@@ -196,24 +196,21 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
         )}
       </div>
 
-      {/* Ledger List */}
-      <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Statement Ledger Entries (Select to View Details)</h3>
-        <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-        {[...filteredStatements]
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .map((st) => (
+      {/* Ledger Cards / List */}
+      <div className="space-y-2.5">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Statement Ledger Entries (Select to View Details)</h3>
+        {filteredStatements.map((st) => (
           <div
             key={st.id}
             onClick={() => onSelectEntryDetail && onSelectEntryDetail(st)}
-            className="px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-all cursor-pointer group"
+            className="p-3.5 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-400 hover:shadow-xs transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
           >
-            <div className="space-y-0.5 min-w-0">
+            <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono font-bold text-xs text-slate-900 group-hover:text-blue-600 transition-colors">
                   {st.reference}
                 </span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded ${
                   st.type === 'Payment'
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                     : 'bg-slate-200 text-slate-700'
@@ -241,7 +238,6 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
             </div>
           </div>
         ))}
-        </div>
       </div>
     </div>
   );

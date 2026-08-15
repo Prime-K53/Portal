@@ -94,7 +94,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${badge.bg}`}>
+                      <span className={`text-[11.5px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${badge.bg}`}>
                         {badge.icon}
                         {badge.label}
                       </span>

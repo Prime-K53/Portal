@@ -29,9 +29,6 @@ import type {
   OrderItem,
   OrderStatus,
   Payment,
-  PaymentRequest,
-  PaymentRequestStatus,
-  PortalAd,
   PortalNotification,
   Product,
   Quotation,
@@ -52,10 +49,7 @@ import type {
   ErpPaymentIntent,
   ErpPaymentRecord,
   ErpPaymentRequest,
-  ErpPaymentRequestCreatePayload,
-  ErpPaymentRequestRecord,
   ErpPaymentResult,
-  ErpPortalAd,
   ErpProfile,
   ErpQuotation,
   ErpReorderResult,
@@ -78,11 +72,6 @@ export interface PortalService {
   getPayments(): Promise<Payment[]>;
   submitPayment(payload: ErpPaymentRequest): Promise<ErpPaymentResult>;
   getPaymentIntent(invoiceId: string, amount: number): Promise<ErpPaymentIntent>;
-
-  // ── Payment requests (NON-ACCOUNTING bank-transfer intentions) ───────────
-  getPaymentRequests(): Promise<PaymentRequest[]>;
-  getPaymentRequest(paymentRequestId: string): Promise<PaymentRequest>;
-  createPaymentRequest(payload: ErpPaymentRequestCreatePayload): Promise<PaymentRequest>;
 
   // ── Orders (created through the ERP request pipeline) ─────────────────────
   getOrders(): Promise<Order[]>;
@@ -121,9 +110,6 @@ export interface PortalService {
 
   // ── Loyalty (real ERP tier for profile display) ───────────────────────────
   getLoyalty(): Promise<ErpLoyalty>;
-
-  // ── Advertisements (ERP portal banner ads — dashboard carousel) ───────────
-  getAds(): Promise<PortalAd[]>;
 }
 
 /** Explicit failure for features blocked by pending ERP migrations. */
@@ -159,8 +145,6 @@ function normalizeInvoiceStatus(status: string | undefined): InvoiceStatus {
     return normalized as InvoiceStatus;
   }
   if (normalized === 'voided') return 'voided';
-  // ERP stores 'Partial' / 'Paid' / 'Unpaid' / 'Overdue' capitalized.
-  if (normalized === 'partial') return 'partially_paid';
   return (normalized || 'unpaid') as InvoiceStatus;
 }
 
@@ -193,15 +177,12 @@ function normalizeDeliveryStatus(status: string | undefined): DeliveryNotificati
     case 'inbound':
       return 'processing';
     case 'active':
-    case 'in transit':
-    case 'in_transit':
       return 'dispatched';
     case 'delivered':
       return 'delivered';
     case 'delayed':
       return 'delayed';
     case 'out_for_delivery':
-    case 'out for delivery':
       return 'out_for_delivery';
     default:
       return normalized === 'processing' || normalized === 'dispatched' || normalized === 'order_placed'
@@ -213,7 +194,7 @@ function normalizeDeliveryStatus(status: string | undefined): DeliveryNotificati
 function mapInvoice(summary: ErpInvoiceSummary): Invoice {
   return {
     id: summary.id,
-    invoiceNumber: summary.invoice_number ?? summary.id,
+    invoiceNumber: summary.invoice_number,
     issueDate: summary.created_at,
     dueDate: summary.due_date ?? summary.created_at,
     amount: summary.total_amount,
@@ -226,21 +207,18 @@ function mapInvoice(summary: ErpInvoiceSummary): Invoice {
 
 function mapOrder(order: ErpOrder): Order {
   const items: OrderItem[] = (order.items ?? []).map((item) => ({
-    // The ERP list endpoint carries the display name as `productName` (raw
-    // stored order lines); the detail endpoint normalizes it to `name`.
-    // Never hardcode 'Item' when the ERP provides a real name.
-    productId: item.productId ?? item.product_id ?? '',
-    productName: item.name ?? item.productName ?? item.product_name ?? item.description ?? 'Item',
+    productId: '',
+    productName: item.name,
     quantity: item.quantity,
-    unitPrice: item.unitPrice ?? item.price ?? item.unit_price ?? 0,
-    total: item.lineTotal ?? item.lineTotalNet ?? item.line_total ?? item.subtotal ?? (item.quantity ?? 0) * (item.unitPrice ?? item.price ?? item.unit_price ?? 0),
+    unitPrice: item.unitPrice,
+    total: item.lineTotal,
   }));
   return {
     id: order.id,
-    orderNumber: order.order_number ?? order.orderNumber ?? order.id,
+    orderNumber: order.order_number ?? order.id,
     date: order.orderDate ?? order.created_at ?? '',
     items,
-    totalAmount: order.totalAmount ?? order.total ?? 0,
+    totalAmount: order.totalAmount,
     status: normalizeOrderStatus(order.status),
     deliveryAddress: '',
     paymentMethod: '',
@@ -251,53 +229,53 @@ function mapOrder(order: ErpOrder): Order {
 
 function mapQuotation(quotation: ErpQuotation): Quotation {
   const items: QuotationItem[] = (quotation.items ?? []).map((item, idx) => ({
-    id: item.productId ?? item.product_id ?? `qi_${idx}`,
-    productId: item.productId ?? item.product_id ?? undefined,
-    description: item.name ?? item.description ?? 'Item',
+    id: `qi_${idx}`,
+    productId: item.productId ?? undefined,
+    description: item.name,
     quantity: item.quantity,
-    unitPrice: item.unitPrice ?? item.price ?? 0,
-    total: item.lineTotal ?? item.lineTotalNet ?? (item.quantity ?? 0) * (item.unitPrice ?? item.price ?? 0),
+    unitPrice: item.unitPrice,
+    total: item.lineTotal,
   }));
-  const statusRaw = String(quotation.status ?? '').toLowerCase();
-  const status: QuoteStatus = statusRaw === 'ready'
-    ? 'quoted'
-    : statusRaw === 'rejected'
-      ? 'declined'
-      : statusRaw === 'converted' || statusRaw === 'revision_requested' || statusRaw === 'accepted' || statusRaw === 'expired'
-        ? (statusRaw as QuoteStatus)
-        : (statusRaw as QuoteStatus) || 'pending_review';
+  const status: QuoteStatus =
+    quotation.status === 'ready'
+      ? 'quoted'
+      : quotation.status === 'rejected'
+        ? 'declined'
+        : quotation.status === 'revision_requested' || quotation.status === 'converted'
+          ? quotation.status
+          : quotation.status;
   return {
     id: quotation.id,
-    quotationNumber: quotation.quotation_number ?? quotation.quotationNumber ?? quotation.id,
-    issuedDate: quotation.created_at ?? quotation.date ?? '',
-    validUntil: quotation.valid_until ?? quotation.validUntil ?? '',
+    quotationNumber: quotation.quotation_number,
+    issuedDate: quotation.created_at ?? '',
+    validUntil: quotation.valid_until ?? '',
     status,
     items,
-    subtotal: quotation.subtotal ?? quotation.materialTotal ?? quotation.total ?? 0,
-    discount: quotation.discount ?? 0,
-    tax: quotation.tax_amount ?? quotation.tax ?? 0,
-    total: quotation.total ?? quotation.totalAmount ?? 0,
-    notes: quotation.payment_terms ?? quotation.paymentTerms ?? undefined,
+    subtotal: quotation.subtotal,
+    discount: quotation.discount,
+    tax: quotation.tax_amount,
+    total: quotation.total,
+    notes: quotation.payment_terms ?? undefined,
     pdfUrl: undefined,
   };
 }
 
 function mapShipment(shipment: ErpShipment): DeliveryNotification {
-  const orderRef = shipment.order_number ?? shipment.orderNumber ?? shipment.order_id ?? shipment.orderId ?? shipment.id;
+  const orderRef = shipment.order_number ?? shipment.order_id ?? shipment.id;
   return {
     id: shipment.id,
-    orderId: shipment.order_id ?? shipment.orderId ?? orderRef,
-    trackingNumber: shipment.tracking_number ?? shipment.trackingNumber ?? shipment.id,
+    orderId: shipment.order_id ?? orderRef,
+    trackingNumber: shipment.tracking_number ?? shipment.id,
     title: `Order ${orderRef}`,
     message: `Shipment status: ${shipment.status}`,
     status: normalizeDeliveryStatus(shipment.status),
-    timestamp: shipment.orderDate ?? shipment.date ?? '',
-    estimatedArrival: shipment.estimated_delivery ?? shipment.estimatedDelivery ?? '',
-    driverName: shipment.driver_name ?? shipment.driverName ?? undefined,
-    driverPhone: shipment.driver_phone ?? shipment.driverPhone ?? undefined,
-    vehicleNumber: shipment.vehicle_no ?? shipment.vehicleNo ?? undefined,
-    deliveryAddress: shipment.shipping_address ?? shipment.shippingAddress ?? '',
-    itemsSummary: (shipment.items ?? []).map((i) => `${i.quantity}x ${i.name ?? 'Item'}`).join(', '),
+    timestamp: shipment.orderDate ?? '',
+    estimatedArrival: shipment.estimated_delivery ?? '',
+    driverName: shipment.driver_name ?? undefined,
+    driverPhone: shipment.driver_phone ?? undefined,
+    vehicleNumber: shipment.vehicle_no ?? undefined,
+    deliveryAddress: shipment.shipping_address ?? '',
+    itemsSummary: (shipment.items ?? []).map((i) => `${i.quantity}x ${i.name}`).join(', '),
     proofOfDelivery: undefined,
     isRead: false,
   };
@@ -325,59 +303,6 @@ function mapPayment(payment: ErpPaymentRecord): Payment {
     method: payment.payment_method,
     referenceCode: payment.reference,
     status: 'verified', // the payments list only contains ERP-recorded payments
-  };
-}
-
-function normalizePaymentRequestStatus(status: string | null | undefined): PaymentRequestStatus {
-  const normalized = String(status ?? '').toLowerCase();
-  switch (normalized) {
-    case 'requested':
-    case 'under_review':
-    case 'confirmed':
-    case 'rejected':
-    case 'cancelled':
-      return normalized as PaymentRequestStatus;
-    default:
-      // Unknown statuses are kept verbatim (never silently coerced to a
-      // misleading label) — the UI renders them honestly as-is.
-      return (normalized || 'requested') as PaymentRequestStatus;
-  }
-}
-
-/**
- * ERP payment-request DTO → Sasa PaymentRequest.
- *
- * A payment request is workflow data ONLY: `requestedAmount` is the requested
- * (not paid) amount and `status` is a workflow status — `confirmed` must never
- * be read as "paid" unless the ERP invoice/payment data independently confirms
- * a recorded accounting payment.
- */
-function mapPaymentRequest(record: ErpPaymentRequestRecord): PaymentRequest {
-  return {
-    id: record.id,
-    requestNumber: record.requestNumber ?? record.id,
-    invoiceId: record.invoiceId ?? '',
-    invoiceNumber: record.invoiceNumber ?? undefined,
-    requestedAmount: Number(record.requestedAmount ?? 0),
-    paymentMethod: record.paymentMethod ?? 'Bank Transfer',
-    status: normalizePaymentRequestStatus(record.status),
-    note: record.note ?? undefined,
-    requestedAt: record.requestedAt ?? record.createdAt ?? '',
-    createdAt: record.createdAt ?? '',
-  };
-}
-
-function mapAd(ad: ErpPortalAd): PortalAd {
-  return {
-    id: ad.id,
-    title: ad.title ?? '',
-    subtitle: ad.subtitle ?? null,
-    badge: ad.badge ?? null,
-    ctaLabel: ad.ctaLabel ?? null,
-    ctaTarget: ad.ctaTarget ?? null,
-    imageUrl: ad.imageUrl ?? null,
-    gradient: ad.gradient ?? null,
-    emoji: ad.emoji ?? null,
   };
 }
 
@@ -536,7 +461,7 @@ export class ErpPortalService implements PortalService {
         : [];
     const items: InvoiceItem[] = itemsRaw.map((item, idx) => ({
       id: `ii_${idx}`,
-      description: String(item.description ?? item.name ?? item.item_name ?? ''),
+      description: String(item.description ?? item.name ?? ''),
       quantity: Number(item.quantity ?? 0),
       unitPrice: Number(item.unitPrice ?? item.unit_price ?? 0),
       total: Number(item.total ?? item.lineTotal ?? item.line_total ?? 0),
@@ -570,36 +495,6 @@ export class ErpPortalService implements PortalService {
 
   async getPaymentIntent(invoiceId: string, amount: number): Promise<ErpPaymentIntent> {
     return this.client.post<ErpPaymentIntent>('/portal/payments/intent', { invoiceId, amount });
-  }
-
-  // ── Payment requests (NON-ACCOUNTING bank-transfer intentions) ───────────
-  //
-  // Verified ERP contract: POST/GET /api/portal/payment-requests and
-  // GET /api/portal/payment-requests/:id. Customer identity is derived by the
-  // ERP from the portal JWT — the payload carries ONLY { invoiceId,
-  // requestedAmount, note }. Creating a request never records a payment,
-  // allocates funds, touches Stripe, or modifies the invoice.
-
-  async getPaymentRequests(): Promise<PaymentRequest[]> {
-    const data = await this.client.get<ErpPaymentRequestRecord[] | { paymentRequests: ErpPaymentRequestRecord[] }>(
-      '/portal/payment-requests'
-    );
-    const list = Array.isArray(data) ? data : data.paymentRequests;
-    return (list ?? []).map(mapPaymentRequest);
-  }
-
-  async getPaymentRequest(paymentRequestId: string): Promise<PaymentRequest> {
-    const record = await this.client.get<ErpPaymentRequestRecord>(`/portal/payment-requests/${paymentRequestId}`);
-    return mapPaymentRequest(record);
-  }
-
-  async createPaymentRequest(payload: ErpPaymentRequestCreatePayload): Promise<PaymentRequest> {
-    const record = await this.client.post<ErpPaymentRequestRecord>('/portal/payment-requests', {
-      invoiceId: payload.invoiceId,
-      requestedAmount: payload.requestedAmount,
-      note: payload.note || undefined,
-    });
-    return mapPaymentRequest(record);
   }
 
   // ── Orders (created through the ERP request pipeline) ─────────────────────
@@ -790,19 +685,6 @@ export class ErpPortalService implements PortalService {
 
   async getLoyalty(): Promise<ErpLoyalty> {
     return this.client.get<ErpLoyalty>('/portal/loyalty');
-  }
-
-  // ── Advertisements (ERP portal banner ads — dashboard carousel) ───────────
-  //
-  // The ERP serves display-ready banner ads at GET /portal/ads (company-scoped
-  // via the customer's companyId, active + date-filtered server-side, sorted
-  // by priority). Sasa renders exactly what the ERP returns — no fallback or
-  // fabricated promotional content.
-
-  async getAds(): Promise<PortalAd[]> {
-    const data = await this.client.get<ErpPortalAd[] | { ads: ErpPortalAd[] }>('/portal/ads');
-    const list = Array.isArray(data) ? data : data.ads;
-    return list.map(mapAd);
   }
 }
 

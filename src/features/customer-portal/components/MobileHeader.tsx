@@ -62,7 +62,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             >
               <ShoppingBag className="w-4.5 h-4.5 text-slate-800" />
               {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-slate-900 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
+                <span className="absolute -top-1 -right-1 bg-slate-900 text-white text-[11.5px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
                   {cartCount}
                 </span>
               )}
@@ -75,7 +75,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             aria-label="Notifications"
           >
             <Bell className="w-4.5 h-4.5 text-slate-800" />
-            <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
+            <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[11.5px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
               {unreadCount}
             </span>
           </button>

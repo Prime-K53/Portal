@@ -21,8 +21,6 @@ import type {
   NewQuoteRequestPayload,
   Order,
   Payment,
-  PaymentRequest,
-  PortalAd,
   PortalNotification,
   Product,
   Quotation,
@@ -31,14 +29,7 @@ import type {
   ReferralInvitePayload,
   StatementEntry,
 } from '../types';
-import type {
-  ErpLoyalty,
-  ErpPaymentIntent,
-  ErpPaymentRequest,
-  ErpPaymentRequestCreatePayload,
-  ErpPaymentResult,
-} from '../types';
-import { ApiError } from './apiClient';
+import type { ErpLoyalty, ErpPaymentIntent, ErpPaymentRequest, ErpPaymentResult } from '../types';
 import {
   initialDeliveries,
   initialInvoices,
@@ -147,34 +138,6 @@ export class MockPortalService implements PortalService {
       clientSecret: `mock_intent_${Date.now()}`,
       mode: 'mock',
     };
-  }
-
-  // ── Payment requests (NON-ACCOUNTING bank-transfer intentions) ───────────
-  //
-  // DELIBERATELY NOT mocked. Payment requests are real ERP workflow data and
-  // the instruction forbids fabricating payment-request data in Sasa. The mock
-  // surfaces an explicit UNAVAILABLE error instead (same pattern as referrals),
-  // so the dev UI never pretends a request exists or was created.
-
-  private paymentRequestUnavailable(): Promise<never> {
-    return Promise.reject(
-      new ApiError(
-        'Payment requests is temporarily unavailable. Payment requests are served by the ERP Portal API and are never fabricated in development mode.',
-        { code: 'UNAVAILABLE' }
-      )
-    );
-  }
-
-  getPaymentRequests(): Promise<PaymentRequest[]> {
-    return this.paymentRequestUnavailable();
-  }
-
-  getPaymentRequest(): Promise<PaymentRequest> {
-    return this.paymentRequestUnavailable();
-  }
-
-  createPaymentRequest(_payload: ErpPaymentRequestCreatePayload): Promise<PaymentRequest> {
-    return this.paymentRequestUnavailable();
   }
 
   // ── Orders ────────────────────────────────────────────────────────────────
@@ -440,14 +403,6 @@ export class MockPortalService implements PortalService {
   // ── Loyalty ───────────────────────────────────────────────────────────────
   async getLoyalty(): Promise<ErpLoyalty> {
     return { points: 0, cashback: 0, tier: 'standard', pointsHistory: [] };
-  }
-
-  // ── Advertisements ────────────────────────────────────────────────────────
-  // Honest empty state: ads come from the ERP's portal_ads table and are never
-  // fabricated in the mock. In dev mode the dashboard simply shows the welcome
-  // and delivery slides.
-  async getAds(): Promise<PortalAd[]> {
-    return [];
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

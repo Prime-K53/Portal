@@ -106,7 +106,7 @@ semantics below were **verified directly from the PrimeERPsystem source**
 | Wallet | — | `GET /portal/wallet` | EXISTS in ERP; no Sasa screen |
 | Documents | — | `GET /portal/documents`, `GET/POST /portal/comments`, `GET /portal/timeline`, `POST /portal/downloads` | EXISTS in ERP (quotation-scoped); no Sasa screen |
 | Support tickets | — | `GET/POST /portal/support/tickets...` | EXISTS in ERP; no Sasa screen |
-| Banner ads | Dashboard carousel | `GET /portal/ads` | `ErpPortalAd[]` — display-ready, company-scoped, active/date-filtered, priority-sorted; Sasa maps to `PortalAd[]` (`mapAd`) and renders real image/gradient/emoji/CTA slides. `GET /portal/promotions` and `POST /portal/orders/preview` still not consumed by Sasa |
+| Promotions / ads | — | `GET /portal/promotions`, `GET /portal/ads`, `POST /portal/orders/preview` | EXISTS in ERP; not yet consumed by Sasa |
 | Referrals | `getReferrals`, `sendReferralInvite`, `claimReferralReward` | `GET/POST /portal/referrals`, `/portal/referrals/{id}`, `/rewards`, `/settings`, `/stats`, `/customers/search` | **BLOCKED in Sasa** — ERP refers existing customers by id; Sasa invites by name/email (see §6) |
 
 ## 5. Real-time events (`ErpSseService`)

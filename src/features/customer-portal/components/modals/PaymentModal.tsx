@@ -148,7 +148,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
                 <div className="flex justify-between items-center text-slate-500 pt-2 border-t border-slate-200">
                   <span>ERP Ledger Status:</span>
-                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
+                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-bold text-[11.5px]">
                     Payment Recorded
                   </span>
                 </div>
@@ -220,7 +220,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                           <div className="text-right">
                             <div className="font-black text-xs text-slate-900">{formatCurrency(inv.amountRemaining)}</div>
                             {inv.status === 'overdue' && (
-                              <span className="text-[10px] bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded-full font-bold">Overdue</span>
+                              <span className="text-[10.5px] bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded-full font-bold">Overdue</span>
                             )}
                           </div>
                         </div>

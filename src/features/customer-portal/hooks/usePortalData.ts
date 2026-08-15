@@ -19,8 +19,6 @@ import type {
   Invoice,
   Order,
   Payment,
-  PaymentRequest,
-  PortalAd,
   PortalNotification,
   Product,
   Quotation,
@@ -64,7 +62,7 @@ export function useInvoiceDetailData(invoiceId: string | null): PortalQueryResul
       return portalService.getInvoiceDetail(invoiceId);
     },
     invoiceId ? [invoiceId] : ['none'],
-    invoiceId !== null
+    invoiceId === null
   );
 }
 
@@ -92,15 +90,6 @@ export function usePaymentsData(): PortalQueryResult<Payment[]> {
   return usePortalQuery(() => portalService.getPayments(), []);
 }
 
-/**
- * Customer payment-request list. Fetched only while enabled (default true) —
- * the payment-request modal gates it so no ERP call is made when the modal is
- * closed.
- */
-export function usePaymentRequestsData(enabled = true): PortalQueryResult<PaymentRequest[]> {
-  return usePortalQuery(() => portalService.getPaymentRequests(), [], enabled);
-}
-
 export function useReferralsData(): PortalQueryResult<Referral[]> {
   return usePortalQuery(() => portalService.getReferrals(), []);
 }
@@ -119,8 +108,4 @@ export function useUnreadNotificationCount(): PortalQueryResult<number> {
 
 export function useLoyaltyData(): PortalQueryResult<ErpLoyalty> {
   return usePortalQuery(() => portalService.getLoyalty(), []);
-}
-
-export function useAdsData(): PortalQueryResult<PortalAd[]> {
-  return usePortalQuery(() => portalService.getAds(), []);
 }

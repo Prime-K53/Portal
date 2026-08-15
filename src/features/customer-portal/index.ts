@@ -17,7 +17,6 @@ export { NotificationDrawer } from './components/NotificationDrawer';
 
 // Modals
 export { PaymentModal } from './components/modals/PaymentModal';
-export { PaymentRequestModal } from './components/modals/PaymentRequestModal';
 export { InvoiceDetailModal } from './components/modals/InvoiceDetailModal';
 export { DeliveryTrackingModal } from './components/modals/DeliveryTrackingModal';
 export { QuoteRequestModal } from './components/modals/QuoteRequestModal';

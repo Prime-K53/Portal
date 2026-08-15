@@ -56,7 +56,7 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
         <div className="p-5 bg-slate-900 text-white flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${statusInfo.bg}`}>
+              <span className={`text-[11.5px] font-bold px-2.5 py-0.5 rounded-full ${statusInfo.bg}`}>
                 {statusInfo.label}
               </span>
               <span className="text-xs font-mono text-slate-300">Order #{delivery.orderId}</span>

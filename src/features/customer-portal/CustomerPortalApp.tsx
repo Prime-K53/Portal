@@ -3,7 +3,6 @@ import { useAuth } from './hooks/useAuth';
 import { useHashRoute } from './router/useHashRoute';
 import { RouteGuard } from './router/RouteGuard';
 import {
-  useAdsData,
   useCatalogData,
   useCustomerData,
   useDeliveriesData,
@@ -24,7 +23,6 @@ import {
   CartItem,
   DeliveryNotification,
   Invoice,
-  PaymentRequest,
   Product,
   QuoteRequestItem,
   StatementEntry,
@@ -45,7 +43,6 @@ import { CartDrawer } from './components/modals/CartDrawer';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { InvoiceDetailModal } from './components/modals/InvoiceDetailModal';
 import { PaymentModal } from './components/modals/PaymentModal';
-import { PaymentRequestModal } from './components/modals/PaymentRequestModal';
 import { ProductDetailModal } from './components/modals/ProductDetailModal';
 import { QuoteRequestModal } from './components/modals/QuoteRequestModal';
 import { StatementItemDetailModal } from './components/modals/StatementItemDetailModal';
@@ -88,7 +85,6 @@ export function CustomerPortalApp({
   const catalogQuery = useCatalogData();
   const notificationsQuery = useNotificationsData();
   const unreadQuery = useUnreadNotificationCount();
-  const adsQuery = useAdsData();
 
   // ── Live ERP events (SSE) ─────────────────────────────────────────────────
   usePortalEvents();
@@ -103,7 +99,6 @@ export function CustomerPortalApp({
   const products = catalogQuery.data ?? [];
   const notifications = notificationsQuery.data ?? [];
   const unreadNotificationCount = unreadQuery.data ?? 0;
-  const ads = adsQuery.data ?? [];
 
   // ── UI state (no business data lives here) ────────────────────────────────
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -113,7 +108,6 @@ export function CustomerPortalApp({
   const [selectedStatementEntryDetail, setSelectedStatementEntryDetail] = useState<StatementEntry | null>(null);
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentRequestInvoice, setPaymentRequestInvoice] = useState<Invoice | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isStatementPrintModalOpen, setIsStatementPrintModalOpen] = useState(false);
@@ -163,26 +157,6 @@ export function CustomerPortalApp({
   const handlePaySingleInvoice = (invoiceId: string) => {
     setSelectedInvoiceIds([invoiceId]);
     setIsPaymentModalOpen(true);
-  };
-
-  // ── Bank Transfer payment REQUEST (workflow data only — never a payment) ─
-  //
-  // Submits a payment REQUEST to the ERP (POST /api/portal/payment-requests).
-  // The ERP derives customer identity from the JWT, re-validates invoice
-  // ownership + outstanding amount, and protects against duplicate active
-  // requests. Sasa never writes a customer_payment or modifies the invoice:
-  // after a successful request the ERP state is simply refreshed and the
-  // invoice remains unpaid/partial unless the ERP independently records a
-  // real accounting payment.
-  const handleSubmitPaymentRequest = (invoiceId: string, requestedAmount: number, note: string): Promise<PaymentRequest> => {
-    return runAction(() => portalService.createPaymentRequest({ invoiceId, requestedAmount, note })).then((created) => {
-      // Phase 9: refresh ERP state. A request does NOT change invoice
-      // financials — this refetch only surfaces real ERP changes.
-      invoicesQuery.refetch();
-      statementsQuery.refetch();
-      customerQuery.refetch();
-      return created;
-    });
   };
 
   // ── Payment (records each selected invoice in the ERP ledger) ─────────────
@@ -277,7 +251,6 @@ export function CustomerPortalApp({
         priority,
         notes,
       });
-      quotationsQuery.refetch();
     });
   };
 
@@ -405,8 +378,8 @@ export function CustomerPortalApp({
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {activeTab === 'dashboard' && (
             <PortalDataBoundary
-              isLoading={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, statementsQuery, adsQuery]).isLoading}
-              error={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, statementsQuery, adsQuery]).error}
+              isLoading={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, statementsQuery]).isLoading}
+              error={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, statementsQuery]).error}
               onRetry={() => {
                 customerQuery.refetch();
                 invoicesQuery.refetch();
@@ -414,7 +387,6 @@ export function CustomerPortalApp({
                 ordersQuery.refetch();
                 quotationsQuery.refetch();
                 statementsQuery.refetch();
-                adsQuery.refetch();
               }}
             >
               <DashboardTab
@@ -422,9 +394,9 @@ export function CustomerPortalApp({
                 invoices={invoices}
                 deliveries={deliveries}
                 statements={statements}
-                ads={ads}
                 onNavigateTab={handleNavigateTab}
                 onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
+                onOpenQuoteModal={() => setIsQuoteModalOpen(true)}
               />
             </PortalDataBoundary>
           )}
@@ -501,7 +473,6 @@ export function CustomerPortalApp({
             >
               <QuotesTab
                 quotes={quotations}
-                onCreateQuote={() => setIsQuoteModalOpen(true)}
                 onAcceptQuotation={handleAcceptQuotation}
                 onRejectQuotation={handleRejectQuotation}
                 onRequestRevision={handleRequestQuotationRevision}
@@ -594,13 +565,6 @@ export function CustomerPortalApp({
         invoice={selectedInvoiceDetail}
         onClose={() => setSelectedInvoiceDetail(null)}
         onPaySingleInvoice={handlePaySingleInvoice}
-        onRequestPayment={(inv) => setPaymentRequestInvoice(inv)}
-      />
-
-      <PaymentRequestModal
-        invoice={paymentRequestInvoice}
-        onClose={() => setPaymentRequestInvoice(null)}
-        onSubmitPaymentRequest={handleSubmitPaymentRequest}
       />
 
       <CartDrawer

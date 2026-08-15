@@ -140,7 +140,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search invoices, products, tracking #, orders, or commands... (e.g. INV-2026, Paper, TRK)"
-            className="w-full bg-transparent text-slate-900 font-normal placeholder-slate-400 focus:outline-none text-sm"
+            className="w-full bg-transparent text-slate-900 font-medium placeholder-slate-400 focus:outline-none text-sm"
           />
           {query && (
             <button
@@ -267,15 +267,15 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                     <span className="font-extrabold text-slate-900 block tabular-nums">
                       ${inv.amountRemaining > 0 ? inv.amountRemaining.toFixed(2) : inv.amount.toFixed(2)}
                     </span>
-                     <span
-                       className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
-                         inv.status === 'paid'
-                           ? 'bg-emerald-100 text-emerald-800'
-                           : inv.status === 'overdue'
-                           ? 'bg-rose-100 text-rose-800'
-                           : 'bg-amber-100 text-amber-800'
-                       }`}
-                     >
+                    <span
+                      className={`text-[10.5px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                        inv.status === 'paid'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : inv.status === 'overdue'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
                       {inv.status}
                     </span>
                   </div>
@@ -310,7 +310,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="font-extrabold text-slate-900 block tabular-nums">${ord.totalAmount.toFixed(2)}</span>
-                    <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-md font-bold">
+                    <span className="text-[10.5px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-md font-bold">
                       {ord.status}
                     </span>
                   </div>

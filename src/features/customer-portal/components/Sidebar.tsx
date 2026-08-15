@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div className="flex items-center gap-1.5">
             <span className="font-black text-sm text-slate-900 tracking-tight">Prime</span>
-            <span className="font-black text-[10px] uppercase tracking-wider text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+            <span className="font-black text-[10.5px] uppercase tracking-wider text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
               PORTAL
             </span>
           </div>
@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="text-[11.5px] font-mono font-bold text-slate-500">{profile?.accountNumber || '—'}</span>
             <span className="w-1 h-1 rounded-full bg-slate-300" />
-            <span className="text-[10px] font-black uppercase text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full border border-amber-200">
+            <span className="text-[10.5px] font-black uppercase text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full border border-amber-200">
               {profile?.tier || '—'}
             </span>
           </div>
@@ -127,8 +127,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
 
               {item.badge !== undefined && item.badge > 0 && (
-                 <span
-                  className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                <span
+                  className={`text-[11.5px] font-black px-2 py-0.5 rounded-full ${
                     isActive
                       ? 'bg-white text-slate-900'
                       : `${item.badgeColor || 'bg-slate-900'} text-white`

@@ -574,45 +574,16 @@ export interface ErpInvoiceSummary {
 export interface ErpOrder {
   id: string;
   order_number: string | null;
-  orderNumber?: string | null;
   customerId?: string;
   customer_id?: string;
   customerName: string;
   orderDate: string;
   deliveryDate: string | null;
   status: string;
-  items: ErpOrderLine[];
+  items: { name: string; quantity: number; unitPrice: number; lineTotal: number }[];
   totalAmount: number;
-  total?: number;
   tracking_number?: string | null;
-  trackingNumber?: string | null;
   created_at: string;
-}
-
-/**
- * Order line as returned by the ERP.
- *
- * The LIST endpoint returns raw stored order lines whose display name lives
- * under `productName` (verified: `productName: "Administration Records"`,
- * plus `productId`, `unitPrice`, `subtotal`); the DETAIL endpoint normalizes
- * them to `name`/`lineTotal`. Both spellings are declared so the mapper can
- * adapt to either variant.
- */
-export interface ErpOrderLine {
-  name?: string;
-  productName?: string;
-  product_name?: string;
-  description?: string;
-  productId?: string | null;
-  product_id?: string | null;
-  quantity: number;
-  unitPrice?: number;
-  price?: number;
-  unit_price?: number;
-  lineTotal?: number;
-  lineTotalNet?: number;
-  line_total?: number;
-  subtotal?: number;
 }
 
 // ── Requests (quotations + orders share the ERP request pipeline) ────────────
@@ -669,57 +640,36 @@ export interface ErpReorderResult {
 
 // ── Quotations ───────────────────────────────────────────────────────────────
 
-/**
- * GET /api/portal/quotations record.
- *
- * The live ERP returns the stored quotation row (camelCase fields — date,
- * validUntil, materialTotal, total, paymentTerms — spread from the data
- * JSON), which differs from the snake_case QuotationRecord used by the ERP
- * admin frontend. Both spellings are declared so the mapper can adapt to
- * either variant.
- */
+/** GET /api/portal/quotations record. */
 export interface ErpQuotation {
   id: string;
-  quotation_number?: string;
-  quotationNumber?: string;
-  request_id?: string | null;
-  customer_id?: string;
-  customerId?: string;
-  customer_name?: string;
-  customerName?: string;
+  quotation_number: string;
+  request_id: string | null;
+  customer_id: string;
+  customer_name: string;
   items: {
     productId?: string | null;
-    product_id?: string | null;
-    name?: string;
-    description?: string;
+    name: string;
     quantity: number;
-    unitPrice?: number;
-    price?: number;
-    lineTotal?: number;
-    lineTotalNet?: number;
+    unitPrice: number;
+    lineTotal: number;
   }[];
-  subtotal?: number;
-  materialTotal?: number;
-  discount?: number;
-  tax_rate?: number;
-  tax_amount?: number;
-  tax?: number;
-  delivery_fee?: number;
+  subtotal: number;
+  discount: number;
+  tax_rate: number;
+  tax_amount: number;
+  delivery_fee: number;
   total: number;
-  totalAmount?: number;
-  currency?: string;
-  payment_terms?: string | null;
-  paymentTerms?: string | null;
-  valid_until?: string | null;
-  validUntil?: string | null;
-  status: string;
-  version?: number;
+  currency: string;
+  payment_terms: string | null;
+  valid_until: string | null;
+  status: 'ready' | 'accepted' | 'rejected' | 'revision_requested' | 'converted' | 'expired';
+  version: number;
   rejected_at?: string | null;
   revision_requested_at?: string | null;
   accepted_at?: string | null;
-  created_at?: string;
-  date?: string;
-  updated_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Payments ─────────────────────────────────────────────────────────────────
@@ -756,111 +706,28 @@ export interface ErpPaymentRequest {
   transactionId?: string;
 }
 
-// ── Payment requests (NON-ACCOUNTING bank-transfer intentions) ──────────────
-
-/**
- * Lifecycle of a payment request. These are WORKFLOW statuses — they are NOT
- * accounting statuses. `confirmed` does NOT mean the invoice is paid; only an
- * ERP-recorded accounting payment (invoice paid_amount / status) says that.
- */
-export type PaymentRequestStatus = 'requested' | 'under_review' | 'confirmed' | 'rejected' | 'cancelled';
-
-/**
- * Customer payment-intent record as represented in the Portal domain.
- * A payment request is workflow data ONLY: it never records a payment,
- * allocates funds, or modifies the invoice.
- */
-export interface PaymentRequest {
-  id: string;
-  requestNumber: string;
-  invoiceId: string;
-  invoiceNumber?: string;
-  requestedAmount: number;
-  /** Always 'Bank Transfer' — the only payment-request method the ERP accepts. */
-  paymentMethod: string;
-  status: PaymentRequestStatus;
-  note?: string;
-  requestedAt: string;
-  createdAt: string;
-}
-
-/**
- * Request body for POST /api/portal/payment-requests.
- *
- * SECURITY: only customer-controlled fields are sent. Customer identity
- * (customer_id) is derived by the ERP from the authenticated portal JWT — it
- * is NEVER included here and the browser can never choose another customer.
- */
-export interface ErpPaymentRequestCreatePayload {
-  invoiceId: string;
-  /** Optional; the ERP defaults to the authoritative outstanding balance. */
-  requestedAmount?: number;
-  note?: string;
-}
-
-/**
- * GET /api/portal/payment-requests record (camelCase DTO verified from the
- * ERP paymentRequestService.toPortalDto) and the 201 response of POST
- * /api/portal/payment-requests.
- */
-export interface ErpPaymentRequestRecord {
-  id: string;
-  requestNumber: string | null;
-  customerId: string | null;
-  customerName: string | null;
-  invoiceId: string | null;
-  invoiceNumber: string | null;
-  requestedAmount: number;
-  paymentMethod: string | null;
-  status: string | null;
-  note: string | null;
-  requestedAt: string | null;
-  reviewedBy: string | null;
-  reviewedAt: string | null;
-  adminNotes: string | null;
-  linkedPaymentId: string | null;
-  createdAt: string | null;
-}
-
 // ── Deliveries / shipments ───────────────────────────────────────────────────
 
-/**
- * GET /api/portal/shipments record.
- *
- * The live ERP returns shipment rows (camelCase fields — trackingNumber,
- * orderId, driverName, vehicleNo, estimatedDelivery, date — spread from the
- * stored data JSON) for `_source: 'shipments'` and delivery-note sourced
- * rows. Both spellings are declared so the mapper can adapt to either.
- */
+/** GET /api/portal/shipments record. */
 export interface ErpShipment {
   id: string;
-  _source?: 'shipments' | 'delivery_notes' | 'sales_orders';
-  order_number?: string | null;
-  orderNumber?: string | null;
+  _source: 'delivery_notes' | 'sales_orders';
+  order_number: string | null;
   order_id?: string | null;
-  orderId?: string | null;
-  orderDate?: string;
-  date?: string;
-  customerName?: string;
-  customer_name?: string;
+  orderDate: string;
+  customerName: string;
   status: string;
-  tracking_number?: string | null;
-  trackingNumber?: string | null;
-  carrier?: string | null;
-  driver_name?: string | null;
-  driverName?: string | null;
-  driver_phone?: string | null;
-  driverPhone?: string | null;
-  vehicle_no?: string | null;
-  vehicleNo?: string | null;
-  estimated_delivery?: string | null;
-  estimatedDelivery?: string | null;
-  actual_arrival?: string | null;
-  current_location?: string | null;
-  proof_of_delivery?: string | null;
-  shipping_address?: string | null;
-  shippingAddress?: string | null;
-  items: { name?: string; quantity: number; unitPrice?: number; price?: number; lineTotal?: number }[];
+  tracking_number: string | null;
+  carrier: string | null;
+  driver_name: string | null;
+  driver_phone: string | null;
+  vehicle_no: string | null;
+  estimated_delivery: string | null;
+  actual_arrival: string | null;
+  current_location: string | null;
+  proof_of_delivery: string | null;
+  shipping_address: string | null;
+  items: { name: string; quantity: number; unitPrice: number; lineTotal: number }[];
 }
 
 // ── Statements ───────────────────────────────────────────────────────────────
@@ -909,44 +776,6 @@ export interface ErpCatalogItem {
   quantity: number;
   category: string;
   status: string;
-}
-
-// ── Advertisements (ERP portal banner ads) ───────────────────────────────────
-
-/**
- * GET /api/portal/ads item — the ERP's display-ready banner ad.
- *
- * Verified from the live ERP response (portalLifecycleService.getActivePortalAds
- * → `portal_ads` table, company-scoped via the customer's companyId, active +
- * date-filtered, sorted by priority desc). Ads are managed in the ERP admin
- * (Smart Operations Hub → Ads); image uploads land in `portal_ads.data.imageUrl`.
- * `gradient` is a full CSS gradient string (e.g.
- * `linear-gradient(135deg, #312E81 0%, #7C5CF0 100%)`).
- */
-export interface ErpPortalAd {
-  id: string;
-  title: string;
-  subtitle: string | null;
-  badge: string | null;
-  ctaLabel: string | null;
-  ctaTarget: string | null;
-  imageUrl: string | null;
-  gradient: string | null;
-  emoji: string | null;
-  endsAt: string | null;
-}
-
-/** Banner ad as consumed by the Sasa dashboard carousel. */
-export interface PortalAd {
-  id: string;
-  title: string;
-  subtitle: string | null;
-  badge: string | null;
-  ctaLabel: string | null;
-  ctaTarget: string | null;
-  imageUrl: string | null;
-  gradient: string | null;
-  emoji: string | null;
 }
 
 // ── Realtime / SSE ───────────────────────────────────────────────────────────

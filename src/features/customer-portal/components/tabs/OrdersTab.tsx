@@ -322,7 +322,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                   placeholder="Search catalog by product name, SKU, or description..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                   className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs"
                 />
                 <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
               </div>
@@ -505,7 +505,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           <Check className="w-3.5 h-3.5" />
                         </button>
 
-                        <span className="text-[10px] font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                        <span className="text-[11.5px] font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">
                           SKU: {product.sku}
                         </span>
                       </div>
@@ -537,10 +537,10 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           className="cursor-pointer space-y-1"
                           onClick={() => onSelectProductDetail && onSelectProductDetail(product)}
                         >
-                          <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-snug">
+                          <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-snug">
                             {product.name}
                           </h4>
-                          <p className="text-sm font-normal text-slate-500 line-clamp-2">
+                          <p className="text-xs text-slate-500 line-clamp-2 font-medium">
                             {product.description}
                           </p>
                         </div>
@@ -625,8 +625,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
           {viewMode === 'table' && (
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-[11px] md:text-[13px] text-slate-700">
-                  <thead className="table-header bg-slate-50 border-b border-slate-200">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50 border-b border-slate-200 font-extrabold text-slate-700 uppercase tracking-wider text-[11.5px]">
                     <tr>
                       <th className="p-3 w-10 text-center">
                         <input
@@ -670,7 +670,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           </td>
 
                           {/* Product Info & Thumbnail */}
-                          <td className="p-3 table-body-cell">
+                          <td className="p-3">
                             <div className="flex items-center gap-3">
                               <img
                                 src={product.image}
@@ -681,7 +681,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                               <div>
                                 <div className="flex items-center gap-1.5">
                                   <span
-                                    className="font-medium text-slate-900 hover:text-indigo-600 cursor-pointer text-xs"
+                                    className="font-extrabold text-slate-900 hover:text-indigo-600 cursor-pointer text-xs"
                                     onClick={() => onSelectProductDetail && onSelectProductDetail(product)}
                                   >
                                     {product.name}
@@ -708,8 +708,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           </td>
 
                           {/* Unit Price */}
-                          <td className="p-3 table-body-cell whitespace-nowrap">
-                            <span className="font-medium text-slate-900 finance-nums">
+                          <td className="p-3 whitespace-nowrap">
+                            <span className="font-extrabold text-slate-900 tabular-nums text-xs">
                               {formatCurrency(product.price)} / {product.unit}
                             </span>
                           </td>
@@ -717,7 +717,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           {/* Stock Status */}
                           <td className="p-3">
                             <span
-                              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                              className={`text-[11.5px] font-extrabold px-2 py-0.5 rounded-full ${
                                 product.inStock
                                   ? 'bg-emerald-100 text-emerald-800'
                                   : 'bg-rose-100 text-rose-800'
@@ -742,7 +742,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                                 type="number"
                                 value={qty}
                                 onChange={(e) => handleQtyInput(product.id, e.target.value, 1)}
-                                className="w-12 text-center font-bold text-xs bg-slate-50 border border-slate-200 rounded py-0.5 text-slate-900 focus:outline-none focus:border-slate-900 finance-nums"
+                                className="w-12 text-center font-bold text-xs bg-slate-50 border border-slate-200 rounded py-0.5 text-slate-900 focus:outline-none focus:border-slate-900 tabular-nums"
                               />
 
                               <button
@@ -755,7 +755,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           </td>
 
                           {/* Subtotal */}
-                          <td className="p-3 text-right table-body-cell font-medium finance-nums">
+                          <td className="p-3 text-right font-black text-slate-900 tabular-nums">
                             {formatCurrency(subtotal)}
                           </td>
 
@@ -807,12 +807,12 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
             <div key={order.id} className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-2xs">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                 <div>
-                  <h4 className="font-mono font-bold text-sm text-slate-900">{order.orderNumber}</h4>
+                  <h4 className="font-extrabold text-sm text-slate-900">{order.orderNumber}</h4>
                   <p className="text-[12.5px] text-slate-500 font-medium">Placed on {formatDate(order.date)}</p>
                 </div>
                 <div className="text-right">
                   <span className="text-sm font-black text-slate-900 block tabular-nums">{formatCurrency(order.totalAmount)}</span>
-                    <span className="text-[10px] bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-full font-bold capitalize">
+                  <span className="text-[11.5px] bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-full font-bold capitalize">
                     {order.status}
                   </span>
                 </div>

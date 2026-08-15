@@ -48,7 +48,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <span className="text-[11.5px] bg-slate-200 text-slate-800 font-mono font-bold px-2 py-0.5 rounded-md border border-slate-300">
               SKU: {product.sku}
             </span>
-            <span className="text-[10px] bg-blue-100 text-blue-800 font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-blue-200">
+            <span className="text-[11.5px] bg-blue-100 text-blue-800 font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border border-blue-200">
               {product.category}
             </span>
           </div>
