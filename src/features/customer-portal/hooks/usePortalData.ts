@@ -62,7 +62,7 @@ export function useInvoiceDetailData(invoiceId: string | null): PortalQueryResul
       return portalService.getInvoiceDetail(invoiceId);
     },
     invoiceId ? [invoiceId] : ['none'],
-    invoiceId === null
+    invoiceId !== null
   );
 }
 

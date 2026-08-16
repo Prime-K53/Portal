@@ -251,6 +251,7 @@ export function CustomerPortalApp({
         priority,
         notes,
       });
+      quotationsQuery.refetch();
     });
   };
 
@@ -396,7 +397,6 @@ export function CustomerPortalApp({
                 statements={statements}
                 onNavigateTab={handleNavigateTab}
                 onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
-                onOpenQuoteModal={() => setIsQuoteModalOpen(true)}
               />
             </PortalDataBoundary>
           )}
@@ -473,6 +473,7 @@ export function CustomerPortalApp({
             >
               <QuotesTab
                 quotes={quotations}
+                onCreateQuote={() => setIsQuoteModalOpen(true)}
                 onAcceptQuotation={handleAcceptQuotation}
                 onRejectQuotation={handleRejectQuotation}
                 onRequestRevision={handleRequestQuotationRevision}

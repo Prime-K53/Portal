@@ -24,7 +24,6 @@ interface DashboardTabProps {
   statements: StatementEntry[];
   onNavigateTab: (tab: TabType) => void;
   onOpenPaymentModal: () => void;
-  onOpenQuoteModal: () => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -34,7 +33,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   statements,
   onNavigateTab,
   onOpenPaymentModal,
-  onOpenQuoteModal,
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [slideDirection, setSlideDirection] = useState<'next' | 'prev'>('next');
@@ -49,28 +47,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       subtitle: `Account ID: ${profile.accountNumber} • ${profile.tier || 'Standard'} Tier`,
       extra: `Available Credit: ${formatCurrency((profile.creditLimit ?? 0) - (profile.currentBalance ?? 0))}`,
       gradient: 'from-slate-900 via-indigo-950 to-slate-900',
-      imageUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80',
-    },
-    {
-      id: 'slide_promo_image',
-      badge: '📦 FEATURED BANNER',
-      badgeBg: 'bg-indigo-400 text-slate-950',
-      title: '', // Image banner without heavy text descriptions
-      subtitle: '',
-      extra: '',
-      gradient: 'from-indigo-950 to-slate-950',
-      imageUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80',
-      isPureImage: true,
-    },
-    {
-      id: 'slide_promo',
-      badge: '🎁 SPECIAL PROMOTION',
-      badgeBg: 'bg-emerald-400 text-slate-950',
-      title: '15% OFF Bulk Printing & Office Supplies',
-      subtitle: 'Use promo code PROMO2026 at checkout for orders over $500.',
-      extra: 'Valid through end of month for registered partners',
-      gradient: 'from-indigo-950 via-slate-900 to-blue-950',
-      imageUrl: 'https://images.unsplash.com/photo-1562577309-2592ab84b1bc?auto=format&fit=crop&w=1200&q=80',
     },
   ];
 
@@ -87,7 +63,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         ? `Est. Arrival: ${latest.estimatedArrival}${latest.driverName ? ` • Driver: ${latest.driverName}` : ''}`
         : '',
       gradient: 'from-slate-950 via-sky-950 to-slate-900',
-      imageUrl: 'https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=1200&q=80',
     });
   }
 
@@ -171,7 +146,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </div>
 
-      {/* 2. Interactive Sliding Banner (Supports Text, Sliding Images, or Pure Image Banners) */}
+      {/* 2. Interactive Sliding Banner (real data slides — no hardcoded ad images) */}
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -182,33 +157,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           key={activeSlide.id}
           className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
         >
-          {/* Background Image Layer */}
-          {activeSlide.imageUrl && (
-            <div className="absolute inset-0 z-0">
-              <img
-                src={activeSlide.imageUrl}
-                alt={activeSlide.title || 'Banner Slide'}
-                className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-              />
-              {/* Scrim Overlay for Contrast if text exists */}
-              {!activeSlide.isPureImage ? (
-                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-900/75 to-slate-950/40" />
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40" />
-              )}
-            </div>
-          )}
-
-          {/* Fallback Gradient if no image */}
-          {!activeSlide.imageUrl && (
-            <div className={`absolute inset-0 z-0 bg-gradient-to-r ${activeSlide.gradient}`} />
-          )}
+          {/* Banner Gradient Background */}
+          <div className={`absolute inset-0 z-0 bg-gradient-to-r ${activeSlide.gradient}`} />
 
           {/* Texture overlay */}
           <div className="absolute inset-0 opacity-15 pointer-events-none bg-[radial-gradient(#60a5fa_1px,transparent_1px)] [background-size:12px_12px] z-0" />
 
-          {/* Active Banner Slide Text Content (if not image-only) */}
-          {!activeSlide.isPureImage && (activeSlide.title || activeSlide.subtitle) && (
+          {/* Active Banner Slide Text Content */}
+          {(activeSlide.title || activeSlide.subtitle) && (
             <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-1">
                 {activeSlide.title && (
@@ -347,7 +303,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </button>
 
           <button
-            onClick={onOpenQuoteModal}
+            onClick={() => onNavigateTab('quotes')}
             className="p-3.5 bg-white border border-slate-200/80 rounded-2xl hover:border-slate-300 hover:bg-slate-50 transition-all text-center flex flex-col items-center justify-center space-y-2 group shadow-2xs"
           >
             <div className="p-2.5 rounded-xl bg-slate-100 text-slate-800 group-hover:scale-110 transition-transform">
@@ -402,14 +358,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </button>
         </div>
 
-        <div className="space-y-2.5">
-          {statements.slice(0, 4).map((st) => (
+        <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+          {[...statements]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 4)
+            .map((st) => (
             <div
               key={st.id}
               onClick={() => onNavigateTab('statements')}
-              className="p-3.5 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-400 hover:shadow-xs transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
+              className="px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-all cursor-pointer group"
             >
-              <div className="space-y-1">
+              <div className="space-y-0.5 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-bold text-xs text-slate-900 group-hover:text-blue-600 transition-colors">
                     {st.reference}

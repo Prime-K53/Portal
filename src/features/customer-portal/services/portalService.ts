@@ -145,6 +145,8 @@ function normalizeInvoiceStatus(status: string | undefined): InvoiceStatus {
     return normalized as InvoiceStatus;
   }
   if (normalized === 'voided') return 'voided';
+  // ERP stores 'Partial' / 'Paid' / 'Unpaid' / 'Overdue' capitalized.
+  if (normalized === 'partial') return 'partially_paid';
   return (normalized || 'unpaid') as InvoiceStatus;
 }
 
@@ -177,12 +179,15 @@ function normalizeDeliveryStatus(status: string | undefined): DeliveryNotificati
     case 'inbound':
       return 'processing';
     case 'active':
+    case 'in transit':
+    case 'in_transit':
       return 'dispatched';
     case 'delivered':
       return 'delivered';
     case 'delayed':
       return 'delayed';
     case 'out_for_delivery':
+    case 'out for delivery':
       return 'out_for_delivery';
     default:
       return normalized === 'processing' || normalized === 'dispatched' || normalized === 'order_placed'
@@ -194,7 +199,7 @@ function normalizeDeliveryStatus(status: string | undefined): DeliveryNotificati
 function mapInvoice(summary: ErpInvoiceSummary): Invoice {
   return {
     id: summary.id,
-    invoiceNumber: summary.invoice_number,
+    invoiceNumber: summary.invoice_number ?? summary.id,
     issueDate: summary.created_at,
     dueDate: summary.due_date ?? summary.created_at,
     amount: summary.total_amount,
@@ -208,17 +213,17 @@ function mapInvoice(summary: ErpInvoiceSummary): Invoice {
 function mapOrder(order: ErpOrder): Order {
   const items: OrderItem[] = (order.items ?? []).map((item) => ({
     productId: '',
-    productName: item.name,
+    productName: item.name ?? 'Item',
     quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    total: item.lineTotal,
+    unitPrice: item.unitPrice ?? item.price ?? 0,
+    total: item.lineTotal ?? item.lineTotalNet ?? (item.quantity ?? 0) * (item.unitPrice ?? item.price ?? 0),
   }));
   return {
     id: order.id,
-    orderNumber: order.order_number ?? order.id,
+    orderNumber: order.order_number ?? order.orderNumber ?? order.id,
     date: order.orderDate ?? order.created_at ?? '',
     items,
-    totalAmount: order.totalAmount,
+    totalAmount: order.totalAmount ?? order.total ?? 0,
     status: normalizeOrderStatus(order.status),
     deliveryAddress: '',
     paymentMethod: '',
@@ -229,53 +234,53 @@ function mapOrder(order: ErpOrder): Order {
 
 function mapQuotation(quotation: ErpQuotation): Quotation {
   const items: QuotationItem[] = (quotation.items ?? []).map((item, idx) => ({
-    id: `qi_${idx}`,
-    productId: item.productId ?? undefined,
-    description: item.name,
+    id: item.productId ?? item.product_id ?? `qi_${idx}`,
+    productId: item.productId ?? item.product_id ?? undefined,
+    description: item.name ?? item.description ?? 'Item',
     quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    total: item.lineTotal,
+    unitPrice: item.unitPrice ?? item.price ?? 0,
+    total: item.lineTotal ?? item.lineTotalNet ?? (item.quantity ?? 0) * (item.unitPrice ?? item.price ?? 0),
   }));
-  const status: QuoteStatus =
-    quotation.status === 'ready'
-      ? 'quoted'
-      : quotation.status === 'rejected'
-        ? 'declined'
-        : quotation.status === 'revision_requested' || quotation.status === 'converted'
-          ? quotation.status
-          : quotation.status;
+  const statusRaw = String(quotation.status ?? '').toLowerCase();
+  const status: QuoteStatus = statusRaw === 'ready'
+    ? 'quoted'
+    : statusRaw === 'rejected'
+      ? 'declined'
+      : statusRaw === 'converted' || statusRaw === 'revision_requested' || statusRaw === 'accepted' || statusRaw === 'expired'
+        ? (statusRaw as QuoteStatus)
+        : (statusRaw as QuoteStatus) || 'pending_review';
   return {
     id: quotation.id,
-    quotationNumber: quotation.quotation_number,
-    issuedDate: quotation.created_at ?? '',
-    validUntil: quotation.valid_until ?? '',
+    quotationNumber: quotation.quotation_number ?? quotation.quotationNumber ?? quotation.id,
+    issuedDate: quotation.created_at ?? quotation.date ?? '',
+    validUntil: quotation.valid_until ?? quotation.validUntil ?? '',
     status,
     items,
-    subtotal: quotation.subtotal,
-    discount: quotation.discount,
-    tax: quotation.tax_amount,
-    total: quotation.total,
-    notes: quotation.payment_terms ?? undefined,
+    subtotal: quotation.subtotal ?? quotation.materialTotal ?? quotation.total ?? 0,
+    discount: quotation.discount ?? 0,
+    tax: quotation.tax_amount ?? quotation.tax ?? 0,
+    total: quotation.total ?? quotation.totalAmount ?? 0,
+    notes: quotation.payment_terms ?? quotation.paymentTerms ?? undefined,
     pdfUrl: undefined,
   };
 }
 
 function mapShipment(shipment: ErpShipment): DeliveryNotification {
-  const orderRef = shipment.order_number ?? shipment.order_id ?? shipment.id;
+  const orderRef = shipment.order_number ?? shipment.orderNumber ?? shipment.order_id ?? shipment.orderId ?? shipment.id;
   return {
     id: shipment.id,
-    orderId: shipment.order_id ?? orderRef,
-    trackingNumber: shipment.tracking_number ?? shipment.id,
+    orderId: shipment.order_id ?? shipment.orderId ?? orderRef,
+    trackingNumber: shipment.tracking_number ?? shipment.trackingNumber ?? shipment.id,
     title: `Order ${orderRef}`,
     message: `Shipment status: ${shipment.status}`,
     status: normalizeDeliveryStatus(shipment.status),
-    timestamp: shipment.orderDate ?? '',
-    estimatedArrival: shipment.estimated_delivery ?? '',
-    driverName: shipment.driver_name ?? undefined,
-    driverPhone: shipment.driver_phone ?? undefined,
-    vehicleNumber: shipment.vehicle_no ?? undefined,
-    deliveryAddress: shipment.shipping_address ?? '',
-    itemsSummary: (shipment.items ?? []).map((i) => `${i.quantity}x ${i.name}`).join(', '),
+    timestamp: shipment.orderDate ?? shipment.date ?? '',
+    estimatedArrival: shipment.estimated_delivery ?? shipment.estimatedDelivery ?? '',
+    driverName: shipment.driver_name ?? shipment.driverName ?? undefined,
+    driverPhone: shipment.driver_phone ?? shipment.driverPhone ?? undefined,
+    vehicleNumber: shipment.vehicle_no ?? shipment.vehicleNo ?? undefined,
+    deliveryAddress: shipment.shipping_address ?? shipment.shippingAddress ?? '',
+    itemsSummary: (shipment.items ?? []).map((i) => `${i.quantity}x ${i.name ?? 'Item'}`).join(', '),
     proofOfDelivery: undefined,
     isRead: false,
   };
@@ -461,7 +466,7 @@ export class ErpPortalService implements PortalService {
         : [];
     const items: InvoiceItem[] = itemsRaw.map((item, idx) => ({
       id: `ii_${idx}`,
-      description: String(item.description ?? item.name ?? ''),
+      description: String(item.description ?? item.name ?? item.item_name ?? ''),
       quantity: Number(item.quantity ?? 0),
       unitPrice: Number(item.unitPrice ?? item.unit_price ?? 0),
       total: Number(item.total ?? item.lineTotal ?? item.line_total ?? 0),

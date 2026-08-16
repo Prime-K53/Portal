@@ -196,16 +196,19 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
         )}
       </div>
 
-      {/* Ledger Cards / List */}
-      <div className="space-y-2.5">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Statement Ledger Entries (Select to View Details)</h3>
-        {filteredStatements.map((st) => (
+      {/* Ledger List */}
+      <div>
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Statement Ledger Entries (Select to View Details)</h3>
+        <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+        {[...filteredStatements]
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .map((st) => (
           <div
             key={st.id}
             onClick={() => onSelectEntryDetail && onSelectEntryDetail(st)}
-            className="p-3.5 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-400 hover:shadow-xs transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
+            className="px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-all cursor-pointer group"
           >
-            <div className="space-y-1">
+            <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-mono font-bold text-xs text-slate-900 group-hover:text-blue-600 transition-colors">
                   {st.reference}
@@ -238,6 +241,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

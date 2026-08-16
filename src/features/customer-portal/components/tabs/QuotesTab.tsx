@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   MessageSquareQuote,
+  Plus,
   RefreshCcw,
   XCircle,
 } from 'lucide-react';
@@ -11,6 +12,7 @@ import { formatCurrency, formatDate, getQuoteStatusBadge } from '../../utils/for
 
 interface QuotesTabProps {
   quotes: Quotation[];
+  onCreateQuote: () => void;
   onAcceptQuotation: (quotationId: string) => void;
   onRejectQuotation: (quotationId: string) => void;
   onRequestRevision: (quotationId: string) => void;
@@ -18,25 +20,35 @@ interface QuotesTabProps {
 
 export const QuotesTab: React.FC<QuotesTabProps> = ({
   quotes,
+  onCreateQuote,
   onAcceptQuotation,
   onRejectQuotation,
   onRequestRevision,
 }) => {
   return (
     <div className="space-y-4 pb-20 text-slate-900">
-      <div className="flex items-center gap-3 pb-3 border-b border-slate-200/80">
-        <div className="p-2.5 rounded-2xl bg-indigo-600 text-white shadow-xs">
-          <MessageSquareQuote className="w-5 h-5" />
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2.5 rounded-2xl bg-indigo-600 text-white shadow-xs">
+            <MessageSquareQuote className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">Quotations</h2>
+            <p className="text-xs text-slate-500">Commercial quotations issued by the ERP — review, accept, reject, or request a revision</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">Quotations</h2>
-          <p className="text-xs text-slate-500">Commercial quotations issued by the ERP — review, accept, reject, or request a revision</p>
-        </div>
+        <button
+          onClick={onCreateQuote}
+          className="shrink-0 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Create Quote
+        </button>
       </div>
 
       {/* Quote List */}
       <div className="space-y-3">
-        {quotes.map((q) => {
+        {[...quotes].sort((a, b) => new Date(b.issuedDate).getTime() - new Date(a.issuedDate).getTime()).map((q) => {
           const statusInfo = getQuoteStatusBadge(q.status);
           const isActionable = q.status === 'quoted';
 
@@ -63,19 +75,21 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
               </div>
 
               {/* Line Items */}
-              <div className="space-y-1.5 text-xs">
-                <span className="text-[11.5px] text-slate-400 uppercase tracking-wider font-bold block">Line Items</span>
-                {q.items.map((item, idx) => (
-                  <div key={item.id ?? `qi_${idx}`} className="p-2.5 bg-white rounded-xl border border-slate-200 flex justify-between shadow-2xs">
-                    <div>
-                      <span className="font-bold text-slate-900">{item.quantity}x {item.description}</span>
+              <div>
+                <span className="text-[11.5px] text-slate-400 uppercase tracking-wider font-bold block mb-1.5">Line Items</span>
+                <div className="divide-y divide-slate-200 bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  {q.items.map((item, idx) => (
+                    <div key={item.id ?? `qi_${idx}`} className="flex justify-between items-center gap-3 px-3 py-2">
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-900">{item.quantity}x {item.description}</span>
+                      </div>
+                      <div className="text-right shrink-0 pl-3">
+                        <span className="text-slate-500 font-mono text-[12.5px] block">{formatCurrency(item.unitPrice)} / unit</span>
+                        <span className="text-slate-900 font-black text-[12.5px] tabular-nums">{formatCurrency(item.total)}</span>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0 pl-3">
-                      <span className="text-slate-500 font-mono text-[12.5px] block">{formatCurrency(item.unitPrice)} / unit</span>
-                      <span className="text-slate-900 font-black text-[12.5px] tabular-nums">{formatCurrency(item.total)}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
               {/* Totals */}
