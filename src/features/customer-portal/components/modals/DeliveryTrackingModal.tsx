@@ -1,0 +1,201 @@
+import React from 'react';
+import {
+  CheckCircle2,
+  Clock,
+  MessageSquare,
+  Navigation,
+  Package,
+  PhoneCall,
+  ShieldCheck,
+  Truck,
+  User,
+  X,
+} from 'lucide-react';
+import { DeliveryNotification, DeliveryStatus } from '../../types';
+import { formatDateTime, getDeliveryStatusBadge } from '../../utils/formatters';
+
+interface DeliveryTrackingModalProps {
+  delivery: DeliveryNotification | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
+  delivery,
+  isOpen,
+  onClose,
+}) => {
+  if (!isOpen || !delivery) return null;
+
+  const steps: { key: DeliveryStatus; title: string; desc: string }[] = [
+    { key: 'order_placed', title: 'Order Placed', desc: 'Order confirmed and generated in ERP system' },
+    { key: 'processing', title: 'Processing & Packing', desc: 'Items picked and packed at Central Warehouse' },
+    { key: 'dispatched', title: 'Dispatched', desc: 'Package departed logistics hub via Express Freight' },
+    { key: 'out_for_delivery', title: 'Out for Delivery', desc: 'In transit with local delivery courier' },
+    { key: 'delivered', title: 'Delivered & Signed', desc: 'Handed over and verified at receiving dock' },
+  ];
+
+  const getStepIndex = (status: DeliveryStatus) => {
+    switch (status) {
+      case 'order_placed': return 0;
+      case 'processing': return 1;
+      case 'dispatched': return 2;
+      case 'out_for_delivery': return 3;
+      case 'delivered': return 4;
+      default: return 3;
+    }
+  };
+
+  const currentStepIdx = getStepIndex(delivery.status);
+  const statusInfo = getDeliveryStatusBadge(delivery.status);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+      <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
+        {/* Modal Header */}
+        <div className="p-5 bg-slate-900 text-white flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${statusInfo.bg}`}>
+                {statusInfo.label}
+              </span>
+              <span className="text-xs font-mono text-slate-300">Order #{delivery.orderId}</span>
+            </div>
+            <h2 className="text-base font-extrabold mt-1 text-white">{delivery.title}</h2>
+            <p className="text-xs font-mono text-slate-400 mt-0.5">Tracking ID: {delivery.trackingNumber}</p>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body Scrollable */}
+        <div className="p-5 overflow-y-auto space-y-5 text-slate-900">
+          {/* Estimated Arrival Banner */}
+          <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-200/80 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Clock className="w-5 h-5 text-blue-600" />
+              <div>
+                <span className="text-[11.5px] uppercase font-bold text-slate-500 block">Estimated Arrival</span>
+                <span className="text-sm font-extrabold text-blue-700">{delivery.estimatedArrival || 'Scheduled Delivery'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Live Progress Timeline */}
+          <div>
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-3">Live Progress Timeline</h3>
+            <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+              {steps.map((step, idx) => {
+                const isDone = idx <= currentStepIdx;
+                const isCurrent = idx === currentStepIdx;
+
+                return (
+                  <div key={step.key} className="relative flex items-start gap-3">
+                    <div
+                      className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[11.5px] font-bold transition ${
+                        isCurrent
+                          ? 'bg-blue-600 text-white ring-4 ring-blue-100'
+                          : isDone
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-200 text-slate-500 border border-slate-300'
+                      }`}
+                    >
+                      {isDone ? '✓' : idx + 1}
+                    </div>
+                    <div>
+                      <h4 className={`text-xs font-bold ${isCurrent ? 'text-blue-700' : isDone ? 'text-slate-900' : 'text-slate-400'}`}>
+                        {step.title}
+                      </h4>
+                      <p className="text-[12.5px] text-slate-500 leading-relaxed">{step.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Courier Driver Details */}
+          {delivery.driverName && (
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[11.5px] text-slate-400 uppercase tracking-wider block font-bold">Assigned Courier</span>
+                  <strong className="text-xs font-extrabold text-slate-900">{delivery.driverName}</strong>
+                  <span className="text-[11.5px] text-slate-500 block">{delivery.vehicleNumber}</span>
+                </div>
+              </div>
+
+              {delivery.driverPhone && (
+                <div className="flex gap-2">
+                  <a
+                    href={`tel:${delivery.driverPhone}`}
+                    className="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition"
+                    title="Call Driver"
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={`sms:${delivery.driverPhone}`}
+                    className="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition"
+                    title="Text Driver"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Live Telemetry Simulation */}
+          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 relative h-32 flex flex-col items-center justify-center p-4 text-center">
+            <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px] opacity-50" />
+            <div className="relative z-10 space-y-1.5">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-blue-200 text-blue-700 text-xs font-bold shadow-2xs">
+                <Navigation className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                <span>Driver GPS Telemetry Active</span>
+              </div>
+              <p className="text-xs text-slate-700 font-medium">
+                Current Location: <span className="text-slate-900 font-bold font-mono">En Route to Receiving Dock</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Proof of Delivery Card */}
+          {delivery.proofOfDelivery && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2 text-xs">
+              <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Verified Proof of Delivery</span>
+              </div>
+              <p className="text-slate-700">
+                Signed by: <strong className="text-slate-900">{delivery.proofOfDelivery.signedBy}</strong>
+              </p>
+              <p className="text-slate-500 text-[12.5px]">
+                Delivered at: {formatDateTime(delivery.proofOfDelivery.deliveredAt)}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl transition"
+          >
+            Close Progress Tracker
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+

@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Local scratch / verification output
+build-check.txt
+build2.txt
+tscheck.txt
+served-dashboard.txt
+ui-out.txt

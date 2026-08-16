@@ -1,0 +1,6 @@
+{
+  "name": "Prime PORTAL",
+  "description": "Mobile-first customer portal for managing unpaid invoices, tracking deliveries, placing orders, requesting quotes, viewing account statements, and sharing referrals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
