@@ -264,7 +264,7 @@ export function CustomerPortalApp({
   ) => {
     const totalAmount = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
     await runAction(async () => {
-      await portalService.createOrder(
+      const created = await portalService.createOrder(
         {
           items: cartItems.map((ci) => ({
             productId: ci.product.id,
