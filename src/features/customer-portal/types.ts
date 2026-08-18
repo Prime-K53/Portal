@@ -55,7 +55,6 @@ export interface Customer {
   creditLimit?: number;
   currentBalance?: number;
   tier?: string;
-  referralCode?: string;
 }
 
 export interface AuthCredentials {
@@ -109,9 +108,6 @@ export interface AccountProfile {
     phone: string;
     avatar: string;
   };
-  referralCode: string;
-  referralLink: string;
-  totalReferralEarned: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -261,6 +257,67 @@ export interface NewOrderPayload {
   deliveryAddress: string;
   paymentTerms: string;
   totalAmount: number;
+  /** Optional delivery date — sent to the ERP as `requestedDeliveryDate`. */
+  requestedDeliveryDate?: string;
+  /** Optional ERP portal promotion code — validated server-side only. */
+  promotionCode?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Order Requests (ERP quotation_requests with request_type 'order')
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Workflow status of an ERP order REQUEST (ODR-...).
+ *
+ * These are REQUEST statuses, not Sales Order statuses. A request becomes an
+ * official Sales Order (SO-...) only when the ERP converts it
+ * (POST /api/portal/admin/requests/:id/complete-order).
+ */
+export type RequestStatus =
+  | 'draft'
+  | 'submitted'
+  | 'assigned'
+  | 'under_review'
+  | 'waiting_for_customer'
+  | 'ready_for_conversion'
+  | 'converted'
+  | 'rejected'
+  | 'cancelled';
+
+/** Promotion snapshot as returned by the ERP request row. */
+export interface OrderRequestPromotion {
+  code?: string;
+  name?: string;
+  discountAmount?: number;
+}
+
+/**
+ * Customer order REQUEST as returned by the ERP request pipeline
+ * (GET /portal/requests with request_type === 'order').
+ *
+ * This is NOT an official Sales Order. `officialOrderNumber` (SO-...) is set
+ * ONLY when the ERP has actually converted the request — Sasa never fabricates
+ * an SO number.
+ */
+export interface OrderRequest {
+  id: string;
+  /** ERP request number (ODR-YYYY-######). */
+  requestNumber: string;
+  date: string;
+  items: OrderItem[];
+  subtotal: number;
+  discountTotal?: number;
+  /** ERP-authoritative grand total after any server-side promotion. */
+  total: number;
+  promotion?: OrderRequestPromotion;
+  status: RequestStatus;
+  notes?: string;
+  requestedDeliveryDate?: string;
+  /** Set ONLY when the ERP converted the request into an official sales order. */
+  officialOrderId?: string;
+  officialOrderNumber?: string;
+  reorderOfNumber?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -407,24 +464,97 @@ export type StatementEntry = Statement;
 // Referrals
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * @provisional — referral model to be locked to the ERP referral/rewards contract.
- */
-export interface Referral {
+export interface ReferralCustomerSearchResult {
   id: string;
-  refereeName: string;
-  refereeCompany?: string;
-  email: string;
-  dateInvited: string;
-  status: 'invited' | 'registered' | 'first_purchase_completed' | 'reward_issued';
-  rewardAmount: number;
-  rewardClaimed: boolean;
+  name: string;
+  email: string | null;
 }
 
-export interface ReferralInvitePayload {
-  refereeName: string;
-  refereeCompany: string;
-  email: string;
+export interface PortalReferral {
+  id: string;
+  referredCustomerId: string;
+  referredCustomerName: string;
+  referredCustomerEmail: string | null;
+  status: 'active' | 'converted' | 'expired' | 'cancelled';
+  pendingInvoiceId: string | null;
+  pendingInvoiceAmount: number;
+  convertedInvoiceId: string | null;
+  convertedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReferralCreatePayload {
+  referredCustomerId: string;
+  notes?: string;
+}
+
+export interface ReferralTimelineEntry {
+  id: string;
+  referralId: string;
+  eventType: string;
+  title: string;
+  description: string | null;
+  amount: number | null;
+  actorName: string | null;
+  timestamp: string;
+  createdAt: string;
+}
+
+export interface ReferralReward {
+  id: string;
+  referralId: string;
+  referralCode: string | null;
+  referredCustomerId: string | null;
+  referredCustomerName: string | null;
+  invoiceId: string | null;
+  invoiceAmount: number;
+  amount: number;
+  status: 'pending' | 'approved' | 'paid' | 'cancelled';
+  approvedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  walletTransactionId: string | null;
+  createdAt: string;
+}
+
+/** GET /api/portal/referrals/stats — ERP funnel stats (camelCase, no envelope). */
+export interface ReferralStats {
+  total: number;
+  signedUp: number;
+  qualified: number;
+  rewardApproved: number;
+  paid: number;
+  pendingRewardAmount: number;
+  totalEarned: number;
+  conversionRate: number;
+}
+
+/** GET /api/portal/referrals/settings — ERP program configuration (read-only in Sasa). */
+export interface ReferralSettings {
+  enabled: boolean;
+  rewardType: string;
+  rewardValue: number;
+  rewardPercentage: number;
+  minimumPurchase: number;
+  maxRewardAmount: number;
+  expiryDays: number;
+  requireApproval: boolean;
+  shareMessage: string;
+}
+
+/** GET /api/portal/wallet — ERP-authoritative wallet (read-only in Sasa). */
+export interface WalletTransaction {
+  date: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  reference: string;
+}
+
+export interface Wallet {
+  walletBalance: number;
+  transactions: WalletTransaction[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -655,6 +785,10 @@ export interface ErpRequest {
   requestedDeliveryDate?: string | null;
   reorderOf?: string | null;
   reorderOfNumber?: string | null;
+  reorder_of?: string | null;
+  reorder_of_number?: string | null;
+  sales_order_id?: string | null;
+  sales_order_number?: string | null;
   created_at?: string;
 }
 
@@ -914,6 +1048,29 @@ export interface ErpCatalogItem {
 // ── Advertisements (ERP portal banner ads) ───────────────────────────────────
 
 /**
+ * Prepared banner asset metadata produced by the ERP pipeline
+ * (backend bannerImageService → stored in portal_ads.data.imageMeta →
+ * delivered by GET /api/portal/ads). Uploads are always 1600 × 400 WebP;
+ * pasted-URL banners carry probed dimensions instead (format/fileSize absent).
+ */
+export interface PortalAdImageMeta {
+  /** Banner type — always 'customer_portal_banner'. */
+  bannerType?: string;
+  /** Asset width in px. */
+  width: number;
+  /** Asset height in px. */
+  height: number;
+  /** Asset aspect ratio (width / height). */
+  aspectRatio: number;
+  /** Stored format — 'webp' for prepared banners. */
+  format?: string;
+  /** Stored file size in bytes. */
+  fileSize?: number;
+  /** ISO timestamp of when the asset was prepared. */
+  preparedAt?: string;
+}
+
+/**
  * GET /api/portal/ads item — the ERP's display-ready banner ad.
  *
  * Verified from the live ERP response (portalLifecycleService.getActivePortalAds
@@ -931,6 +1088,7 @@ export interface ErpPortalAd {
   ctaLabel: string | null;
   ctaTarget: string | null;
   imageUrl: string | null;
+  imageMeta: PortalAdImageMeta | null;
   gradient: string | null;
   emoji: string | null;
   endsAt: string | null;
@@ -945,6 +1103,7 @@ export interface PortalAd {
   ctaLabel: string | null;
   ctaTarget: string | null;
   imageUrl: string | null;
+  imageMeta: PortalAdImageMeta | null;
   gradient: string | null;
   emoji: string | null;
 }
@@ -984,3 +1143,139 @@ export interface ErpNotificationEvent {
 export type ErpSseEvent =
   | { name: 'entity_changed'; data: ErpEntityChangedEvent }
   | { name: 'notification'; data: ErpNotificationEvent };
+
+// ── Referrals ───────────────────────────────────────────────────────────────────
+
+/** GET /api/portal/referrals/customers/search result item. */
+export interface ErpReferralCustomerSearchResult {
+  id: string;
+  name: string;
+  email: string | null;
+}
+
+/** GET /api/portal/referrals list item. */
+export interface ErpReferral {
+  id: string;
+  referred_customer_id: string;
+  referred_customer_name: string;
+  referred_customer_email: string | null;
+  status: 'active' | 'converted' | 'expired' | 'cancelled';
+  pending_invoice_id: string | null;
+  pending_invoice_amount: number;
+  converted_invoice_id: string | null;
+  converted_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /api/portal/referrals/:id response. */
+export type ErpReferralDetail = ErpReferral;
+
+/**
+ * GET /api/portal/referrals/:id/timeline list item.
+ *
+ * The ERP returns the RAW snake_case referral_timeline rows (bare array — no
+ * envelope). `event_type` values: created, referral_cancelled,
+ * referral_expired, reward_earned, reward_approved, reward_rejected.
+ * `metadata_json` is a JSON STRING (not parsed) when present.
+ */
+export interface ErpReferralTimelineEntry {
+  id: string;
+  referral_id: string;
+  event_type: string;
+  title: string;
+  description: string | null;
+  amount: number | null;
+  actor_id: string | null;
+  actor_name: string | null;
+  metadata_json: string | null;
+  timestamp: string;
+  created_at: string;
+  version?: number;
+}
+
+/** POST /api/portal/referrals request body. */
+export interface ErpReferralCreatePayload {
+  referredCustomerId: string;
+  notes?: string;
+}
+
+/**
+ * POST /api/portal/referrals — 201 response.
+ *
+ * NOTE: the create endpoint returns the RAW snake_case customer_referrals row
+ * (via referralService.register → SELECT *), which differs from the camelCase
+ * list/detail DTOs. `customer_id` is the REFERRED customer; `referred_by_*`
+ * identify the referrer.
+ */
+export interface ErpReferralCreateResult {
+  id: string;
+  customer_id: string;
+  referred_by_id: string;
+  referred_by_name: string | null;
+  referral_code: string | null;
+  status: string;
+  pending_invoice_id: string | null;
+  pending_invoice_amount: number | null;
+  converted_invoice_id: string | null;
+  converted_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  version?: number;
+}
+
+/** GET /api/portal/referrals/rewards list item. */
+export interface ErpReferralReward {
+  id: string;
+  referral_id: string;
+  referral_code: string | null;
+  referred_customer_id: string | null;
+  referred_customer_name: string | null;
+  invoice_id: string | null;
+  invoice_amount: number;
+  amount: number;
+  status: 'pending' | 'approved' | 'paid' | 'cancelled';
+  approved_at: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  wallet_transaction_id: string | null;
+  created_at: string;
+}
+
+/** GET /api/portal/referrals/stats response (flat camelCase funnel stats). */
+export interface ErpReferralStats {
+  total: number;
+  signedUp: number;
+  qualified: number;
+  rewardApproved: number;
+  paid: number;
+  pendingRewardAmount: number;
+  totalEarned: number;
+  conversionRate: number;
+}
+
+/** GET /api/portal/referrals/settings response (camelCase program config). */
+export interface ErpReferralSettings {
+  enabled: boolean;
+  rewardType: string;
+  rewardValue: number;
+  rewardPercentage: number;
+  minimumPurchase: number;
+  maxRewardAmount: number;
+  expiryDays: number;
+  requireApproval: boolean;
+  shareMessage: string;
+}
+
+/** GET /api/portal/wallet response (ERP-authoritative wallet, read-only). */
+export interface ErpWallet {
+  walletBalance: number;
+  transactions: Array<{
+    date: string;
+    amount: number;
+    type: 'credit' | 'debit';
+    reference: string;
+  }>;
+}

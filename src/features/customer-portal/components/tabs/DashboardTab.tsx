@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   Award,
-  ChevronLeft,
+  CheckCircle2,
   ChevronRight,
+  Clock,
   CreditCard,
-  FileText,
   Gift,
   MessageSquareQuote,
   Receipt,
@@ -13,7 +13,7 @@ import {
   Truck,
   Wallet,
 } from 'lucide-react';
-import { AccountProfile, DeliveryNotification, Invoice, PortalAd, StatementEntry, TabType } from '../../types';
+import { AccountProfile, DeliveryNotification, Invoice, PortalAd, PortalAdImageMeta, StatementEntry, TabType } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 
 interface DashboardTabProps {
@@ -58,10 +58,74 @@ interface BannerSlide {
   /** Full CSS gradient string from the ERP ad record (e.g. linear-gradient(...)). */
   gradientCss?: string;
   imageUrl?: string | null;
+  /** ERP pipeline asset metadata (dimensions of the actual stored banner). */
+  imageMeta?: PortalAdImageMeta | null;
   emoji?: string | null;
   ctaLabel?: string | null;
   onCta?: () => void;
 }
+
+/** Canonical banner aspect ratio — the ERP artwork is displayed at 4:1. */
+const BANNER_ASPECT_RATIO = 4;
+
+/**
+ * Banner backdrop. The ERP gradient (or default Sasa gradient) always renders
+ * behind the artwork so a slow/failed image never shows a blank or broken
+ * region, and the 4:1 container height is reserved before the image arrives
+ * (no dashboard layout shift).
+ *
+ * Image fitting is intrinsic-ratio aware so artwork is NEVER stretched:
+ *  - ratio >= 4:1 (correct 1600×400 or wider) → object-cover fills the banner;
+ *  - ratio < 4:1 (legacy square/tall uploads) → object-contain shows the full
+ *    image undistorted, with the gradient visible in the letterbox.
+ * A malformed/failed image URL silently falls back to the gradient instead of
+ * breaking the dashboard.
+ */
+const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+  const [isAtLeastWide, setIsAtLeastWide] = useState(() => {
+    // Decide the initial fit from the ERP pipeline metadata (no flash of the
+    // wrong fit, no runtime probe needed for prepared assets). Legacy banners
+    // without metadata default to cover and correct themselves on load.
+    const meta = slide.imageMeta;
+    if (meta && Number.isFinite(meta.width) && Number(meta.width) > 0 && Number(meta.height) > 0) {
+      return Number(meta.width) / Number(meta.height) >= BANNER_ASPECT_RATIO;
+    }
+    return true;
+  });
+
+  const gradientLayer = slide.gradientCss ? (
+    <div className="absolute inset-0 z-0" style={{ background: slide.gradientCss }} />
+  ) : (
+    <div
+      className={`absolute inset-0 z-0 bg-gradient-to-r ${
+        slide.gradientClass ?? 'from-slate-900 via-indigo-950 to-slate-900'
+      }`}
+    />
+  );
+
+  return (
+    <>
+      {gradientLayer}
+      {slide.imageUrl && !imageFailed && (
+        <img
+          src={slide.imageUrl}
+          alt={slide.title}
+          onError={() => setImageFailed(true)}
+          onLoad={(e) => {
+            const { naturalWidth, naturalHeight } = e.currentTarget;
+            setIsAtLeastWide(
+              naturalHeight > 0 && naturalWidth / naturalHeight >= BANNER_ASPECT_RATIO
+            );
+          }}
+          className={`absolute inset-0 z-0 w-full h-full ${
+            isAtLeastWide ? 'object-cover' : 'object-contain'
+          }`}
+        />
+      )}
+    </>
+  );
+};
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
   profile,
@@ -101,6 +165,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       subtitle: ad.subtitle ?? '',
       gradientCss: ad.gradient ?? undefined,
       imageUrl: ad.imageUrl,
+      imageMeta: ad.imageMeta,
       emoji: ad.emoji,
       ctaLabel: ad.ctaLabel,
       onCta: ctaTab ? () => onNavigateTab(ctaTab) : undefined,
@@ -167,9 +232,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     setTouchStartX(null);
   };
 
-  const unpaidInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid');
-  const unpaidTotal = unpaidInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
-  const overdueCount = unpaidInvoices.filter((i) => i.status === 'overdue').length;
+  const unpaidList = invoices.filter((i) => i.status !== 'paid');
+  const paidList = invoices.filter((i) => i.status === 'paid');
+
+  const totalUnpaid = unpaidList.reduce((sum, i) => sum + i.amountRemaining, 0);
+  const totalPaid = paidList.reduce((sum, i) => sum + i.amountPaid, 0);
+  const isFullyPaid = unpaidList.length === 0;
 
   return (
     <div className="space-y-6 pb-24 text-slate-900 animate-fade-in">
@@ -209,7 +277,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="relative overflow-hidden rounded-2xl min-h-[140px] sm:min-h-[160px] bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
+        className="relative overflow-hidden rounded-2xl aspect-[4/1] w-full bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
       >
         {/* Slide Content — keyed so it remounts and slides in on every slide change */}
         <div
@@ -218,20 +286,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         >
           {/* Banner Background — real ERP image when provided, otherwise the
               ERP ad's CSS gradient, otherwise the default Sasa gradient. Never
-              a placeholder/stock image. */}
-          {activeSlide.imageUrl ? (
-            <img
-              src={activeSlide.imageUrl}
-              alt={activeSlide.title}
-              className="absolute inset-0 z-0 w-full h-full object-cover"
-            />
-          ) : activeSlide.gradientCss ? (
-            <div className="absolute inset-0 z-0" style={{ background: activeSlide.gradientCss }} />
-          ) : (
-            <div
-              className={`absolute inset-0 z-0 bg-gradient-to-r ${activeSlide.gradientClass ?? 'from-slate-900 via-indigo-950 to-slate-900'}`}
-            />
-          )}
+              a placeholder/stock image. The artwork always fills the reserved
+              4:1 space without stretching (see BannerBackground). */}
+          <BannerBackground slide={activeSlide} />
 
           {/* Texture overlay */}
           <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px] z-0" />
@@ -299,59 +356,46 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </div>
 
-      {/* 3. Account Summary Section */}
+      {/* KPI Mini Cards Grid */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-black text-slate-900 tracking-tight relative">
-            Account Summary
-            <span className="absolute -bottom-1 left-0 w-5 h-2 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-sm" />
-          </h3>
-          <button
-            onClick={() => onNavigateTab('invoices')}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 transition"
-          >
-            View All
-          </button>
-        </div>
-
         <div className="grid grid-cols-2 gap-3">
-          {/* Card 1: Unpaid Invoices */}
-          <button
-            onClick={onOpenPaymentModal}
-            className="group p-4 bg-gradient-to-b from-rose-50/80 via-rose-50 to-white border border-rose-100 rounded-2xl text-left space-y-2 hover:from-rose-100/70 hover:via-rose-100/30 hover:to-rose-50 transition-all shadow-md hover:shadow-lg"
-          >
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-rose-100 to-rose-50 text-rose-600">
-                <FileText className="w-5 h-5" />
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          {/* Outstanding Summary Card */}
+          <div className="bg-amber-50/80 rounded-2xl p-4 border border-amber-200/80 space-y-1">
+            <div className="flex items-center justify-between text-amber-800">
+              <span className="text-xs font-bold uppercase tracking-wider">Outstanding</span>
+              <Clock className="w-4 h-4 text-amber-600" />
             </div>
-            <div className="text-[12px] font-black text-slate-700 leading-tight">Unpaid Invoices</div>
-            <div className="text-base font-black text-rose-600 tracking-tight tabular-nums">
-              {formatCurrency(unpaidTotal)}
-            </div>
-            <div className="text-[11px] font-bold text-rose-700">
-              {overdueCount > 0 ? `${overdueCount} Overdue` : 'Outstanding Balance'}
-            </div>
-          </button>
+            <p className="text-xl font-extrabold font-mono text-amber-950">
+              {formatCurrency(totalUnpaid)}
+            </p>
+            <p className="text-[11px] text-amber-700 font-medium">
+              {unpaidList.length > 0 ? `${unpaidList.length} Pending Invoice${unpaidList.length === 1 ? '' : 's'}` : 'No Unpaid Balance'}
+            </p>
+          </div>
 
-          {/* Card 2: Available Credit */}
-          <button
-            onClick={() => onNavigateTab('statements')}
-            className="group p-4 bg-gradient-to-b from-emerald-50/80 via-emerald-50 to-white border border-emerald-100 rounded-2xl text-left space-y-2 hover:from-emerald-100/70 hover:via-emerald-100/30 hover:to-emerald-50 transition-all shadow-md hover:shadow-lg"
+          {/* Total Payment Summary Card */}
+          <div
+            className={`rounded-2xl p-4 border transition-all duration-300 space-y-1 ${
+              isFullyPaid
+                ? 'bg-emerald-900 text-white border-emerald-700 shadow-md'
+                : 'bg-slate-900 text-white border-slate-800'
+            }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-700">
-                <Wallet className="w-5 h-5" />
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+            <div className="flex items-center justify-between text-slate-300">
+              <span className="text-xs font-bold uppercase tracking-wider">Total Payment</span>
+              <CheckCircle2
+                className={`w-4 h-4 ${isFullyPaid ? 'text-emerald-400' : 'text-amber-400'}`}
+              />
             </div>
-            <div className="text-[12px] font-black text-slate-700 leading-tight">Available Credit</div>
-            <div className="text-base font-black text-emerald-600 tracking-tight tabular-nums">
-              {formatCurrency((profile.creditLimit ?? 0) - (profile.currentBalance ?? 0))}
-            </div>
-            <div className="text-[11px] font-bold text-emerald-700">Available</div>
-          </button>
+            <p className="text-xl font-extrabold font-mono text-white">
+              {formatCurrency(totalPaid)}
+            </p>
+            <p
+              className={`text-[11px] ${isFullyPaid ? 'text-emerald-300 font-bold' : 'text-slate-400'}`}
+            >
+              {isFullyPaid ? 'Fully Settled ✓' : `${paidList.length} Invoice${paidList.length === 1 ? '' : 's'} Settled`}
+            </p>
+          </div>
         </div>
       </div>
 

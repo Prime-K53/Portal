@@ -13,20 +13,28 @@ import {
   usePortalEvents,
   useQuotationsData,
   useReferralsData,
+  useReferralRewardsData,
+  useReferralStatsData,
   useStatementsData,
   useUnreadNotificationCount,
+  useWalletData,
 } from './hooks/usePortalData';
-import { portalService, isReferralsBlockedError } from './services';
+import { portalService } from './services';
 import { ROUTES, pathForTab, tabFromPath } from './router/routes';
 import { combineQueryStates, PortalDataBoundary } from './components/state/PortalDataBoundary';
+import { generateIdempotencyKey } from './utils/idempotency';
 import {
   AccountProfile,
   CartItem,
   DeliveryNotification,
   Invoice,
   PaymentRequest,
+  PortalReferral,
   Product,
   QuoteRequestItem,
+  ReferralCreatePayload,
+  ReferralCustomerSearchResult,
+  ReferralTimelineEntry,
   StatementEntry,
   TabType,
 } from './types';
@@ -85,6 +93,9 @@ export function CustomerPortalApp({
   const quotationsQuery = useQuotationsData();
   const statementsQuery = useStatementsData();
   const referralsQuery = useReferralsData();
+  const referralStatsQuery = useReferralStatsData();
+  const referralRewardsQuery = useReferralRewardsData();
+  const walletQuery = useWalletData();
   const catalogQuery = useCatalogData();
   const notificationsQuery = useNotificationsData();
   const unreadQuery = useUnreadNotificationCount();
@@ -100,6 +111,9 @@ export function CustomerPortalApp({
   const quotations = quotationsQuery.data ?? [];
   const statements = statementsQuery.data ?? [];
   const referrals = referralsQuery.data ?? [];
+  const referralStats = referralStatsQuery.data ?? null;
+  const referralRewards = referralRewardsQuery.data ?? [];
+  const wallet = walletQuery.data ?? null;
   const products = catalogQuery.data ?? [];
   const notifications = notificationsQuery.data ?? [];
   const unreadNotificationCount = unreadQuery.data ?? 0;
@@ -237,21 +251,30 @@ export function CustomerPortalApp({
     setCartItems([]);
   };
 
-  const handlePlaceOrder = async (deliveryAddress: string, paymentTerms: string) => {
+  const handlePlaceOrder = async (
+    deliveryAddress: string,
+    paymentTerms: string,
+    _requestedDeliveryDate?: string,
+    _promotionCode?: string,
+    idempotencyKey?: string
+  ) => {
     const totalAmount = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
     await runAction(async () => {
-      await portalService.createOrder({
-        items: cartItems.map((ci) => ({
-          productId: ci.product.id,
-          productName: ci.product.name,
-          quantity: ci.quantity,
-          unitPrice: ci.product.price,
-          total: ci.product.price * ci.quantity,
-        })),
-        deliveryAddress,
-        paymentTerms,
-        totalAmount,
-      });
+      await portalService.createOrder(
+        {
+          items: cartItems.map((ci) => ({
+            productId: ci.product.id,
+            productName: ci.product.name,
+            quantity: ci.quantity,
+            unitPrice: ci.product.price,
+            total: ci.product.price * ci.quantity,
+          })),
+          deliveryAddress,
+          paymentTerms,
+          totalAmount,
+        },
+        idempotencyKey ?? generateIdempotencyKey()
+      );
       ordersQuery.refetch();
       invoicesQuery.refetch();
       statementsQuery.refetch();
@@ -302,21 +325,35 @@ export function CustomerPortalApp({
     });
   };
 
-  // ── Referrals ─────────────────────────────────────────────────────────────
-  const handleSendInvite = (refereeName: string, refereeCompany: string, email: string) => {
-    runAction(async () => {
-      await portalService.sendReferralInvite({ refereeName, refereeCompany, email });
+  // ── Referrals (ERP referral contract: refer EXISTING ERP customers) ───────
+  //
+  // Creates a referral of an existing ERP customer (POST /api/portal/referrals,
+  // body { referredCustomerId, notes }). The ERP derives customer identity from
+  // the JWT, validates the referral (no self-referral, no duplicates, customer
+  // must exist), and owns the lifecycle (active → converted/expired/cancelled)
+  // plus rewards. Sasa never fabricates referral codes/links and there is no
+  // customer-facing claim: rewards are approved and credited by ERP staff.
+  // `idempotencyKey` identifies this logical submission attempt and is reused
+  // by the UI when the same attempt is retried (the ERP replays its stored
+  // response for the same key).
+  const handleCreateReferral = (payload: ReferralCreatePayload, idempotencyKey: string): Promise<PortalReferral> => {
+    return runAction(() => portalService.createReferral(payload, idempotencyKey)).then((created) => {
+      // Refetch ERP state — this only surfaces real ERP changes.
       referralsQuery.refetch();
+      referralStatsQuery.refetch();
+      referralRewardsQuery.refetch();
+      walletQuery.refetch();
+      return created;
     });
   };
 
-  const handleClaimReward = (referralId: string) => {
-    runAction(async () => {
-      await portalService.claimReferralReward(referralId);
-      referralsQuery.refetch();
-      statementsQuery.refetch();
-      customerQuery.refetch();
-    });
+  // Read-only ERP lookups — the tab surfaces errors inline.
+  const handleSearchReferralCustomers = (query: string): Promise<ReferralCustomerSearchResult[]> => {
+    return portalService.searchReferralCustomers(query);
+  };
+
+  const handleLoadReferralTimeline = (referralId: string): Promise<ReferralTimelineEntry[]> => {
+    return portalService.getReferralTimeline(referralId);
   };
 
   // ── Notifications (ERP portal_notifications) ──────────────────────────────
@@ -531,32 +568,22 @@ export function CustomerPortalApp({
           )}
 
           {activeTab === 'referrals' && (
-            isReferralsBlockedError(referralsQuery.error) ? (
-              // Intentional blocked state: the referral feature is not wired to
-              // the ERP yet — render its unavailable panel, not a generic error.
+            <PortalDataBoundary
+              isLoading={referralsQuery.isLoading}
+              error={referralsQuery.error}
+              onRetry={referralsQuery.refetch}
+            >
               <ReferralsTab
                 profile={profile ?? ({} as AccountProfile)}
-                referrals={[]}
-                onSendInvite={handleSendInvite}
-                onClaimReward={handleClaimReward}
+                referrals={referrals}
+                stats={referralStats}
+                rewards={referralRewards}
+                wallet={wallet}
+                onCreateReferral={handleCreateReferral}
+                onSearchCustomers={handleSearchReferralCustomers}
+                onLoadTimeline={handleLoadReferralTimeline}
               />
-            ) : (
-              <PortalDataBoundary
-                isLoading={referralsQuery.isLoading}
-                error={referralsQuery.error}
-                isEmpty={!referralsQuery.isLoading && !referralsQuery.error && referrals.length === 0}
-                emptyTitle="No referrals yet"
-                emptyDescription="Invitations you send will appear here."
-                onRetry={referralsQuery.refetch}
-              >
-                <ReferralsTab
-                  profile={profile ?? ({} as AccountProfile)}
-                  referrals={referrals}
-                  onSendInvite={handleSendInvite}
-                  onClaimReward={handleClaimReward}
-                />
-              </PortalDataBoundary>
-            )
+            </PortalDataBoundary>
           )}
 
           {activeTab === 'account' && (

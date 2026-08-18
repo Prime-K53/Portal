@@ -1,7 +1,9 @@
 import React from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
-import { CartItem } from '../../types';
+import { CartItem, OrderRequest } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { generateIdempotencyKey } from '../../utils/idempotency';
+import { getRequestStatusLabel } from '../../utils/orderRequest';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -10,9 +12,18 @@ interface CartDrawerProps {
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onRemoveItem: (productId: string) => void;
   onClearCart: () => void;
-  /** Places the order through the Portal service. Rejects with an explicit
-   * error when the ERP cannot accept it (e.g. blocked request pipeline). */
-  onPlaceOrder: (deliveryAddress: string, paymentTerms: string) => Promise<void>;
+  /** Submits the order REQUEST through the Portal service (POST /portal/requests,
+   * requestType 'order'). Resolves with the ERP-created order request (ODR-...)
+   * — an official Sales Order is only created later by the ERP. Rejects with an
+   * explicit error when the ERP cannot accept it. `idempotencyKey` identifies
+   * this logical submission attempt and is reused when the attempt is retried. */
+  onPlaceOrder: (
+    deliveryAddress: string,
+    paymentTerms: string,
+    requestedDeliveryDate?: string,
+    promotionCode?: string,
+    idempotencyKey?: string
+  ) => Promise<OrderRequest>;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -26,9 +37,26 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 }) => {
   const [deliveryAddress, setDeliveryAddress] = React.useState('');
   const [paymentTerms, setPaymentTerms] = React.useState('Net 30 Credit Terms');
+  const [requestedDeliveryDate, setRequestedDeliveryDate] = React.useState('');
+  const [promotionCode, setPromotionCode] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [orderError, setOrderError] = React.useState('');
   const [orderComplete, setOrderComplete] = React.useState(false);
+  const [submittedRequest, setSubmittedRequest] = React.useState<OrderRequest | null>(null);
+
+  // Idempotency key for the CURRENT logical submission attempt: generated on
+  // the first attempt, reused while retrying the SAME attempt (the ERP replays
+  // its stored response), cleared on success and whenever the submission
+  // payload changes (a changed order is a NEW logical submission).
+  const submissionKeyRef = React.useRef<string | null>(null);
+  const payloadSignature = JSON.stringify([cartItems, deliveryAddress, paymentTerms, requestedDeliveryDate, promotionCode]);
+  const lastPayloadSignatureRef = React.useRef(payloadSignature);
+  React.useEffect(() => {
+    if (lastPayloadSignatureRef.current !== payloadSignature) {
+      submissionKeyRef.current = null;
+      lastPayloadSignatureRef.current = payloadSignature;
+    }
+  }, [payloadSignature]);
 
   if (!isOpen) return null;
 
@@ -44,12 +72,22 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
 
+    // One key per logical submission attempt — kept across retries of THIS
+    // attempt, cleared on success (and by the payload-signature effect).
+    if (!submissionKeyRef.current) {
+      submissionKeyRef.current = generateIdempotencyKey();
+    }
+    const idempotencyKey = submissionKeyRef.current;
+
     setIsSubmitting(true);
     setOrderError('');
     try {
-      await onPlaceOrder(deliveryAddress, paymentTerms);
+      const created = await onPlaceOrder(deliveryAddress, paymentTerms, requestedDeliveryDate, promotionCode, idempotencyKey);
+      submissionKeyRef.current = null;
+      setSubmittedRequest(created);
       setOrderComplete(true);
     } catch (err) {
+      // Keep the key — a retry of the same attempt must reuse it.
       setOrderError(err instanceof Error ? err.message : 'The order could not be submitted.');
     } finally {
       setIsSubmitting(false);
@@ -60,6 +98,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setOrderComplete(false);
     setIsSubmitting(false);
     setOrderError('');
+    setSubmittedRequest(null);
     onClose();
   };
 
@@ -88,17 +127,63 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {orderComplete ? (
-            <div className="text-center py-12 space-y-4">
+            <div className="text-center py-10 space-y-4">
               <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-200">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
-              <h4 className="text-xl font-black text-slate-900">Order Submitted!</h4>
-              <p className="text-xs text-slate-600 leading-relaxed max-w-xs mx-auto font-medium">
-                Your order has been submitted to the ERP and routed to logistics dispatch.
-              </p>
+              <div>
+                <h4 className="text-xl font-black text-slate-900">Order Request Submitted!</h4>
+                <p className="text-xs text-slate-600 leading-relaxed max-w-xs mx-auto font-medium mt-1">
+                  Your request has been sent to the ERP sales team for review. A confirmation
+                  reference is shown below — the official Sales Order is created once the ERP
+                  confirms the request.
+                </p>
+              </div>
+
+              {submittedRequest && (
+                <div className="max-w-xs mx-auto p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-bold">Request</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {submittedRequest.requestNumber || 'Pending ERP reference'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-bold">Request ID</span>
+                    <span className="font-mono font-bold text-slate-700">{submittedRequest.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-bold">Status</span>
+                    <span className="font-bold text-sky-700 capitalize">
+                      {getRequestStatusLabel(submittedRequest.status)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-bold">Items</span>
+                    <span className="font-bold text-slate-900">{submittedRequest.items.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-bold">Subtotal</span>
+                    <span className="font-bold text-slate-900 tabular-nums">
+                      {formatCurrency(submittedRequest.subtotal)}
+                    </span>
+                  </div>
+                  {submittedRequest.discountTotal ? (
+                    <div className="flex justify-between text-emerald-700 font-extrabold">
+                      <span>Promotion Applied</span>
+                      <span>-{formatCurrency(submittedRequest.discountTotal)}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between pt-2 border-t border-slate-200 font-black text-slate-900">
+                    <span>Total</span>
+                    <span>{formatCurrency(submittedRequest.total)}</span>
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={handleCloseAndReset}
-                className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm shadow-xs transition"
+                className="w-full max-w-xs py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm shadow-xs transition"
               >
                 Continue Shopping
               </button>
@@ -155,7 +240,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 ))}
               </div>
 
-              {/* Delivery Address */}
+              {/* Delivery Details */}
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3 text-xs">
                 <div>
                   <label className="block text-slate-500 font-bold mb-1">Delivery Address</label>
@@ -180,6 +265,25 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <option value="Prepaid ACH Transfer">Prepaid ACH Transfer</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Requested Delivery Date</label>
+                  <input
+                    type="date"
+                    value={requestedDeliveryDate}
+                    onChange={(e) => setRequestedDeliveryDate(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 font-bold focus:outline-none focus:border-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Promotion Code</label>
+                  <input
+                    type="text"
+                    value={promotionCode}
+                    onChange={(e) => setPromotionCode(e.target.value)}
+                    placeholder="Enter a portal promotion code (optional)"
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 font-bold focus:outline-none focus:border-slate-400"
+                  />
+                </div>
               </div>
 
               {/* Order Calculation Breakdown */}
@@ -198,6 +302,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <span>Grand Total</span>
                   <span className="text-slate-900">{formatCurrency(grandTotal)}</span>
                 </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Final pricing is confirmed by the ERP on submission — any promotion discount or
+                  price adjustment will be reflected in the request total.
+                </p>
               </div>
 
               {orderError && (
@@ -225,7 +333,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </>
               ) : (
                 <>
-                  <span>Submit Order ({formatCurrency(grandTotal)})</span>
+                  <span>Submit Order Request ({formatCurrency(grandTotal)})</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

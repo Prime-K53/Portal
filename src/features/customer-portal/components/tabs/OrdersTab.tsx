@@ -9,6 +9,7 @@ import {
   Eye,
   Grid,
   List,
+  Loader2,
   Minus,
   Package,
   Plus,
@@ -22,26 +23,35 @@ import {
   Truck,
   Zap,
 } from 'lucide-react';
-import { CartItem, Order, Product } from '../../types';
+import { CartItem, Order, OrderRequest, Product } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { canCancelOrderRequest, canReorderOrder, getRequestStatusBadge } from '../../utils/orderRequest';
 
 interface OrdersTabProps {
   products: Product[];
+  /** Official Sales Orders (SO-...) created by the ERP. */
   orders: Order[];
+  /** Customer order REQUESTS (ODR-...) — submitted requests awaiting ERP confirmation. */
+  orderRequests: OrderRequest[];
   cartItems: CartItem[];
   onAddToCart: (product: Product, quantity: number) => void;
   onOpenCart: () => void;
-  onReorder: (order: Order) => void;
+  /** Re-submits an official order through the ERP reorder pipeline — resolves with the new request. */
+  onReorder: (order: Order) => Promise<OrderRequest>;
+  /** Cancels a customer's own order request — the ERP enforces ownership + status. */
+  onCancelOrderRequest: (request: OrderRequest) => Promise<OrderRequest>;
   onSelectProductDetail?: (product: Product) => void;
 }
 
 export const OrdersTab: React.FC<OrdersTabProps> = ({
   products,
   orders,
+  orderRequests,
   cartItems,
   onAddToCart,
   onOpenCart,
   onReorder,
+  onCancelOrderRequest,
   onSelectProductDetail,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'history'>('catalog');
@@ -200,6 +210,54 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
 
   const totalCartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+  // Order request cancellation — two-step confirm (no destructive instant action)
+  const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
+  const [cancelBusyId, setCancelBusyId] = useState<string | null>(null);
+  // Reorder feedback — shows the ERP-created request number
+  const [reorderBusyId, setReorderBusyId] = useState<string | null>(null);
+  const [reorderNotice, setReorderNotice] = useState<string | null>(null);
+
+  const resetReorderNotice = () => {
+    if (reorderNotice) {
+      window.setTimeout(() => setReorderNotice(null), 6000);
+    }
+  };
+
+  const handleCancelRequestClick = (request: OrderRequest) => {
+    if (pendingCancelId === request.id) {
+      setCancelBusyId(request.id);
+      onCancelOrderRequest(request)
+        .catch(() => {
+          // The ERP rejected the cancellation (e.g. already converted) — the
+          // global action error banner explains why; the list refreshes.
+        })
+        .finally(() => {
+          setPendingCancelId(null);
+          setCancelBusyId(null);
+        });
+    } else {
+      setPendingCancelId(request.id);
+    }
+  };
+
+  const handleReorderClick = (order: Order) => {
+    if (reorderBusyId) return;
+    setReorderBusyId(order.id);
+    onReorder(order)
+      .then((created) => {
+        if (created.requestNumber) {
+          setReorderNotice(
+            `Reorder submitted — new order request ${created.requestNumber} created. It will be reviewed by the ERP sales team.`
+          );
+          resetReorderNotice();
+        }
+      })
+      .catch(() => {
+        // Error surfaced by the global action error banner.
+      })
+      .finally(() => setReorderBusyId(null));
+  };
+
   return (
     <div className="space-y-4 pb-28 text-slate-900">
       {/* Module Header */}
@@ -237,7 +295,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
           }`}
         >
           <Package className="w-4 h-4" />
-          <span>Order History ({orders.length})</span>
+          <span>Order History ({orderRequests.length + orders.length})</span>
         </button>
       </div>
 
@@ -801,44 +859,199 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
           )}
         </>
       ) : (
-        /* Order History Subtab */
+        /* Order History Subtab — Order REQUESTS (ODR) + Official Sales Orders (SO) */
         <div className="space-y-3">
-          {orders.map((order) => (
-            <div key={order.id} className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-2xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                <div>
-                  <h4 className="font-mono font-bold text-sm text-slate-900">{order.orderNumber}</h4>
-                  <p className="text-[12.5px] text-slate-500 font-medium">Placed on {formatDate(order.date)}</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-sm font-black text-slate-900 block tabular-nums">{formatCurrency(order.totalAmount)}</span>
-                    <span className="text-[10px] bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-full font-bold capitalize">
-                    {order.status}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-1 text-xs text-slate-700">
-                {order.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between font-medium">
-                    <span>{item.quantity}x {item.productName}</span>
-                    <span className="text-slate-500 tabular-nums">{formatCurrency(item.total)}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-slate-500 text-[12.5px] font-medium">Est. Delivery: {formatDate(order.estimatedDelivery)}</span>
-                <button
-                  onClick={() => onReorder(order)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 font-bold text-xs flex items-center gap-1.5 transition shadow-2xs"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Reorder 1-Click</span>
-                </button>
-              </div>
+          {reorderNotice && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-bold leading-relaxed flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{reorderNotice}</span>
             </div>
-          ))}
+          )}
+
+          {/* Section: Order Requests (ODR-...) — the ERP request pipeline */}
+          <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/70">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                  <Package className="w-4 h-4 text-indigo-600" />
+                  Order Requests
+                </h3>
+                <p className="text-[11.5px] text-slate-500 font-medium">
+                  Submitted requests awaiting ERP confirmation — the official Sales Order is created by the ERP.
+                </p>
+              </div>
+              <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+                {orderRequests.length} request(s)
+              </span>
+            </div>
+          </div>
+
+          {orderRequests.length === 0 ? (
+            <div className="text-center py-8 bg-white rounded-2xl border border-slate-200/90 space-y-2">
+              <Package className="w-8 h-8 mx-auto text-slate-300" />
+              <p className="text-xs font-bold text-slate-600">No order requests yet</p>
+              <p className="text-[11.5px] text-slate-400">Submit items from the catalog — each submission creates an ODR request reviewed by the ERP sales team.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {orderRequests.map((request) => {
+                const badge = getRequestStatusBadge(request.status);
+                const cancelable = canCancelOrderRequest(request.status);
+                const isPendingConfirm = pendingCancelId === request.id;
+                const isBusy = cancelBusyId === request.id;
+                return (
+                  <div key={request.id} className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                      <div>
+                        <h4 className="font-mono font-bold text-sm text-slate-900">{request.requestNumber || 'Request'}</h4>
+                        <p className="text-[12.5px] text-slate-500 font-medium">Submitted {formatDate(request.date)}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-black text-slate-900 block tabular-nums">{formatCurrency(request.total)}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold capitalize ${badge.bg}`}>
+                          {badge.label}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 text-xs text-slate-700">
+                      {request.items.length > 0 ? (
+                        request.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between font-medium">
+                            <span>{item.quantity}x {item.productName}</span>
+                            <span className="text-slate-500 tabular-nums">{formatCurrency(item.total)}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-[11.5px] text-slate-400">Request line items are confirmed by the ERP.</p>
+                      )}
+                      {request.discountTotal ? (
+                        <div className="flex justify-between font-bold text-emerald-700">
+                          <span>Promotion discount</span>
+                          <span>-{formatCurrency(request.discountTotal)}</span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+                      <div className="text-slate-500 text-[12.5px] font-medium space-y-0.5">
+                        {request.requestedDeliveryDate && (
+                          <div>Requested delivery: <span className="text-slate-700">{formatDate(request.requestedDeliveryDate)}</span></div>
+                        )}
+                        {request.reorderOfNumber && (
+                          <div>Reorder of <span className="font-mono text-slate-700">{request.reorderOfNumber}</span></div>
+                        )}
+                        {request.officialOrderNumber ? (
+                          <div className="text-emerald-700 font-bold">
+                            Converted to official order <span className="font-mono">{request.officialOrderNumber}</span>
+                          </div>
+                        ) : request.status === 'converted' ? (
+                          <div className="text-emerald-700 font-bold">Converted by the ERP</div>
+                        ) : (
+                          <div>Awaiting ERP review</div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {cancelable && (
+                          <button
+                            onClick={() => handleCancelRequestClick(request)}
+                            disabled={isBusy}
+                            className={`px-3.5 py-1.5 rounded-xl font-bold transition shadow-2xs ${
+                              isPendingConfirm
+                                ? 'bg-rose-600 text-white hover:bg-rose-700'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                            }`}
+                          >
+                            {isBusy ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : isPendingConfirm ? (
+                              'Confirm Cancel?'
+                            ) : (
+                              'Cancel Request'
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Section: Official Sales Orders (SO-...) */}
+          <div className="p-3.5 rounded-2xl bg-slate-100 border border-slate-200/70">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                  <Truck className="w-4 h-4 text-slate-600" />
+                  Official Sales Orders
+                </h3>
+                <p className="text-[11.5px] text-slate-500 font-medium">
+                  Orders confirmed by the ERP and routed to logistics dispatch.
+                </p>
+              </div>
+              <span className="text-[10px] font-extrabold bg-slate-200 text-slate-700 border border-slate-300 px-2 py-0.5 rounded-full">
+                {orders.length} order(s)
+              </span>
+            </div>
+          </div>
+
+          {orders.length === 0 ? (
+            <div className="text-center py-8 bg-white rounded-2xl border border-slate-200/90 space-y-2">
+              <Truck className="w-8 h-8 mx-auto text-slate-300" />
+              <p className="text-xs font-bold text-slate-600">No official sales orders yet</p>
+              <p className="text-[11.5px] text-slate-400">Once the ERP confirms an order request, the official Sales Order appears here.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {orders.map((order) => (
+                <div key={order.id} className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div>
+                      <h4 className="font-mono font-bold text-sm text-slate-900">{order.orderNumber}</h4>
+                      <p className="text-[12.5px] text-slate-500 font-medium">Placed on {formatDate(order.date)}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-black text-slate-900 block tabular-nums">{formatCurrency(order.totalAmount)}</span>
+                      <span className="text-[10px] bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-full font-bold capitalize">
+                        {order.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-xs text-slate-700">
+                    {order.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between font-medium">
+                        <span>{item.quantity}x {item.productName}</span>
+                        <span className="text-slate-500 tabular-nums">{formatCurrency(item.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <span className="text-slate-500 text-[12.5px] font-medium">Est. Delivery: {formatDate(order.estimatedDelivery)}</span>
+                    {canReorderOrder(order) ? (
+                      <button
+                        onClick={() => handleReorderClick(order)}
+                        disabled={reorderBusyId === order.id}
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 font-bold text-xs flex items-center gap-1.5 transition shadow-2xs disabled:opacity-50"
+                      >
+                        {reorderBusyId === order.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                        )}
+                        <span>{reorderBusyId === order.id ? 'Submitting...' : 'Reorder 1-Click'}</span>
+                      </button>
+                    ) : (
+                      <span className="text-slate-400 text-[12.5px] font-medium">Not reorderable</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

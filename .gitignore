@@ -13,3 +13,7 @@ build2.txt
 tscheck.txt
 served-dashboard.txt
 ui-out.txt
+
+# Editor tool workspace
+.kilocode/
+.kilo/

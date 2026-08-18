@@ -8,7 +8,7 @@
  * The single production data source is the PrimeERPsystem Portal API.
  */
 
-import { AccountProfile, DeliveryNotification, Invoice, Order, Product, QuoteRequest, Referral, StatementEntry } from '../types';
+import { AccountProfile, DeliveryNotification, Invoice, Order, Product, QuoteRequest, StatementEntry } from '../types';
 
 export const initialProfile: AccountProfile = {
   id: 'usr_001',
@@ -27,9 +27,6 @@ export const initialProfile: AccountProfile = {
     phone: '+1 (800) 555-0199 ext. 402',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
   },
-  referralCode: 'PATIENCE2026',
-  referralLink: 'https://portal.supplier.com/ref/PATIENCE2026',
-  totalReferralEarned: 1250,
 };
 
 export const initialInvoices: Invoice[] = [
@@ -364,47 +361,4 @@ export const initialStatements: StatementEntry[] = [
   { id: 'st_005', date: '2026-07-20', type: 'Payment', reference: 'PMT-89021', description: 'Bank Wire Transfer Partial Payment', debit: 0, credit: 1000.00, balance: 1000.00 },
   { id: 'st_006', date: '2026-07-25', type: 'Invoice', reference: 'INV-2026-0892', description: 'Corporate Letterheads & Business Cards Order', debit: 1240.00, credit: 0, balance: 2240.00 },
   { id: 'st_007', date: '2026-08-01', type: 'Invoice', reference: 'INV-2026-0914', description: 'Marketing Brochures, Banners & Executive Notebooks', debit: 3080.00, credit: 0, balance: 5320.00 },
-];
-
-export const initialReferrals: Referral[] = [
-  {
-    id: 'ref_1',
-    refereeName: 'David Sterling',
-    refereeCompany: 'Sterling Marketing Agency',
-    email: 'd.sterling@sterlingmktg.com',
-    dateInvited: '2026-07-12',
-    status: 'reward_issued',
-    rewardAmount: 500,
-    rewardClaimed: true,
-  },
-  {
-    id: 'ref_2',
-    refereeName: 'Elena Rostova',
-    refereeCompany: 'Apex Brand Studio',
-    email: 'elena@apexbrand.io',
-    dateInvited: '2026-07-28',
-    status: 'first_purchase_completed',
-    rewardAmount: 750,
-    rewardClaimed: false,
-  },
-  {
-    id: 'ref_3',
-    refereeName: 'Brian O\'Connor',
-    refereeCompany: 'Midwest Publishing Group',
-    email: 'brian@midwestpub.com',
-    dateInvited: '2026-08-04',
-    status: 'registered',
-    rewardAmount: 250,
-    rewardClaimed: false,
-  },
-  {
-    id: 'ref_4',
-    refereeName: 'Samantha Wu',
-    refereeCompany: 'NextGen Retail & Packaging',
-    email: 's.wu@nextgenretail.com',
-    dateInvited: '2026-08-08',
-    status: 'invited',
-    rewardAmount: 250,
-    rewardClaimed: false,
-  },
 ];
