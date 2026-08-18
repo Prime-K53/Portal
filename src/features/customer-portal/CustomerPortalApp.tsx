@@ -9,6 +9,7 @@ import {
   useDeliveriesData,
   useInvoicesData,
   useNotificationsData,
+  useOrderRequestsData,
   useOrdersData,
   usePortalEvents,
   useQuotationsData,
@@ -28,6 +29,7 @@ import {
   CartItem,
   DeliveryNotification,
   Invoice,
+  OrderRequest,
   PaymentRequest,
   PortalReferral,
   Product,
@@ -90,6 +92,7 @@ export function CustomerPortalApp({
   const invoicesQuery = useInvoicesData();
   const deliveriesQuery = useDeliveriesData();
   const ordersQuery = useOrdersData();
+  const orderRequestsQuery = useOrderRequestsData();
   const quotationsQuery = useQuotationsData();
   const statementsQuery = useStatementsData();
   const referralsQuery = useReferralsData();
@@ -108,6 +111,7 @@ export function CustomerPortalApp({
   const invoices = invoicesQuery.data ?? [];
   const deliveries = deliveriesQuery.data ?? [];
   const orders = ordersQuery.data ?? [];
+  const orderRequests = orderRequestsQuery.data ?? [];
   const quotations = quotationsQuery.data ?? [];
   const statements = statementsQuery.data ?? [];
   const referrals = referralsQuery.data ?? [];
@@ -276,11 +280,33 @@ export function CustomerPortalApp({
         idempotencyKey ?? generateIdempotencyKey()
       );
       ordersQuery.refetch();
+      orderRequestsQuery.refetch();
       invoicesQuery.refetch();
       statementsQuery.refetch();
       deliveriesQuery.refetch();
       customerQuery.refetch();
       setCartItems([]);
+      return created;
+    });
+  };
+
+  /**
+   * Cancels a customer's own order REQUEST (POST /portal/requests/:id/cancel).
+   * The ERP enforces ownership and the cancellable status set — requests
+   * already converted / rejected / cancelled are rejected server-side.
+   */
+  const handleCancelOrderRequest = (requestId: string): Promise<OrderRequest> => {
+    return runAction(() => portalService.cancelOrderRequest(requestId)).then((cancelled) => {
+      orderRequestsQuery.refetch();
+      return cancelled;
+    });
+  };
+
+  /** Re-submits an official Sales Order through the ERP reorder pipeline. */
+  const handleReorderOrder = (orderId: string): Promise<OrderRequest> => {
+    return runAction(() => portalService.reorderOrder(orderId)).then((created) => {
+      orderRequestsQuery.refetch();
+      return created;
     });
   };
 
@@ -502,26 +528,23 @@ export function CustomerPortalApp({
 
           {activeTab === 'orders' && (
             <PortalDataBoundary
-              isLoading={combineQueryStates([catalogQuery, ordersQuery]).isLoading}
-              error={combineQueryStates([catalogQuery, ordersQuery]).error}
+              isLoading={combineQueryStates([catalogQuery, ordersQuery, orderRequestsQuery]).isLoading}
+              error={combineQueryStates([catalogQuery, ordersQuery, orderRequestsQuery]).error}
               onRetry={() => {
                 catalogQuery.refetch();
                 ordersQuery.refetch();
+                orderRequestsQuery.refetch();
               }}
             >
               <OrdersTab
                 products={products}
                 orders={orders}
+                orderRequests={orderRequests}
                 cartItems={cartItems}
                 onAddToCart={handleAddToCart}
                 onOpenCart={() => setIsCartOpen(true)}
-                onReorder={(order) => {
-                  order.items.forEach((item) => {
-                    const prod = products.find((p) => p.id === item.productId) || products[0];
-                    if (prod) handleAddToCart(prod, item.quantity);
-                  });
-                  setIsCartOpen(true);
-                }}
+                onReorder={(order) => handleReorderOrder(order.id)}
+                onCancelOrderRequest={(request) => handleCancelOrderRequest(request.id)}
                 onSelectProductDetail={(product) => setSelectedProductDetail(product)}
               />
             </PortalDataBoundary>

@@ -182,6 +182,14 @@ export class MockPortalService implements PortalService {
   }
 
   // ── Orders ────────────────────────────────────────────────────────────────
+  //
+  // DELIBERATELY NOT mocked for order REQUEST mutations. Order requests
+  // (ODR-...) are real ERP workflow data — creating/cancelling/reordering in
+  // the mock would fabricate ERP state and hide contract bugs. The mock keeps
+  // the read-only seeded official orders (SO list) but surfaces an explicit
+  // UNAVAILABLE error for every order-request mutation (same pattern as
+  // payment requests and referrals).
+
   async getOrders(): Promise<Order[]> {
     return clone(this.orders);
   }
