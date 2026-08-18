@@ -123,7 +123,7 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
                     <div className="col-span-2 text-slate-400 text-[12.5px] self-center">{formatDate(st.date)}</div>
                     <div className="col-span-3 font-mono text-slate-900 font-bold self-center">{st.reference}</div>
                     <div className="col-span-3 self-center">
-                      <span className={`text-[11.5px] px-2 py-0.5 rounded-full font-bold ${
+                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                         st.type === 'Payment'
                           ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                           : 'bg-slate-100 text-slate-800 border border-slate-200'

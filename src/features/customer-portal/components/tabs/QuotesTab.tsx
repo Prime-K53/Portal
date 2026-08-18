@@ -60,8 +60,8 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
               <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm text-slate-900">{q.quotationNumber}</span>
-                    <span className={`text-[11.5px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
+                    <span className="font-mono font-bold text-sm text-slate-900">{q.quotationNumber}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
                       {statusInfo.label}
                     </span>
                   </div>
@@ -69,7 +69,7 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
                 </div>
 
                 <div className="text-right">
-                  <span className="text-sm font-black text-slate-900 block tabular-nums">{formatCurrency(q.total)}</span>
+                  <span className="text-sm font-medium text-slate-900 block finance-nums">{formatCurrency(q.total)}</span>
                   <span className="text-[11.5px] text-slate-400">Valid until {q.validUntil ? formatDate(q.validUntil) : '—'}</span>
                 </div>
               </div>
@@ -83,10 +83,10 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
                       <div className="min-w-0">
                         <span className="font-bold text-slate-900">{item.quantity}x {item.description}</span>
                       </div>
-                      <div className="text-right shrink-0 pl-3">
-                        <span className="text-slate-500 font-mono text-[12.5px] block">{formatCurrency(item.unitPrice)} / unit</span>
-                        <span className="text-slate-900 font-black text-[12.5px] tabular-nums">{formatCurrency(item.total)}</span>
-                      </div>
+                        <div className="text-right shrink-0 pl-3">
+                          <span className="text-slate-500 font-mono text-[12.5px] block finance-nums">{formatCurrency(item.unitPrice)} / unit</span>
+                          <span className="text-slate-900 font-medium text-[12.5px] finance-nums">{formatCurrency(item.total)}</span>
+                        </div>
                     </div>
                   ))}
                 </div>
@@ -96,23 +96,23 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
               <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
                 <div className="flex justify-between text-slate-500 font-medium">
                   <span>Subtotal</span>
-                  <span className="tabular-nums">{formatCurrency(q.subtotal)}</span>
+                  <span className="finance-nums">{formatCurrency(q.subtotal)}</span>
                 </div>
                 {q.discount ? (
                   <div className="flex justify-between text-slate-500 font-medium">
                     <span>Discount</span>
-                    <span className="tabular-nums">-{formatCurrency(q.discount)}</span>
+                    <span className="finance-nums">-{formatCurrency(q.discount)}</span>
                   </div>
                 ) : null}
                 {q.tax ? (
                   <div className="flex justify-between text-slate-500 font-medium">
                     <span>Tax</span>
-                    <span className="tabular-nums">{formatCurrency(q.tax)}</span>
+                    <span className="finance-nums">{formatCurrency(q.tax)}</span>
                   </div>
                 ) : null}
-                <div className="flex justify-between text-slate-900 font-black border-t border-slate-200 pt-1 mt-1">
+                <div className="flex justify-between text-slate-900 font-bold border-t border-slate-200 pt-1 mt-1">
                   <span>Total</span>
-                  <span className="tabular-nums">{formatCurrency(q.total)}</span>
+                  <span className="finance-nums">{formatCurrency(q.total)}</span>
                 </div>
               </div>
 

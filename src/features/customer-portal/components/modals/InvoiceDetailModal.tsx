@@ -1,19 +1,23 @@
 import React from 'react';
-import { Calendar, Download, FileText, Loader2, Lock, Printer, X } from 'lucide-react';
+import { Calendar, Download, FileText, Landmark, Loader2, Lock, Printer, X } from 'lucide-react';
 import { Invoice } from '../../types';
 import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/formatters';
+import { canRequestPayment } from '../../utils/paymentRequest';
 import { useInvoiceDetailData } from '../../hooks/usePortalData';
 
 interface InvoiceDetailModalProps {
   invoice: Invoice | null;
   onClose: () => void;
   onPaySingleInvoice: (invoiceId: string) => void;
+  /** Opens the Bank Transfer payment-REQUEST flow (workflow data only — never a payment). */
+  onRequestPayment: (invoice: Invoice) => void;
 }
 
 export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   invoice,
   onClose,
   onPaySingleInvoice,
+  onRequestPayment,
 }) => {
   // Fetch the ERP invoice detail (line items) when the modal is open.
   // Falls back to the list data if the detail endpoint fails.
@@ -53,7 +57,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-extrabold text-base text-slate-900">{effectiveInvoice.invoiceNumber}</h3>
-                <span className={`text-[11.5px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
                   {statusInfo.label}
                 </span>
               </div>
@@ -161,17 +165,30 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
             </button>
           </div>
 
-          {effectiveInvoice.amountRemaining > 0 ? (
-            <button
-              onClick={() => {
-                onClose();
-                onPaySingleInvoice(effectiveInvoice.id);
-              }}
-              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Pay {formatCurrency(effectiveInvoice.amountRemaining)} Now</span>
-            </button>
+          {canRequestPayment(effectiveInvoice) ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  onClose();
+                  onRequestPayment(effectiveInvoice);
+                }}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 hover:bg-slate-100 font-extrabold text-xs flex items-center gap-1.5 transition"
+                title="Request to pay this invoice by bank transfer (not an immediate payment)"
+              >
+                <Landmark className="w-3.5 h-3.5 text-slate-600" />
+                <span>Request Payment</span>
+              </button>
+              <button
+                onClick={() => {
+                  onClose();
+                  onPaySingleInvoice(effectiveInvoice.id);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Pay {formatCurrency(effectiveInvoice.amountRemaining)} Now</span>
+              </button>
+            </div>
           ) : (
             <div className="px-4 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl font-bold text-xs">
               ✓ Fully Settled

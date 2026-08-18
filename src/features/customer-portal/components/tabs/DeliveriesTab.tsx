@@ -59,7 +59,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ deliveries, onSele
               >
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                   <span className="font-mono text-xs font-bold text-slate-900">{item.trackingNumber}</span>
-                  <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full ${statusInfo.bg}`}>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusInfo.bg}`}>
                     {statusInfo.label}
                   </span>
                 </div>

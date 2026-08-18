@@ -213,7 +213,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
                 <span className="font-mono font-bold text-xs text-slate-900 group-hover:text-blue-600 transition-colors">
                   {st.reference}
                 </span>
-                <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded ${
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                   st.type === 'Payment'
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                     : 'bg-slate-200 text-slate-700'

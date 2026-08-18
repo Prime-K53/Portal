@@ -51,9 +51,9 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 <Icon className={`w-5 h-5 transition-transform ${isActive ? 'text-blue-600' : 'text-slate-500'}`} />
                 {tab.badge !== undefined && tab.badge > 0 && (
                   <span
-                    className={`absolute -top-1.5 -right-2.5 ${
-                      tab.badgeColor || 'bg-rose-600'
-                    } text-white text-[11.5px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-2xs`}
+                   className={`absolute -top-1.5 -right-2.5 ${
+                       tab.badgeColor || 'bg-rose-600'
+                     } text-white text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-2xs`}
                   >
                     {tab.badge}
                   </span>

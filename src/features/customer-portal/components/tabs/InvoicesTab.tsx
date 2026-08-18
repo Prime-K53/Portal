@@ -125,13 +125,13 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
         {/* 2. Search Bar & Export CSV */}
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Search by invoice #, PO #, or line items..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-900 shadow-2xs"
-            />
+              <input
+                type="text"
+                placeholder="Search by invoice #, PO #, or line items..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-900 shadow-2xs"
+              />
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
           </div>
 
@@ -210,11 +210,11 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
                         )}
                       </button>
                     )}
-                    <h3 className="font-black text-sm text-slate-900">{inv.invoiceNumber}</h3>
+                    <h3 className="font-mono font-bold text-sm text-slate-500">{inv.invoiceNumber}</h3>
                   </div>
 
                   <span
-                    className={`text-[10.5px] font-extrabold uppercase px-2 py-0.5 rounded-md tracking-wider ${
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wider ${
                       inv.status === 'overdue'
                         ? 'bg-rose-100 text-rose-800'
                         : inv.status === 'paid'
@@ -227,13 +227,13 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
                 </div>
 
                 {/* Dates line */}
-                <p className="text-xs text-slate-500 font-medium mt-1">
+                <p className="text-xs text-slate-500 font-normal mt-1">
                   Issue Date: {inv.issueDate} <span className="text-slate-300">|</span> Due: {inv.dueDate}
                 </p>
 
                 {/* Description & Note */}
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-xs font-bold text-slate-800 line-clamp-1">
+                  <p className="text-sm font-normal text-slate-800 line-clamp-1">
                     {inv.items.map((i) => `${i.quantity}x ${i.description}`).join(', ')}
                   </p>
                   {inv.notes && (
@@ -243,7 +243,7 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
 
                 {/* Footer Action Row */}
                 <div className="flex items-center justify-between gap-3 pt-3 mt-3 border-t border-slate-100">
-                  <span className="text-base font-black text-slate-900 tabular-nums">
+                  <span className="text-base font-medium text-slate-900 finance-nums">
                     {formatCurrency(inv.amount)}
                   </span>
 

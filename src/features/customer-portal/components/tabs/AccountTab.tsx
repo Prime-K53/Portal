@@ -58,7 +58,7 @@ export const AccountTab: React.FC<AccountTabProps> = ({ profile, onSignOut }) =>
             {profile?.accountNumber && (
               <p className="text-xs text-slate-500 font-mono font-bold">Account #: {profile.accountNumber}</p>
             )}
-            <span className="inline-block mt-1 text-[11.5px] bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-full font-bold">
+            <span className="inline-block mt-1 text-[10px] bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-full font-bold">
               {profile?.tier || 'Standard'}
             </span>
           </div>
@@ -101,11 +101,11 @@ export const AccountTab: React.FC<AccountTabProps> = ({ profile, onSignOut }) =>
 
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="p-3 bg-white rounded-xl border border-slate-200">
-            <span className="text-slate-400 block text-[11.5px] uppercase font-bold">Total Approved Credit</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-bold">Total Approved Credit</span>
             <strong className="text-base font-black text-slate-900">{formatCurrency(profile.creditLimit)}</strong>
           </div>
           <div className="p-3 bg-white rounded-xl border border-slate-200">
-            <span className="text-slate-400 block text-[11.5px] uppercase font-bold">Current Drawn Balance</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-bold">Current Drawn Balance</span>
             <strong className="text-base font-black text-orange-600">{formatCurrency(profile.currentBalance)}</strong>
           </div>
         </div>

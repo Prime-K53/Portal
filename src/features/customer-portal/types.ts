@@ -261,6 +261,67 @@ export interface NewOrderPayload {
   deliveryAddress: string;
   paymentTerms: string;
   totalAmount: number;
+  /** Optional delivery date — sent to the ERP as `requestedDeliveryDate`. */
+  requestedDeliveryDate?: string;
+  /** Optional ERP portal promotion code — validated server-side only. */
+  promotionCode?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Order Requests (ERP quotation_requests with request_type 'order')
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Workflow status of an ERP order REQUEST (ODR-...).
+ *
+ * These are REQUEST statuses, not Sales Order statuses. A request becomes an
+ * official Sales Order (SO-...) only when the ERP converts it
+ * (POST /api/portal/admin/requests/:id/complete-order).
+ */
+export type RequestStatus =
+  | 'draft'
+  | 'submitted'
+  | 'assigned'
+  | 'under_review'
+  | 'waiting_for_customer'
+  | 'ready_for_conversion'
+  | 'converted'
+  | 'rejected'
+  | 'cancelled';
+
+/** Promotion snapshot as returned by the ERP request row. */
+export interface OrderRequestPromotion {
+  code?: string;
+  name?: string;
+  discountAmount?: number;
+}
+
+/**
+ * Customer order REQUEST as returned by the ERP request pipeline
+ * (GET /portal/requests with request_type === 'order').
+ *
+ * This is NOT an official Sales Order. `officialOrderNumber` (SO-...) is set
+ * ONLY when the ERP has actually converted the request — Sasa never fabricates
+ * an SO number.
+ */
+export interface OrderRequest {
+  id: string;
+  /** ERP request number (ODR-YYYY-######). */
+  requestNumber: string;
+  date: string;
+  items: OrderItem[];
+  subtotal: number;
+  discountTotal?: number;
+  /** ERP-authoritative grand total after any server-side promotion. */
+  total: number;
+  promotion?: OrderRequestPromotion;
+  status: RequestStatus;
+  notes?: string;
+  requestedDeliveryDate?: string;
+  /** Set ONLY when the ERP converted the request into an official sales order. */
+  officialOrderId?: string;
+  officialOrderNumber?: string;
+  reorderOfNumber?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -581,12 +642,38 @@ export interface ErpOrder {
   orderDate: string;
   deliveryDate: string | null;
   status: string;
-  items: { name: string; quantity: number; unitPrice?: number; price?: number; lineTotal?: number; lineTotalNet?: number }[];
+  items: ErpOrderLine[];
   totalAmount: number;
   total?: number;
   tracking_number?: string | null;
   trackingNumber?: string | null;
   created_at: string;
+}
+
+/**
+ * Order line as returned by the ERP.
+ *
+ * The LIST endpoint returns raw stored order lines whose display name lives
+ * under `productName` (verified: `productName: "Administration Records"`,
+ * plus `productId`, `unitPrice`, `subtotal`); the DETAIL endpoint normalizes
+ * them to `name`/`lineTotal`. Both spellings are declared so the mapper can
+ * adapt to either variant.
+ */
+export interface ErpOrderLine {
+  name?: string;
+  productName?: string;
+  product_name?: string;
+  description?: string;
+  productId?: string | null;
+  product_id?: string | null;
+  quantity: number;
+  unitPrice?: number;
+  price?: number;
+  unit_price?: number;
+  lineTotal?: number;
+  lineTotalNet?: number;
+  line_total?: number;
+  subtotal?: number;
 }
 
 // ── Requests (quotations + orders share the ERP request pipeline) ────────────
@@ -629,6 +716,10 @@ export interface ErpRequest {
   requestedDeliveryDate?: string | null;
   reorderOf?: string | null;
   reorderOfNumber?: string | null;
+  reorder_of?: string | null;
+  reorder_of_number?: string | null;
+  sales_order_id?: string | null;
+  sales_order_number?: string | null;
   created_at?: string;
 }
 
@@ -730,6 +821,72 @@ export interface ErpPaymentRequest {
   transactionId?: string;
 }
 
+// ── Payment requests (NON-ACCOUNTING bank-transfer intentions) ──────────────
+
+/**
+ * Lifecycle of a payment request. These are WORKFLOW statuses — they are NOT
+ * accounting statuses. `confirmed` does NOT mean the invoice is paid; only an
+ * ERP-recorded accounting payment (invoice paid_amount / status) says that.
+ */
+export type PaymentRequestStatus = 'requested' | 'under_review' | 'confirmed' | 'rejected' | 'cancelled';
+
+/**
+ * Customer payment-intent record as represented in the Portal domain.
+ * A payment request is workflow data ONLY: it never records a payment,
+ * allocates funds, or modifies the invoice.
+ */
+export interface PaymentRequest {
+  id: string;
+  requestNumber: string;
+  invoiceId: string;
+  invoiceNumber?: string;
+  requestedAmount: number;
+  /** Always 'Bank Transfer' — the only payment-request method the ERP accepts. */
+  paymentMethod: string;
+  status: PaymentRequestStatus;
+  note?: string;
+  requestedAt: string;
+  createdAt: string;
+}
+
+/**
+ * Request body for POST /api/portal/payment-requests.
+ *
+ * SECURITY: only customer-controlled fields are sent. Customer identity
+ * (customer_id) is derived by the ERP from the authenticated portal JWT — it
+ * is NEVER included here and the browser can never choose another customer.
+ */
+export interface ErpPaymentRequestCreatePayload {
+  invoiceId: string;
+  /** Optional; the ERP defaults to the authoritative outstanding balance. */
+  requestedAmount?: number;
+  note?: string;
+}
+
+/**
+ * GET /api/portal/payment-requests record (camelCase DTO verified from the
+ * ERP paymentRequestService.toPortalDto) and the 201 response of POST
+ * /api/portal/payment-requests.
+ */
+export interface ErpPaymentRequestRecord {
+  id: string;
+  requestNumber: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  requestedAmount: number;
+  paymentMethod: string | null;
+  status: string | null;
+  note: string | null;
+  requestedAt: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  adminNotes: string | null;
+  linkedPaymentId: string | null;
+  createdAt: string | null;
+}
+
 // ── Deliveries / shipments ───────────────────────────────────────────────────
 
 /**
@@ -817,6 +974,44 @@ export interface ErpCatalogItem {
   quantity: number;
   category: string;
   status: string;
+}
+
+// ── Advertisements (ERP portal banner ads) ───────────────────────────────────
+
+/**
+ * GET /api/portal/ads item — the ERP's display-ready banner ad.
+ *
+ * Verified from the live ERP response (portalLifecycleService.getActivePortalAds
+ * → `portal_ads` table, company-scoped via the customer's companyId, active +
+ * date-filtered, sorted by priority desc). Ads are managed in the ERP admin
+ * (Smart Operations Hub → Ads); image uploads land in `portal_ads.data.imageUrl`.
+ * `gradient` is a full CSS gradient string (e.g.
+ * `linear-gradient(135deg, #312E81 0%, #7C5CF0 100%)`).
+ */
+export interface ErpPortalAd {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  badge: string | null;
+  ctaLabel: string | null;
+  ctaTarget: string | null;
+  imageUrl: string | null;
+  gradient: string | null;
+  emoji: string | null;
+  endsAt: string | null;
+}
+
+/** Banner ad as consumed by the Sasa dashboard carousel. */
+export interface PortalAd {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  badge: string | null;
+  ctaLabel: string | null;
+  ctaTarget: string | null;
+  imageUrl: string | null;
+  gradient: string | null;
+  emoji: string | null;
 }
 
 // ── Realtime / SSE ───────────────────────────────────────────────────────────

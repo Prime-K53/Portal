@@ -20,7 +20,10 @@ import type {
   NewOrderPayload,
   NewQuoteRequestPayload,
   Order,
+  OrderRequest,
   Payment,
+  PaymentRequest,
+  PortalAd,
   PortalNotification,
   Product,
   Quotation,
@@ -29,7 +32,14 @@ import type {
   ReferralInvitePayload,
   StatementEntry,
 } from '../types';
-import type { ErpLoyalty, ErpPaymentIntent, ErpPaymentRequest, ErpPaymentResult } from '../types';
+import type {
+  ErpLoyalty,
+  ErpPaymentIntent,
+  ErpPaymentRequest,
+  ErpPaymentRequestCreatePayload,
+  ErpPaymentResult,
+} from '../types';
+import { ApiError } from './apiClient';
 import {
   initialDeliveries,
   initialInvoices,
@@ -140,93 +150,74 @@ export class MockPortalService implements PortalService {
     };
   }
 
+  // ── Payment requests (NON-ACCOUNTING bank-transfer intentions) ───────────
+  //
+  // DELIBERATELY NOT mocked. Payment requests are real ERP workflow data and
+  // the instruction forbids fabricating payment-request data in Sasa. The mock
+  // surfaces an explicit UNAVAILABLE error instead (same pattern as referrals),
+  // so the dev UI never pretends a request exists or was created.
+
+  private paymentRequestUnavailable(): Promise<never> {
+    return Promise.reject(
+      new ApiError(
+        'Payment requests is temporarily unavailable. Payment requests are served by the ERP Portal API and are never fabricated in development mode.',
+        { code: 'UNAVAILABLE' }
+      )
+    );
+  }
+
+  getPaymentRequests(): Promise<PaymentRequest[]> {
+    return this.paymentRequestUnavailable();
+  }
+
+  getPaymentRequest(): Promise<PaymentRequest> {
+    return this.paymentRequestUnavailable();
+  }
+
+  createPaymentRequest(_payload: ErpPaymentRequestCreatePayload): Promise<PaymentRequest> {
+    return this.paymentRequestUnavailable();
+  }
+
   // ── Orders ────────────────────────────────────────────────────────────────
+  //
+  // DELIBERATELY NOT mocked for order REQUEST mutations. Order requests
+  // (ODR-...) are real ERP workflow data — creating/cancelling/reordering in
+  // the mock would fabricate ERP state and hide contract bugs. The mock keeps
+  // the read-only seeded official orders (SO list) but surfaces an explicit
+  // UNAVAILABLE error for every order-request mutation (same pattern as
+  // payment requests and referrals).
+
   async getOrders(): Promise<Order[]> {
     return clone(this.orders);
   }
 
-  async createOrder(payload: NewOrderPayload): Promise<Order> {
-    const orderNum = `ORD-${Math.floor(8800 + Math.random() * 1000)}`;
-    const invoiceNum = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const today = new Date().toISOString().split('T')[0];
-    const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-    const newOrder: Order = {
-      id: `ord_${Date.now()}`,
-      orderNumber: orderNum,
-      date: today,
-      totalAmount: payload.totalAmount,
-      status: 'processing',
-      deliveryAddress: payload.deliveryAddress,
-      paymentMethod: payload.paymentTerms,
-      estimatedDelivery: 'In 2-3 Business Days',
-      associatedInvoiceId: `inv_${Date.now()}`,
-      items: clone(payload.items),
-    };
-    this.orders = [newOrder, ...this.orders];
-
-    const newInvoice: Invoice = {
-      id: `inv_${Date.now()}`,
-      invoiceNumber: invoiceNum,
-      issueDate: today,
-      dueDate,
-      amount: payload.totalAmount,
-      amountPaid: 0,
-      amountRemaining: payload.totalAmount,
-      status: 'unpaid',
-      poNumber: `PO-${Math.floor(90000 + Math.random() * 9999)}`,
-      items: payload.items.map((item, idx) => ({
-        id: `it_new_${idx}`,
-        description: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        total: item.total,
-      })),
-    };
-    this.invoices = [newInvoice, ...this.invoices];
-
-    this.profile = { ...this.profile, currentBalance: this.profile.currentBalance + payload.totalAmount };
-
-    this.statements = [
-      {
-        id: `st_${Date.now()}`,
-        date: today,
-        type: 'Invoice',
-        reference: invoiceNum,
-        description: `Purchase Order ${orderNum}`,
-        debit: payload.totalAmount,
-        credit: 0,
-        balance: this.profile.currentBalance,
-      },
-      ...this.statements,
-    ];
-
-    this.deliveries = [
-      {
-        id: `del_${Date.now()}`,
-        orderId: orderNum,
-        trackingNumber: `TRK-${Math.floor(100000 + Math.random() * 900000)}-US`,
-        title: 'Order Confirmed & Processing',
-        message: `Order ${orderNum} received! Items are being packed at warehouse.`,
-        status: 'processing',
-        timestamp: new Date().toISOString(),
-        estimatedArrival: 'In 2-3 Days',
-        deliveryAddress: payload.deliveryAddress,
-        itemsSummary: payload.items.map((item) => `${item.quantity}x ${item.productName}`).join(', '),
-        isRead: false,
-      } as DeliveryNotification,
-      ...this.deliveries,
-    ];
-
-    return clone(newOrder);
+  getOrderRequests(): Promise<OrderRequest[]> {
+    return Promise.resolve([]);
   }
 
-  async reorderOrder(orderId: string): Promise<Order> {
-    const order = this.orders.find((o) => o.id === orderId || o.orderNumber === orderId);
-    if (!order) throw new Error(`Order not found: ${orderId}`);
-    const reordered: Order = { ...clone(order), id: `ord_${Date.now()}`, status: 'processing' };
-    this.orders = [reordered, ...this.orders];
-    return clone(reordered);
+  getOrderRequestById(): Promise<OrderRequest> {
+    return this.orderRequestUnavailable();
+  }
+
+  private orderRequestUnavailable(): Promise<never> {
+    return Promise.reject(
+      new ApiError(
+        'Order requests is temporarily unavailable. Order requests are served by the ERP Portal API and are never fabricated in development mode.',
+        { code: 'UNAVAILABLE' }
+      )
+    );
+  }
+
+  createOrder(_payload: NewOrderPayload, _idempotencyKey: string): Promise<OrderRequest> {
+    return this.orderRequestUnavailable();
+  }
+
+  cancelOrderRequest(_requestId: string): Promise<OrderRequest> {
+    return this.orderRequestUnavailable();
+  }
+
+  reorderOrder(_orderId: string): Promise<OrderRequest> {
+    return this.orderRequestUnavailable();
   }
 
   // ── Quotations (formal) & quotation requests ──────────────────────────────
@@ -403,6 +394,14 @@ export class MockPortalService implements PortalService {
   // ── Loyalty ───────────────────────────────────────────────────────────────
   async getLoyalty(): Promise<ErpLoyalty> {
     return { points: 0, cashback: 0, tier: 'standard', pointsHistory: [] };
+  }
+
+  // ── Advertisements ────────────────────────────────────────────────────────
+  // Honest empty state: ads come from the ERP's portal_ads table and are never
+  // fabricated in the mock. In dev mode the dashboard simply shows the welcome
+  // and delivery slides.
+  async getAds(): Promise<PortalAd[]> {
+    return [];
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

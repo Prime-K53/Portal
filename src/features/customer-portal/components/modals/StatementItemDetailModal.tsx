@@ -179,7 +179,7 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
             </div>
 
             <div className="text-right">
-              <span className={`text-[11.5px] font-extrabold px-2.5 py-1 rounded-full border ${
+              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
                 isPayment
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                   : 'bg-slate-200 text-slate-800 border-slate-300'

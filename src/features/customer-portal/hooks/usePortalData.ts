@@ -18,7 +18,10 @@ import type {
   DeliveryNotification,
   Invoice,
   Order,
+  OrderRequest,
   Payment,
+  PaymentRequest,
+  PortalAd,
   PortalNotification,
   Product,
   Quotation,
@@ -70,6 +73,14 @@ export function useOrdersData(): PortalQueryResult<Order[]> {
   return usePortalQuery(() => portalService.getOrders(), []);
 }
 
+/**
+ * Customer order REQUESTS (ODR-...) — submitted requests from the ERP request
+ * pipeline. Distinct from official Sales Orders (useOrdersData).
+ */
+export function useOrderRequestsData(): PortalQueryResult<OrderRequest[]> {
+  return usePortalQuery(() => portalService.getOrderRequests(), []);
+}
+
 export function useQuoteRequestsData(): PortalQueryResult<QuoteRequest[]> {
   return usePortalQuery(() => portalService.getQuoteRequests(), []);
 }
@@ -90,6 +101,15 @@ export function usePaymentsData(): PortalQueryResult<Payment[]> {
   return usePortalQuery(() => portalService.getPayments(), []);
 }
 
+/**
+ * Customer payment-request list. Fetched only while enabled (default true) —
+ * the payment-request modal gates it so no ERP call is made when the modal is
+ * closed.
+ */
+export function usePaymentRequestsData(enabled = true): PortalQueryResult<PaymentRequest[]> {
+  return usePortalQuery(() => portalService.getPaymentRequests(), [], enabled);
+}
+
 export function useReferralsData(): PortalQueryResult<Referral[]> {
   return usePortalQuery(() => portalService.getReferrals(), []);
 }
@@ -108,4 +128,8 @@ export function useUnreadNotificationCount(): PortalQueryResult<number> {
 
 export function useLoyaltyData(): PortalQueryResult<ErpLoyalty> {
   return usePortalQuery(() => portalService.getLoyalty(), []);
+}
+
+export function useAdsData(): PortalQueryResult<PortalAd[]> {
+  return usePortalQuery(() => portalService.getAds(), []);
 }

@@ -27,8 +27,13 @@ import type {
   NewQuoteRequestPayload,
   Order,
   OrderItem,
+  OrderRequest,
+  OrderRequestPromotion,
   OrderStatus,
   Payment,
+  PaymentRequest,
+  PaymentRequestStatus,
+  PortalAd,
   PortalNotification,
   Product,
   Quotation,
@@ -38,6 +43,7 @@ import type {
   QuoteStatus,
   Referral,
   ReferralInvitePayload,
+  RequestStatus,
   StatementEntry,
 } from '../types';
 import type {
@@ -49,7 +55,10 @@ import type {
   ErpPaymentIntent,
   ErpPaymentRecord,
   ErpPaymentRequest,
+  ErpPaymentRequestCreatePayload,
+  ErpPaymentRequestRecord,
   ErpPaymentResult,
+  ErpPortalAd,
   ErpProfile,
   ErpQuotation,
   ErpReorderResult,
@@ -73,10 +82,27 @@ export interface PortalService {
   submitPayment(payload: ErpPaymentRequest): Promise<ErpPaymentResult>;
   getPaymentIntent(invoiceId: string, amount: number): Promise<ErpPaymentIntent>;
 
+  // ── Payment requests (NON-ACCOUNTING bank-transfer intentions) ───────────
+  getPaymentRequests(): Promise<PaymentRequest[]>;
+  getPaymentRequest(paymentRequestId: string): Promise<PaymentRequest>;
+  createPaymentRequest(payload: ErpPaymentRequestCreatePayload): Promise<PaymentRequest>;
+
   // ── Orders (created through the ERP request pipeline) ─────────────────────
   getOrders(): Promise<Order[]>;
-  createOrder(payload: NewOrderPayload): Promise<Order>;
-  reorderOrder(orderId: string): Promise<Order>;
+  /** ERP order REQUESTS (ODR-...) — the customer's submitted requests, NOT official SOs. */
+  getOrderRequests(): Promise<OrderRequest[]>;
+  /** GET /portal/requests/:id — the ERP enforces customer ownership server-side. */
+  getOrderRequestById(requestId: string): Promise<OrderRequest>;
+  /**
+   * Submits an order REQUEST. `idempotencyKey` must be generated once per
+   * logical submission attempt (utils/idempotency.ts) and reused for retries
+   * of the SAME attempt — it is sent as the Idempotency-Key header so the ERP
+   * can replay the stored response instead of creating a duplicate request.
+   */
+  createOrder(payload: NewOrderPayload, idempotencyKey: string): Promise<OrderRequest>;
+  /** POST /portal/requests/:id/cancel — only cancellable request statuses are accepted by the ERP. */
+  cancelOrderRequest(requestId: string): Promise<OrderRequest>;
+  reorderOrder(orderId: string): Promise<OrderRequest>;
 
   // ── Quotations (formal, READY) ────────────────────────────────────────────
   getQuotations(): Promise<Quotation[]>;
@@ -110,6 +136,9 @@ export interface PortalService {
 
   // ── Loyalty (real ERP tier for profile display) ───────────────────────────
   getLoyalty(): Promise<ErpLoyalty>;
+
+  // ── Advertisements (ERP portal banner ads — dashboard carousel) ───────────
+  getAds(): Promise<PortalAd[]>;
 }
 
 /** Explicit failure for features blocked by pending ERP migrations. */
@@ -212,11 +241,14 @@ function mapInvoice(summary: ErpInvoiceSummary): Invoice {
 
 function mapOrder(order: ErpOrder): Order {
   const items: OrderItem[] = (order.items ?? []).map((item) => ({
-    productId: '',
-    productName: item.name ?? 'Item',
+    // The ERP list endpoint carries the display name as `productName` (raw
+    // stored order lines); the detail endpoint normalizes it to `name`.
+    // Never hardcode 'Item' when the ERP provides a real name.
+    productId: item.productId ?? item.product_id ?? '',
+    productName: item.name ?? item.productName ?? item.product_name ?? item.description ?? 'Item',
     quantity: item.quantity,
-    unitPrice: item.unitPrice ?? item.price ?? 0,
-    total: item.lineTotal ?? item.lineTotalNet ?? (item.quantity ?? 0) * (item.unitPrice ?? item.price ?? 0),
+    unitPrice: item.unitPrice ?? item.price ?? item.unit_price ?? 0,
+    total: item.lineTotal ?? item.lineTotalNet ?? item.line_total ?? item.subtotal ?? (item.quantity ?? 0) * (item.unitPrice ?? item.price ?? item.unit_price ?? 0),
   }));
   return {
     id: order.id,
@@ -311,6 +343,59 @@ function mapPayment(payment: ErpPaymentRecord): Payment {
   };
 }
 
+function normalizePaymentRequestStatus(status: string | null | undefined): PaymentRequestStatus {
+  const normalized = String(status ?? '').toLowerCase();
+  switch (normalized) {
+    case 'requested':
+    case 'under_review':
+    case 'confirmed':
+    case 'rejected':
+    case 'cancelled':
+      return normalized as PaymentRequestStatus;
+    default:
+      // Unknown statuses are kept verbatim (never silently coerced to a
+      // misleading label) — the UI renders them honestly as-is.
+      return (normalized || 'requested') as PaymentRequestStatus;
+  }
+}
+
+/**
+ * ERP payment-request DTO → Sasa PaymentRequest.
+ *
+ * A payment request is workflow data ONLY: `requestedAmount` is the requested
+ * (not paid) amount and `status` is a workflow status — `confirmed` must never
+ * be read as "paid" unless the ERP invoice/payment data independently confirms
+ * a recorded accounting payment.
+ */
+function mapPaymentRequest(record: ErpPaymentRequestRecord): PaymentRequest {
+  return {
+    id: record.id,
+    requestNumber: record.requestNumber ?? record.id,
+    invoiceId: record.invoiceId ?? '',
+    invoiceNumber: record.invoiceNumber ?? undefined,
+    requestedAmount: Number(record.requestedAmount ?? 0),
+    paymentMethod: record.paymentMethod ?? 'Bank Transfer',
+    status: normalizePaymentRequestStatus(record.status),
+    note: record.note ?? undefined,
+    requestedAt: record.requestedAt ?? record.createdAt ?? '',
+    createdAt: record.createdAt ?? '',
+  };
+}
+
+function mapAd(ad: ErpPortalAd): PortalAd {
+  return {
+    id: ad.id,
+    title: ad.title ?? '',
+    subtitle: ad.subtitle ?? null,
+    badge: ad.badge ?? null,
+    ctaLabel: ad.ctaLabel ?? null,
+    ctaTarget: ad.ctaTarget ?? null,
+    imageUrl: ad.imageUrl ?? null,
+    gradient: ad.gradient ?? null,
+    emoji: ad.emoji ?? null,
+  };
+}
+
 function mapCatalogItem(item: ErpCatalogItem): Product {
   return {
     id: item.id,
@@ -381,8 +466,46 @@ function mapRequestToQuoteRequest(request: ErpRequest): QuoteRequest {
   };
 }
 
-/** ERP request row → Sasa Order (the request must still be confirmed into an order). */
-function mapRequestToOrder(request: ErpRequest): Order {
+/**
+ * ERP status string → Sasa RequestStatus. Unknown/blank values fall back to
+ * 'submitted' so a request is never hidden or mislabelled as closed.
+ */
+function normalizeRequestStatus(status: string | undefined | null): RequestStatus {
+  const normalized = String(status ?? '').toLowerCase();
+  switch (normalized) {
+    case 'draft':
+    case 'submitted':
+    case 'assigned':
+    case 'under_review':
+    case 'waiting_for_customer':
+    case 'ready_for_conversion':
+    case 'converted':
+    case 'rejected':
+    case 'cancelled':
+      return normalized;
+    default:
+      return 'submitted';
+  }
+}
+
+function extractPromotion(promotion: unknown): OrderRequestPromotion | undefined {
+  if (!promotion || typeof promotion !== 'object') return undefined;
+  const raw = promotion as Record<string, unknown>;
+  return {
+    code: typeof raw.code === 'string' ? raw.code : undefined,
+    name: typeof raw.name === 'string' ? raw.name : undefined,
+    discountAmount: typeof raw.discountAmount === 'number' ? raw.discountAmount : undefined,
+  };
+}
+
+/**
+ * ERP request row → Sasa OrderRequest.
+ *
+ * An ERP 'order' request is NOT an official Sales Order. The request number
+ * (ODR-...) is the customer-visible reference; the official SO number is
+ * present only after the ERP converts the request (sales_order_number).
+ */
+function mapRequestToOrderRequest(request: ErpRequest): OrderRequest {
   const items: OrderItem[] = (request.items ?? []).map((item) => ({
     productId: item.productId ?? item.product_id ?? '',
     productName: item.name ?? item.description ?? 'Item',
@@ -392,14 +515,19 @@ function mapRequestToOrder(request: ErpRequest): Order {
   }));
   return {
     id: request.id,
-    orderNumber: request.requestNumber,
+    requestNumber: request.requestNumber,
     date: request.created_at ?? '',
     items,
-    totalAmount: request.total ?? 0,
-    status: 'pending',
-    deliveryAddress: '',
-    paymentMethod: '',
-    estimatedDelivery: request.requestedDeliveryDate ?? request.requested_delivery_date ?? '',
+    subtotal: request.subtotal ?? 0,
+    discountTotal: request.discountTotal ?? request.discount_total ?? undefined,
+    total: request.total ?? 0,
+    promotion: extractPromotion(request.promotion),
+    status: normalizeRequestStatus(request.status),
+    notes: request.notes ?? undefined,
+    requestedDeliveryDate: request.requestedDeliveryDate ?? request.requested_delivery_date ?? undefined,
+    officialOrderId: request.sales_order_id ?? undefined,
+    officialOrderNumber: request.sales_order_number ?? undefined,
+    reorderOfNumber: request.reorderOfNumber ?? request.reorder_of_number ?? undefined,
   };
 }
 
@@ -502,6 +630,36 @@ export class ErpPortalService implements PortalService {
     return this.client.post<ErpPaymentIntent>('/portal/payments/intent', { invoiceId, amount });
   }
 
+  // ── Payment requests (NON-ACCOUNTING bank-transfer intentions) ───────────
+  //
+  // Verified ERP contract: POST/GET /api/portal/payment-requests and
+  // GET /api/portal/payment-requests/:id. Customer identity is derived by the
+  // ERP from the portal JWT — the payload carries ONLY { invoiceId,
+  // requestedAmount, note }. Creating a request never records a payment,
+  // allocates funds, touches Stripe, or modifies the invoice.
+
+  async getPaymentRequests(): Promise<PaymentRequest[]> {
+    const data = await this.client.get<ErpPaymentRequestRecord[] | { paymentRequests: ErpPaymentRequestRecord[] }>(
+      '/portal/payment-requests'
+    );
+    const list = Array.isArray(data) ? data : data.paymentRequests;
+    return (list ?? []).map(mapPaymentRequest);
+  }
+
+  async getPaymentRequest(paymentRequestId: string): Promise<PaymentRequest> {
+    const record = await this.client.get<ErpPaymentRequestRecord>(`/portal/payment-requests/${paymentRequestId}`);
+    return mapPaymentRequest(record);
+  }
+
+  async createPaymentRequest(payload: ErpPaymentRequestCreatePayload): Promise<PaymentRequest> {
+    const record = await this.client.post<ErpPaymentRequestRecord>('/portal/payment-requests', {
+      invoiceId: payload.invoiceId,
+      requestedAmount: payload.requestedAmount,
+      note: payload.note || undefined,
+    });
+    return mapPaymentRequest(record);
+  }
+
   // ── Orders (created through the ERP request pipeline) ─────────────────────
 
   async getOrders(): Promise<Order[]> {
@@ -511,45 +669,120 @@ export class ErpPortalService implements PortalService {
   }
 
   /**
-   * Creates an order by submitting an ERP 'order' request.
-   * The ERP re-prices every line server-side (browser prices are only kept for
-   * genuine custom line items); `deliveryAddress` and `paymentTerms` have no
-   * dedicated ERP request fields and are folded into the request notes.
+   * ERP order REQUESTS (ODR-...): GET /api/portal/requests filtered to
+   * requestType 'order'. Official Sales Orders (SO-...) come from getOrders().
    */
-  async createOrder(payload: NewOrderPayload): Promise<Order> {
+  async getOrderRequests(): Promise<OrderRequest[]> {
+    const data = await this.client.get<ErpRequest[] | { requests: ErpRequest[] }>('/portal/requests');
+    const list = Array.isArray(data) ? data : data.requests;
+    return (list ?? [])
+      .filter((request) => (request.requestType ?? request.request_type) === 'order')
+      .map(mapRequestToOrderRequest);
+  }
+
+  /**
+   * Fetches one request through GET /api/portal/requests/:id. The ERP resolves
+   * the request by id AND the JWT customer_id, so a customer can only read
+   * their own request (404 when it does not belong to them).
+   */
+  async getOrderRequestById(requestId: string): Promise<OrderRequest> {
+    const record = await this.client.get<ErpRequest>(`/portal/requests/${requestId}`);
+    return mapRequestToOrderRequest(record);
+  }
+
+  /**
+   * Creates an order REQUEST via POST /api/portal/requests (requestType
+   * 'order'). The ERP re-prices every line server-side (browser prices are
+   * only kept for genuine custom line items) and returns the authoritative
+   * subtotal / discount / total. `deliveryAddress` and `paymentTerms` have no
+   * dedicated ERP request fields and are folded into the request notes.
+   *
+   * `idempotencyKey` identifies ONE logical submission attempt: the caller
+   * generates it once (utils/idempotency.ts) and reuses the same key when
+   * retrying the same attempt. It is sent as the Idempotency-Key header so
+   * the ERP (middleware/idempotency.cjs, user-scoped, 24h TTL) replays the
+   * stored response instead of creating a duplicate ODR request.
+   *
+   * The returned OrderRequest is NOT an official Sales Order — the ERP creates
+   * the SO only when staff convert the request.
+   */
+  async createOrder(payload: NewOrderPayload, idempotencyKey: string): Promise<OrderRequest> {
     const notes = [
       payload.deliveryAddress ? `Delivery address: ${payload.deliveryAddress}` : null,
       payload.paymentTerms ? `Payment terms: ${payload.paymentTerms}` : null,
     ]
       .filter(Boolean)
       .join('. ') || undefined;
-    const request = await this.client.post<ErpRequest>('/portal/requests', {
-      requestType: 'order',
-      items: payload.items.map((item) => ({
-        productId: item.productId || undefined,
-        name: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-      })),
-      notes,
-    });
-    return mapRequestToOrder(request);
+    const request = await this.client.post<ErpRequest>(
+      '/portal/requests',
+      {
+        requestType: 'order',
+        items: payload.items.map((item) => ({
+          productId: item.productId || undefined,
+          name: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+        notes,
+        requestedDeliveryDate: payload.requestedDeliveryDate || undefined,
+        promotionCode: payload.promotionCode || undefined,
+      },
+      { headers: { 'Idempotency-Key': idempotencyKey } }
+    );
+    return mapRequestToOrderRequest(request);
   }
 
-  /** Re-submits an existing order through the ERP reorder pipeline. */
-  async reorderOrder(orderId: string): Promise<Order> {
+  /**
+   * Cancels a customer's own order REQUEST via
+   * POST /api/portal/requests/:id/cancel. The ERP enforces ownership and the
+   * cancellable status set server-side. The ERP cancel response is a minimal
+   * { id, status } — the full updated request is then re-read from
+   * GET /api/portal/requests/:id so the caller always receives the ERP's
+   * authoritative record (number, items, totals preserved). If the follow-up
+   * read fails, the ERP cancel result itself is returned — never a fabricated
+   * request.
+   */
+  async cancelOrderRequest(requestId: string): Promise<OrderRequest> {
+    const result = await this.client.post<{ id: string; status: string }>(`/portal/requests/${requestId}/cancel`);
+    try {
+      return await this.getOrderRequestById(result.id);
+    } catch {
+      return {
+        id: result.id,
+        requestNumber: '',
+        date: '',
+        items: [],
+        subtotal: 0,
+        total: 0,
+        status: normalizeRequestStatus(result.status),
+      };
+    }
+  }
+
+  /**
+   * Re-submits an existing official Sales Order through the ERP reorder
+   * pipeline (POST /api/portal/orders/:id/reorder). The ERP creates a NEW
+   * order request (ODR-...) referencing the original order, and blocks
+   * Draft/Cancelled orders server-side. The created request is re-read from
+   * GET /api/portal/requests/:id for its full ERP-authoritative record; the
+   * minimal reorder response is returned only when that read fails.
+   */
+  async reorderOrder(orderId: string): Promise<OrderRequest> {
     const result = await this.client.post<ErpReorderResult>(`/portal/orders/${orderId}/reorder`);
-    return {
-      id: result.id,
-      orderNumber: result.requestNumber,
-      date: new Date().toISOString(),
-      items: [],
-      totalAmount: 0,
-      status: 'pending',
-      deliveryAddress: '',
-      paymentMethod: '',
-      estimatedDelivery: '',
-    };
+    try {
+      return await this.getOrderRequestById(result.id);
+    } catch {
+      return {
+        id: result.id,
+        requestNumber: result.requestNumber,
+        date: new Date().toISOString(),
+        items: [],
+        subtotal: 0,
+        total: 0,
+        status: normalizeRequestStatus(result.status),
+        reorderOfNumber: result.reorderOfNumber ?? undefined,
+      };
+    }
   }
 
   // ── Quotations (formal, READY) ────────────────────────────────────────────
@@ -690,6 +923,19 @@ export class ErpPortalService implements PortalService {
 
   async getLoyalty(): Promise<ErpLoyalty> {
     return this.client.get<ErpLoyalty>('/portal/loyalty');
+  }
+
+  // ── Advertisements (ERP portal banner ads — dashboard carousel) ───────────
+  //
+  // The ERP serves display-ready banner ads at GET /portal/ads (company-scoped
+  // via the customer's companyId, active + date-filtered server-side, sorted
+  // by priority). Sasa renders exactly what the ERP returns — no fallback or
+  // fabricated promotional content.
+
+  async getAds(): Promise<PortalAd[]> {
+    const data = await this.client.get<ErpPortalAd[] | { ads: ErpPortalAd[] }>('/portal/ads');
+    const list = Array.isArray(data) ? data : data.ads;
+    return list.map(mapAd);
   }
 }
 
