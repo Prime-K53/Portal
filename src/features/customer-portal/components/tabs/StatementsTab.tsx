@@ -44,7 +44,9 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
   });
 
   const totalCredits = filteredStatements.reduce((sum, s) => sum + s.credit, 0);
-  const isFullyPaid = (profile?.currentBalance || 0) === 0;
+  const sortedFiltered = [...filteredStatements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const outstandingBalance = sortedFiltered.length > 0 ? sortedFiltered[sortedFiltered.length - 1].balance : 0;
+  const isFullyPaid = outstandingBalance === 0;
 
   const handleExportCSV = () => {
     exportToCSV(
@@ -122,7 +124,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
           <div className={`text-xl font-black mt-1 tabular-nums ${
             isFullyPaid ? 'text-[#92400E]' : 'text-rose-700'
           }`}>
-            {formatCurrency(profile?.currentBalance || 0)}
+             {formatCurrency(outstandingBalance)}
           </div>
           <div className={`text-xs font-bold mt-1 ${
             isFullyPaid ? 'text-[#A16207]' : 'text-rose-600'

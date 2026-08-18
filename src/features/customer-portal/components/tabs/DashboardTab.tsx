@@ -232,12 +232,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     setTouchStartX(null);
   };
 
-  const unpaidList = invoices.filter((i) => i.status !== 'paid');
-  const paidList = invoices.filter((i) => i.status === 'paid');
-
-  const totalUnpaid = unpaidList.reduce((sum, i) => sum + i.amountRemaining, 0);
-  const totalPaid = paidList.reduce((sum, i) => sum + i.amountPaid, 0);
-  const isFullyPaid = unpaidList.length === 0;
+  const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
+  const sortedStatements = [...statements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const outstandingBalance = sortedStatements.length > 0 ? sortedStatements[sortedStatements.length - 1].balance : 0;
+  const isFullyPaid = outstandingBalance === 0;
 
   return (
     <div className="space-y-6 pb-24 text-slate-900 animate-fade-in">
@@ -366,10 +364,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <Clock className="w-4 h-4 text-amber-600" />
             </div>
             <p className="text-xl font-extrabold font-mono text-amber-950">
-              {formatCurrency(totalUnpaid)}
+              {formatCurrency(outstandingBalance)}
             </p>
             <p className="text-[11px] text-amber-700 font-medium">
-              {unpaidList.length > 0 ? `${unpaidList.length} Pending Invoice${unpaidList.length === 1 ? '' : 's'}` : 'No Unpaid Balance'}
+              {isFullyPaid ? 'No Unpaid Balance' : 'Has Outstanding Balance'}
             </p>
           </div>
 
@@ -388,12 +386,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               />
             </div>
             <p className="text-xl font-extrabold font-mono text-white">
-              {formatCurrency(totalPaid)}
+              {formatCurrency(totalPayment)}
             </p>
             <p
               className={`text-[11px] ${isFullyPaid ? 'text-emerald-300 font-bold' : 'text-slate-400'}`}
             >
-              {isFullyPaid ? 'Fully Settled ✓' : `${paidList.length} Invoice${paidList.length === 1 ? '' : 's'} Settled`}
+              {isFullyPaid ? 'Fully Settled ✓' : 'Amount Paid'}
             </p>
           </div>
         </div>

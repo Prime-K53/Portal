@@ -19,7 +19,7 @@ export const initialProfile: AccountProfile = {
   phone: '+1 (555) 234-8900',
   address: '100 Logistics Way, Suite 800, Chicago, IL 60601',
   creditLimit: 10000,
-  currentBalance: 4320.00,
+  currentBalance: 5320.00,
   tier: 'Gold Partner',
   accountManager: {
     name: 'Sarah Jenkins',
