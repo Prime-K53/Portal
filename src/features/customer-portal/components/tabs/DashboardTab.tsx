@@ -376,7 +376,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             className={`rounded-2xl p-4 border transition-all duration-300 space-y-1 ${
               isFullyPaid
                 ? 'bg-emerald-900 text-white border-emerald-700 shadow-md'
-                : 'bg-slate-900/80 text-white border-slate-800/80'
+                : 'bg-slate-900 text-white border-slate-800'
             }`}
           >
             <div className="flex items-center justify-between text-slate-300">
