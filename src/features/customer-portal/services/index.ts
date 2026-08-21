@@ -8,7 +8,7 @@ export { AuthError, authService, createAuthService, erpApiBaseUrl, PORTAL_SESSIO
 export type { AuthService, AuthErrorCode, LoginOutcome } from './authService';
 export { MockAuthService } from './authService';
 export { MockPortalService } from './mockPortalService';
-export { createPortalService, isReferralsBlockedError, portalService } from './portalService';
+export { createPortalService, portalService } from './portalService';
 export type { PortalService } from './portalService';
 export { ErpSseService, sseService } from './sseService';
 export type { SseEventHandlers } from './sseService';

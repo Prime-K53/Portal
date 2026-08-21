@@ -23,11 +23,14 @@ import type {
   PaymentRequest,
   PortalAd,
   PortalNotification,
+  PortalReferral,
   Product,
   Quotation,
   QuoteRequest,
-  Referral,
+  ReferralReward,
+  ReferralStats,
   StatementEntry,
+  Wallet,
 } from '../types';
 import type { ErpLoyalty } from '../types';
 
@@ -110,8 +113,20 @@ export function usePaymentRequestsData(enabled = true): PortalQueryResult<Paymen
   return usePortalQuery(() => portalService.getPaymentRequests(), [], enabled);
 }
 
-export function useReferralsData(): PortalQueryResult<Referral[]> {
+export function useReferralsData(): PortalQueryResult<PortalReferral[]> {
   return usePortalQuery(() => portalService.getReferrals(), []);
+}
+
+export function useReferralStatsData(): PortalQueryResult<ReferralStats> {
+  return usePortalQuery(() => portalService.getReferralStats(), []);
+}
+
+export function useReferralRewardsData(): PortalQueryResult<ReferralReward[]> {
+  return usePortalQuery(() => portalService.getReferralRewards(), []);
+}
+
+export function useWalletData(): PortalQueryResult<Wallet> {
+  return usePortalQuery(() => portalService.getWallet(), []);
 }
 
 export function useCatalogData(): PortalQueryResult<Product[]> {

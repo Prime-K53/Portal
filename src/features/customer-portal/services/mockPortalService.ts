@@ -25,12 +25,18 @@ import type {
   PaymentRequest,
   PortalAd,
   PortalNotification,
+  PortalReferral,
   Product,
   Quotation,
   QuoteRequest,
-  Referral,
-  ReferralInvitePayload,
+  ReferralCreatePayload,
+  ReferralCustomerSearchResult,
+  ReferralReward,
+  ReferralSettings,
+  ReferralStats,
+  ReferralTimelineEntry,
   StatementEntry,
+  Wallet,
 } from '../types';
 import type {
   ErpLoyalty,
@@ -47,7 +53,6 @@ import {
   initialProducts,
   initialProfile,
   initialQuotes,
-  initialReferrals,
   initialStatements,
 } from '../data/mockData';
 import type { PortalService } from './portalService';
@@ -61,7 +66,6 @@ export class MockPortalService implements PortalService {
   private orders: Order[];
   private quotes: QuoteRequest[];
   private statements: StatementEntry[];
-  private referrals: Referral[];
   private products: Product[];
 
   constructor() {
@@ -74,7 +78,6 @@ export class MockPortalService implements PortalService {
     this.orders = clone(initialOrders);
     this.quotes = clone(initialQuotes);
     this.statements = clone(initialStatements);
-    this.referrals = clone(initialReferrals);
     this.products = clone(initialProducts);
   }
 
@@ -191,13 +194,96 @@ export class MockPortalService implements PortalService {
     return clone(this.orders);
   }
 
-  getOrderRequests(): Promise<OrderRequest[]> {
-    return Promise.resolve([]);
+  async createOrder(payload: NewOrderPayload, _idempotencyKey: string): Promise<OrderRequest> {
+    const orderNum = `ORD-${Math.floor(8800 + Math.random() * 1000)}`;
+    const invoiceNum = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const today = new Date().toISOString().split('T')[0];
+    const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const newOrder: Order = {
+      id: `ord_${Date.now()}`,
+      orderNumber: orderNum,
+      date: today,
+      totalAmount: payload.totalAmount,
+      status: 'processing',
+      deliveryAddress: payload.deliveryAddress,
+      paymentMethod: payload.paymentTerms,
+      estimatedDelivery: 'In 2-3 Business Days',
+      associatedInvoiceId: `inv_${Date.now()}`,
+      items: clone(payload.items),
+    };
+    this.orders = [newOrder, ...this.orders];
+
+    const newInvoice: Invoice = {
+      id: `inv_${Date.now()}`,
+      invoiceNumber: invoiceNum,
+      issueDate: today,
+      dueDate,
+      amount: payload.totalAmount,
+      amountPaid: 0,
+      amountRemaining: payload.totalAmount,
+      status: 'unpaid',
+      poNumber: `PO-${Math.floor(90000 + Math.random() * 9999)}`,
+      items: payload.items.map((item, idx) => ({
+        id: `it_new_${idx}`,
+        description: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        total: item.total,
+      })),
+    };
+    this.invoices = [newInvoice, ...this.invoices];
+
+    this.profile = { ...this.profile, currentBalance: this.profile.currentBalance + payload.totalAmount };
+
+    this.statements = [
+      {
+        id: `st_${Date.now()}`,
+        date: today,
+        type: 'Invoice',
+        reference: invoiceNum,
+        description: `Purchase Order ${orderNum}`,
+        debit: payload.totalAmount,
+        credit: 0,
+        balance: this.profile.currentBalance,
+      },
+      ...this.statements,
+    ];
+
+    this.deliveries = [
+      {
+        id: `del_${Date.now()}`,
+        orderId: orderNum,
+        trackingNumber: `TRK-${Math.floor(100000 + Math.random() * 900000)}-US`,
+        title: 'Order Confirmed & Processing',
+        message: `Order ${orderNum} received! Items are being packed at warehouse.`,
+        status: 'processing',
+        timestamp: new Date().toISOString(),
+        estimatedArrival: 'In 2-3 Days',
+        deliveryAddress: payload.deliveryAddress,
+        itemsSummary: payload.items.map((item) => `${item.quantity}x ${item.productName}`).join(', '),
+        isRead: false,
+      } as DeliveryNotification,
+      ...this.deliveries,
+    ];
+
+    return clone({
+      ...newOrder,
+      requestNumber: orderNum,
+      date: today,
+      subtotal: payload.totalAmount,
+      total: payload.totalAmount,
+      status: 'submitted' as const,
+    });
   }
 
-  getOrderRequestById(): Promise<OrderRequest> {
-    return this.orderRequestUnavailable();
-  }
+  // ── Order REQUESTS (ODR-...) ──────────────────────────────────────────────
+  //
+  // DELIBERATELY NOT mocked. Order requests are real ERP request-pipeline
+  // data; the instruction forbids fabricating request workflow data in Sasa.
+  // These methods surface an explicit UNAVAILABLE error (same pattern as
+  // payment requests and referrals), so the dev UI never pretends a request
+  // exists or was converted into a Sales Order.
 
   private orderRequestUnavailable(): Promise<never> {
     return Promise.reject(
@@ -208,16 +294,30 @@ export class MockPortalService implements PortalService {
     );
   }
 
-  createOrder(_payload: NewOrderPayload, _idempotencyKey: string): Promise<OrderRequest> {
+  getOrderRequests(): Promise<OrderRequest[]> {
     return this.orderRequestUnavailable();
   }
 
-  cancelOrderRequest(_requestId: string): Promise<OrderRequest> {
+  getOrderRequestById(): Promise<OrderRequest> {
     return this.orderRequestUnavailable();
   }
 
-  reorderOrder(_orderId: string): Promise<OrderRequest> {
+  cancelOrderRequest(): Promise<OrderRequest> {
     return this.orderRequestUnavailable();
+  }
+
+  async reorderOrder(orderId: string): Promise<OrderRequest> {
+    const order = this.orders.find((o) => o.id === orderId || o.orderNumber === orderId);
+    if (!order) throw new Error(`Order not found: ${orderId}`);
+    const reordered: Order = { ...clone(order), id: `ord_${Date.now()}`, status: 'processing' };
+    this.orders = [reordered, ...this.orders];
+    return clone({
+      ...reordered,
+      requestNumber: reordered.orderNumber,
+      subtotal: reordered.totalAmount,
+      total: reordered.totalAmount,
+      status: 'submitted' as const,
+    });
   }
 
   // ── Quotations (formal) & quotation requests ──────────────────────────────
@@ -310,53 +410,58 @@ export class MockPortalService implements PortalService {
   }
 
   // ── Referrals ─────────────────────────────────────────────────────────────
-  async getReferrals(): Promise<Referral[]> {
-    return clone(this.referrals);
+  //
+  // DELIBERATELY NOT mocked. Referrals refer EXISTING ERP customers
+  // (search → select → create), the ERP tracks the lifecycle and staff manage
+  // rewards + wallet crediting — no customer-facing claim or invite flow
+  // exists. The mock surfaces an explicit UNAVAILABLE error (same pattern as
+  // payment requests), so the dev UI never pretends a referral exists, was
+  // created, or that a reward can be claimed. The mock must not contradict
+  // the real ERP API contract.
+
+  private referralUnavailable(): Promise<never> {
+    return Promise.reject(
+      new ApiError(
+        'Referrals is temporarily unavailable. Referrals are served by the ERP Portal API and are never fabricated in development mode.',
+        { code: 'UNAVAILABLE' }
+      )
+    );
   }
 
-  async sendReferralInvite(payload: ReferralInvitePayload): Promise<Referral> {
-    const newReferral: Referral = {
-      id: `ref_${Date.now()}`,
-      refereeName: payload.refereeName,
-      refereeCompany: payload.refereeCompany,
-      email: payload.email,
-      dateInvited: new Date().toISOString().split('T')[0],
-      status: 'invited',
-      rewardAmount: 500,
-      rewardClaimed: false,
-    };
-    this.referrals = [newReferral, ...this.referrals];
-    return clone(newReferral);
+  searchReferralCustomers(_query: string): Promise<ReferralCustomerSearchResult[]> {
+    return this.referralUnavailable();
   }
 
-  async claimReferralReward(referralId: string): Promise<Referral> {
-    const referral = this.referrals.find((ref) => ref.id === referralId);
-    if (!referral || referral.rewardClaimed) return clone(referral || this.referrals[0]);
+  getReferrals(): Promise<PortalReferral[]> {
+    return this.referralUnavailable();
+  }
 
-    const updated: Referral = { ...referral, rewardClaimed: true };
-    this.referrals = this.referrals.map((ref) => (ref.id === referralId ? updated : ref));
+  getReferral(): Promise<PortalReferral> {
+    return this.referralUnavailable();
+  }
 
-    this.profile = {
-      ...this.profile,
-      totalReferralEarned: this.profile.totalReferralEarned + referral.rewardAmount,
-      currentBalance: Math.max(0, this.profile.currentBalance - referral.rewardAmount),
-    };
+  getReferralTimeline(): Promise<ReferralTimelineEntry[]> {
+    return this.referralUnavailable();
+  }
 
-    this.statements = [
-      {
-        id: `st_${Date.now()}`,
-        date: new Date().toISOString().split('T')[0],
-        type: 'Credit Note',
-        reference: `CRD-${Math.floor(1000 + Math.random() * 9000)}`,
-        description: 'Referral Bonus Program Reward Credit Applied',
-        debit: 0,
-        credit: referral.rewardAmount,
-        balance: this.profile.currentBalance,
-      },
-      ...this.statements,
-    ];
+  createReferral(_payload: ReferralCreatePayload, _idempotencyKey: string): Promise<PortalReferral> {
+    return this.referralUnavailable();
+  }
 
-    return clone(updated);
+  getReferralRewards(): Promise<ReferralReward[]> {
+    return this.referralUnavailable();
+  }
+
+  getReferralStats(): Promise<ReferralStats> {
+    return this.referralUnavailable();
+  }
+
+  getReferralSettings(): Promise<ReferralSettings> {
+    return this.referralUnavailable();
+  }
+
+  getWallet(): Promise<Wallet> {
+    return this.referralUnavailable();
   }
 
   // ── Catalog / products ────────────────────────────────────────────────────

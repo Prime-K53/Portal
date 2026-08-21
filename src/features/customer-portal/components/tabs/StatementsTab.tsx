@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronRight, Download, Eye, FileSpreadsheet, FileText, Filter, Printer, Receipt, ShieldCheck } from 'lucide-react';
+import { Calendar, CheckCircle2, ChevronRight, Clock, Download, Eye, FileSpreadsheet, FileText, Filter, Printer, Receipt, ShieldCheck } from 'lucide-react';
 import { AccountProfile, StatementEntry } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { exportToCSV } from '../../utils/exportUtils';
@@ -44,7 +44,9 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
   });
 
   const totalCredits = filteredStatements.reduce((sum, s) => sum + s.credit, 0);
-  const totalDebits = filteredStatements.reduce((sum, s) => sum + s.debit, 0);
+  const sortedFiltered = [...filteredStatements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const outstandingBalance = sortedFiltered.length > 0 ? sortedFiltered[sortedFiltered.length - 1].balance : 0;
+  const isFullyPaid = outstandingBalance === 0;
 
   const handleExportCSV = () => {
     exportToCSV(
@@ -101,18 +103,63 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
         </div>
       </div>
 
-      {/* Account Credit & Balance Summary (Removed Credit Limit KPI as requested) */}
+      {/* Outstanding & Total Payment KPI */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
-          <span className="text-xs font-semibold text-slate-500 block">Net Balance Due</span>
-          <div className="text-xl font-black text-slate-900 mt-0.5 tabular-nums">{formatCurrency(profile?.currentBalance || 0)}</div>
-          <span className="text-xs font-medium text-slate-500 mt-1 block tabular-nums">Filtered Debits: +{formatCurrency(totalDebits)}</span>
+        {/* Outstanding Card */}
+        <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-2xs ${
+          isFullyPaid ? 'bg-[#FFF8E1] border-[#FDE68A]' : 'bg-rose-50 border-rose-100'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-black uppercase tracking-wider block ${
+              isFullyPaid ? 'text-[#92400E]' : 'text-rose-700'
+            }`}>
+              OUTSTANDING
+            </span>
+            <div className={`p-1.5 rounded-full ${
+              isFullyPaid ? 'bg-[#FDE68A] text-[#92400E]' : 'bg-rose-100 text-rose-600'
+            }`}>
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className={`text-xl font-black mt-1 tabular-nums ${
+            isFullyPaid ? 'text-[#92400E]' : 'text-rose-700'
+          }`}>
+             {formatCurrency(outstandingBalance)}
+          </div>
+          <div className={`text-xs font-bold mt-1 ${
+            isFullyPaid ? 'text-[#A16207]' : 'text-rose-600'
+          }`}>
+            {isFullyPaid ? 'No Unpaid Balance' : 'Has Outstanding Balance'}
+          </div>
         </div>
 
-        <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
-          <span className="text-xs font-semibold text-slate-500 block">Total Payments</span>
-          <div className="text-xl font-black text-emerald-600 mt-0.5 tabular-nums">{formatCurrency(totalCredits)}</div>
-          <span className="text-xs font-medium text-emerald-700 mt-1 block">Total Credits Received</span>
+        {/* Total Payment Card */}
+        <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-2xs ${
+          isFullyPaid ? 'bg-[#14532D] border-[#14532D]' : 'bg-slate-100 border-slate-200'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-black uppercase tracking-wider block ${
+              isFullyPaid ? 'text-white' : 'text-slate-600'
+            }`}>
+              TOTAL PAYMENT
+            </span>
+            <div className={`p-1.5 rounded-full ${
+              isFullyPaid ? 'bg-[#FACC15] text-[#14532D]' : 'bg-slate-200 text-slate-500'
+            }`}>
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className={`text-xl font-black mt-1 tabular-nums ${
+            isFullyPaid ? 'text-white' : 'text-slate-700'
+          }`}>
+            {formatCurrency(totalCredits)}
+          </div>
+          <div className={`text-xs font-bold mt-1 flex items-center gap-1 ${
+            isFullyPaid ? 'text-emerald-400' : 'text-slate-500'
+          }`}>
+            {isFullyPaid && <CheckCircle2 className="w-3 h-3" />}
+            {isFullyPaid ? 'Fully Settled' : 'Amount Paid'}
+          </div>
         </div>
       </div>
 

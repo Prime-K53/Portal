@@ -5,11 +5,9 @@
  *
  * Implements the ERP Portal API as verified from the PrimeERPsystem source
  * (docs/SASA_PHASE_4_ERP_INTEGRATION.md). Every method maps to a REAL endpoint.
- * Features that the ERP genuinely cannot serve — referral invitations (the ERP
- * only refers EXISTING customers by id, while Sasa's UI invites by name/email)
- * and reward claiming (ERP-admin approved, no customer endpoint) — throw an
- * explicit UNAVAILABLE error. They are never fabricated or replaced with mock
- * data.
+ * Referrals refer EXISTING ERP customers by id (search → select → create) and
+ * rewards are ERP-admin approved — Sasa never fabricates referrals, rewards or
+ * wallet credits, and never claims or approves anything.
  *
  * Customer scoping: every endpoint derives the authenticated customer from the
  * ERP JWT server-side. Sasa NEVER sends a customer_id from the UI — no URL,
@@ -20,6 +18,15 @@ import { env } from '../config/env';
 import type {
   AccountProfile,
   DeliveryNotification,
+  ErpReferral,
+  ErpReferralCreatePayload,
+  ErpReferralCreateResult,
+  ErpReferralCustomerSearchResult,
+  ErpReferralReward,
+  ErpReferralSettings,
+  ErpReferralStats,
+  ErpReferralTimelineEntry,
+  ErpWallet,
   Invoice,
   InvoiceItem,
   InvoiceStatus,
@@ -35,16 +42,22 @@ import type {
   PaymentRequestStatus,
   PortalAd,
   PortalNotification,
+  PortalReferral,
   Product,
   Quotation,
   QuotationItem,
   QuoteRequest,
   QuoteRequestItem,
   QuoteStatus,
-  Referral,
-  ReferralInvitePayload,
+  ReferralCreatePayload,
+  ReferralCustomerSearchResult,
+  ReferralReward,
+  ReferralSettings,
+  ReferralStats,
+  ReferralTimelineEntry,
   RequestStatus,
   StatementEntry,
+  Wallet,
 } from '../types';
 import type {
   ErpCatalogItem,
@@ -120,10 +133,16 @@ export interface PortalService {
   // ── Statements ────────────────────────────────────────────────────────────
   getStatements(startDate?: string, endDate?: string): Promise<StatementEntry[]>;
 
-  // ── Referrals — blocked: Sasa's invite flow does not match the ERP ────────
-  getReferrals(): Promise<Referral[]>;
-  sendReferralInvite(payload: ReferralInvitePayload): Promise<Referral>;
-  claimReferralReward(referralId: string): Promise<Referral>;
+  // ── Referrals ───────────────────────────────────────────────────────────────
+  searchReferralCustomers(query: string): Promise<ReferralCustomerSearchResult[]>;
+  getReferrals(): Promise<PortalReferral[]>;
+  getReferral(referralId: string): Promise<PortalReferral>;
+  getReferralTimeline(referralId: string): Promise<ReferralTimelineEntry[]>;
+  createReferral(payload: ReferralCreatePayload, idempotencyKey: string): Promise<PortalReferral>;
+  getReferralRewards(): Promise<ReferralReward[]>;
+  getReferralStats(): Promise<ReferralStats>;
+  getReferralSettings(): Promise<ReferralSettings>;
+  getWallet(): Promise<Wallet>;
 
   // ── Catalog / products ────────────────────────────────────────────────────
   getCatalog(): Promise<Product[]>;
@@ -139,25 +158,6 @@ export interface PortalService {
 
   // ── Advertisements (ERP portal banner ads — dashboard carousel) ───────────
   getAds(): Promise<PortalAd[]>;
-}
-
-/** Explicit failure for features blocked by pending ERP migrations. */
-function blocked(feature: string, reason: string): never {
-  throw new ApiError(`${feature} is temporarily unavailable. ${reason}`, { code: 'UNAVAILABLE' });
-}
-
-/**
- * True when the error is the EXPECTED blocked-referral state — the referral
- * feature is intentionally not wired and must render its unavailable panel,
- * never a generic failure. Any other error (network, auth, server) stays a
- * real error and remains visible/diagnosable.
- */
-export function isReferralsBlockedError(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    error.code === 'UNAVAILABLE' &&
-    (error.message ?? '').startsWith('Referrals is temporarily unavailable.')
-  );
 }
 
 // ── ERP → Sasa adapters (exact shapes from the Phase 3 contract §7) ─────────
@@ -391,6 +391,7 @@ function mapAd(ad: ErpPortalAd): PortalAd {
     ctaLabel: ad.ctaLabel ?? null,
     ctaTarget: ad.ctaTarget ?? null,
     imageUrl: ad.imageUrl ?? null,
+    imageMeta: ad.imageMeta ?? null,
     gradient: ad.gradient ?? null,
     emoji: ad.emoji ?? null,
   };
@@ -431,6 +432,82 @@ function mapNotification(notification: ErpNotification): PortalNotification {
     timestamp: notification.created_at,
     isRead: notification.is_read ?? false,
     link: notification.link ?? undefined,
+  };
+}
+
+function mapErpReferral(referral: ErpReferral): PortalReferral {
+  return {
+    id: referral.id,
+    referredCustomerId: referral.referred_customer_id,
+    referredCustomerName: referral.referred_customer_name,
+    referredCustomerEmail: referral.referred_customer_email,
+    status: referral.status,
+    pendingInvoiceId: referral.pending_invoice_id,
+    pendingInvoiceAmount: referral.pending_invoice_amount,
+    convertedInvoiceId: referral.converted_invoice_id,
+    convertedAt: referral.converted_at,
+    notes: referral.notes,
+    createdAt: referral.created_at,
+    updatedAt: referral.updated_at,
+  };
+}
+
+/**
+ * POST /api/portal/referrals 201 result (raw snake_case customer_referrals
+ * row) → PortalReferral. The create response does NOT carry the referred
+ * customer's name/email (the table only stores the referrer's name), so the
+ * customer name is left blank — the UI shows the ERP-returned id/name, never
+ * an invented one.
+ */
+function mapErpReferralCreateResult(result: ErpReferralCreateResult): PortalReferral {
+  return {
+    id: result.id,
+    referredCustomerId: result.customer_id,
+    referredCustomerName: '',
+    referredCustomerEmail: null,
+    status: (result.status as PortalReferral['status']) || 'active',
+    pendingInvoiceId: result.pending_invoice_id,
+    pendingInvoiceAmount: result.pending_invoice_amount ?? 0,
+    convertedInvoiceId: result.converted_invoice_id,
+    convertedAt: result.converted_at,
+    notes: result.notes,
+    createdAt: result.created_at,
+    updatedAt: result.updated_at,
+  };
+}
+
+/** Raw snake_case referral_timeline row → Sasa ReferralTimelineEntry. */
+function mapErpTimelineEntry(entry: ErpReferralTimelineEntry): ReferralTimelineEntry {
+  return {
+    id: entry.id,
+    referralId: entry.referral_id,
+    eventType: entry.event_type,
+    title: entry.title,
+    description: entry.description,
+    amount: entry.amount,
+    actorName: entry.actor_name,
+    timestamp: entry.timestamp,
+    createdAt: entry.created_at,
+  };
+}
+
+/** ERP reward DTO → Sasa ReferralReward (amount is ERP-authoritative, never calculated). */
+function mapErpReward(reward: ErpReferralReward): ReferralReward {
+  return {
+    id: reward.id,
+    referralId: reward.referral_id,
+    referralCode: reward.referral_code,
+    referredCustomerId: reward.referred_customer_id,
+    referredCustomerName: reward.referred_customer_name,
+    invoiceId: reward.invoice_id,
+    invoiceAmount: reward.invoice_amount,
+    amount: reward.amount,
+    status: reward.status,
+    approvedAt: reward.approved_at,
+    cancelledAt: reward.cancelled_at,
+    cancelReason: reward.cancel_reason,
+    walletTransactionId: reward.wallet_transaction_id,
+    createdAt: reward.created_at,
   };
 }
 
@@ -562,9 +639,6 @@ export class ErpPortalService implements PortalService {
       currentBalance: profile.balance,
       tier: tier as AccountProfile['tier'],
       accountManager: { name: '', email: '', phone: '', avatar: '' }, // ERP DATA MISSING (§16)
-      referralCode: '',
-      referralLink: '',
-      totalReferralEarned: 0, // referrals blocked pending migrations 0003/0004
     };
   }
 
@@ -859,35 +933,117 @@ export class ErpPortalService implements PortalService {
     return mapStatement(statement);
   }
 
-  // ── Referrals — blocked: Sasa's invite flow does not match the ERP ────────
-  //
-  // The ERP referral API exists and is LIVE (GET/POST /portal/referrals,
-  // /portal/referrals/rewards, /settings, /stats), but it refers EXISTING
-  // customers by their ERP customer id (searched via /portal/referrals/customers/search).
-  // Sasa's ReferralInvitePayload (name/company/email of a NEW contact) does not
-  // map to the ERP contract, and reward claiming is ERP-ADMIN approved — there
-  // is no customer claim endpoint. These stay UNAVAILABLE instead of being
-  // fabricated or half-wired.
+  // ── Referrals ───────────────────────────────────────────────────────────────
 
-  getReferrals(): Promise<Referral[]> {
-    return blocked(
-      'Referrals',
-      'The ERP referral list is live, but Sasa models referrals as email invitations while the ERP refers existing customers by id. The Sasa referral screen must be rebuilt around the ERP contract before it can be enabled.'
+  /**
+   * GET /api/portal/referrals/customers/search?q=... — searches the ERP
+   * customer directory (name/email). The ERP enforces the minimum 2-char
+   * query, excludes the authenticated customer and caps results at 20; Sasa
+   * mirrors the minimum length client-side so no request is wasted. The query
+   * is embedded in the path because the ApiClient has no generic params bag.
+   */
+  async searchReferralCustomers(query: string): Promise<ReferralCustomerSearchResult[]> {
+    const q = query.trim();
+    if (q.length < 2) return [];
+    const data = await this.client.get<ErpReferralCustomerSearchResult[]>(
+      `/portal/referrals/customers/search?q=${encodeURIComponent(q)}`
     );
+    return (data ?? []).map((r) => ({ id: r.id, name: r.name, email: r.email }));
   }
 
-  sendReferralInvite(): Promise<Referral> {
-    return blocked(
-      'Sending a referral invitation',
-      'The ERP only refers existing customers by their ERP customer id (POST /portal/referrals requires referredCustomerId). Sasa\u2019s name/email invite form cannot be sent to the ERP — the invite flow must be redesigned around the ERP contract.'
-    );
+  async getReferrals(): Promise<PortalReferral[]> {
+    const data = await this.client.get<
+      { referrals: ErpReferral[]; total?: number; page?: number; pageSize?: number; totalPages?: number } | ErpReferral[]
+    >('/portal/referrals');
+    const list = Array.isArray(data) ? data : data.referrals ?? [];
+    return list.map(mapErpReferral);
   }
 
-  claimReferralReward(): Promise<Referral> {
-    return blocked(
-      'Claiming a referral reward',
-      'The ERP has no customer-facing claim endpoint — referral rewards are approved and credited by ERP staff (PATCH /api/referrals/rewards/:id/approve).'
+  async getReferral(referralId: string): Promise<PortalReferral> {
+    const data = await this.client.get<ErpReferral>(`/portal/referrals/${referralId}`);
+    return mapErpReferral(data);
+  }
+
+  /**
+   * GET /api/portal/referrals/:id/timeline — the ERP returns the RAW
+   * snake_case referral_timeline rows as a bare array (no envelope). Only the
+   * authenticated customer's own referral timeline is served (ownership 404).
+   */
+  async getReferralTimeline(referralId: string): Promise<ReferralTimelineEntry[]> {
+    const data = await this.client.get<ErpReferralTimelineEntry[] | { timeline: ErpReferralTimelineEntry[] }>(
+      `/portal/referrals/${referralId}/timeline`
     );
+    const list = Array.isArray(data) ? data : data.timeline ?? [];
+    return (list ?? []).map(mapErpTimelineEntry);
+  }
+
+  /**
+   * POST /api/portal/referrals — creates a referral for an EXISTING ERP
+   * customer (the ERP validates existence, self-referral, business duplicates
+   * and ownership server-side). `idempotencyKey` identifies ONE logical
+   * submission attempt (utils/idempotency.ts) and is reused when retrying the
+   * same attempt — sent as the Idempotency-Key header so the ERP
+   * (middleware/idempotency.cjs, user-scoped, 24h TTL) replays the stored 201
+   * instead of creating a duplicate referral. The 201 body is the raw
+   * snake_case customer_referrals row — mapped to the same PortalReferral DTO.
+   */
+  async createReferral(payload: ReferralCreatePayload, idempotencyKey: string): Promise<PortalReferral> {
+    const body: ErpReferralCreatePayload = {
+      referredCustomerId: payload.referredCustomerId,
+      ...(payload.notes ? { notes: payload.notes } : {}),
+    };
+    const data = await this.client.post<ErpReferralCreateResult | ErpReferral>('/portal/referrals', body, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+    return 'customer_id' in data ? mapErpReferralCreateResult(data) : mapErpReferral(data);
+  }
+
+  async getReferralRewards(): Promise<ReferralReward[]> {
+    const data = await this.client.get<
+      { rewards: ErpReferralReward[]; total?: number; page?: number; pageSize?: number; totalPages?: number } | ErpReferralReward[]
+    >('/portal/referrals/rewards');
+    const list = Array.isArray(data) ? data : data.rewards ?? [];
+    return (list ?? []).map(mapErpReward);
+  }
+
+  async getReferralStats(): Promise<ReferralStats> {
+    const data = await this.client.get<ErpReferralStats>('/portal/referrals/stats');
+    return {
+      total: data.total ?? 0,
+      signedUp: data.signedUp ?? 0,
+      qualified: data.qualified ?? 0,
+      rewardApproved: data.rewardApproved ?? 0,
+      paid: data.paid ?? 0,
+      pendingRewardAmount: data.pendingRewardAmount ?? 0,
+      totalEarned: data.totalEarned ?? 0,
+      conversionRate: data.conversionRate ?? 0,
+    };
+  }
+
+  /** Read-only: the ERP owns the referral program configuration. */
+  async getReferralSettings(): Promise<ReferralSettings> {
+    const data = await this.client.get<ErpReferralSettings>('/portal/referrals/settings');
+    return {
+      enabled: data.enabled ?? true,
+      rewardType: data.rewardType ?? '',
+      rewardValue: data.rewardValue ?? 0,
+      rewardPercentage: data.rewardPercentage ?? 0,
+      minimumPurchase: data.minimumPurchase ?? 0,
+      maxRewardAmount: data.maxRewardAmount ?? 0,
+      expiryDays: data.expiryDays ?? 0,
+      requireApproval: data.requireApproval ?? true,
+      shareMessage: data.shareMessage ?? '',
+    };
+  }
+
+  /**
+   * GET /api/portal/wallet — ERP-authoritative wallet. The ERP credits the
+   * wallet when a reward is approved; Sasa only reads and never writes a
+   * balance or transaction.
+   */
+  async getWallet(): Promise<Wallet> {
+    const data = await this.client.get<ErpWallet>('/portal/wallet');
+    return { walletBalance: data.walletBalance ?? 0, transactions: data.transactions ?? [] };
   }
 
   // ── Catalog / products ────────────────────────────────────────────────────
