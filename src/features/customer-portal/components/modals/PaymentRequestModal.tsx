@@ -158,9 +158,9 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
                 <CheckCircle2 className="w-8 h-8 text-emerald-600" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-xl font-black text-slate-900">Bank Transfer Request Sent</h4>
+                <h4 className="text-xl font-black text-slate-900">Payment Request Sent</h4>
                 <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-sm mx-auto">
-                  Your request has been submitted for review. This request does not mark your invoice as paid.
+                  Your request to pay {formatCurrency(createdRequest.requestedAmount)} by {createdRequest.paymentMethod || BANK_TRANSFER_METHOD_LABEL} has been submitted successfully.
                 </p>
               </div>
 
@@ -194,8 +194,7 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
               <div className="p-3 bg-amber-50/90 border border-amber-200/90 rounded-2xl text-amber-900 text-xs font-medium text-left flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">
-                  The invoice is not marked as paid. Once our team reviews your request and verifies the bank
-                  transfer, the payment is recorded in the ERP ledger.
+                  This request does not mark your invoice as paid. Your invoice will be updated after the payment is received and recorded by Prime Printing Services.
                 </p>
               </div>
 

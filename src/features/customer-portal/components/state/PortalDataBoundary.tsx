@@ -8,10 +8,27 @@
  */
 
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Inbox, Loader2, Lock, RefreshCcw, WifiOff } from 'lucide-react';
 import { ApiError } from '../../services/apiClient';
-import { AuthError } from '../../services/authService';
+import { AuthError, PORTAL_SESSION_EXPIRED_EVENT } from '../../services/authService';
 import { isMockModeActive } from '../../config/env';
+
+/**
+ * True once the auth layer has broadcast `portal-session-expired` — i.e. the
+ * session is being torn down and the route guard is about to redirect to the
+ * login screen. Data boundaries use this to avoid painting a misleading,
+ * persistent "session expired" error card over that transition.
+ */
+function useSessionExpiring(): boolean {
+  const [expiring, setExpiring] = useState(false);
+  useEffect(() => {
+    const onExpired = () => setExpiring(true);
+    window.addEventListener(PORTAL_SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(PORTAL_SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
+  return expiring;
+}
 
 function resolveErrorMessage(error: unknown): { message: string; kind: 'auth' | 'network' | 'forbidden' | 'notConfigured' | 'unknown' } {
   if (error instanceof ApiError) {
@@ -73,6 +90,14 @@ export function ErrorState({
   fullScreen?: boolean;
 }) {
   const { message, kind } = resolveErrorMessage(error);
+  const sessionExpiring = useSessionExpiring();
+
+  // The session was intentionally torn down and the guard is redirecting to
+  // sign-in — show a neutral transition instead of a stale data-error card.
+  if (sessionExpiring && (kind === 'auth' || kind === 'forbidden')) {
+    return <LoadingState label="Signing you out..." fullScreen={fullScreen} />;
+  }
+
   const Icon = kind === 'network' ? WifiOff : kind === 'auth' || kind === 'forbidden' ? Lock : AlertTriangle;
   const iconClass =
     kind === 'network' ? 'text-rose-500 bg-rose-50 border-rose-100'

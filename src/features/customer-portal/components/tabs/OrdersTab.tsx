@@ -41,6 +41,7 @@ interface OrdersTabProps {
   /** Cancels a customer's own order request — the ERP enforces ownership + status. */
   onCancelOrderRequest: (request: OrderRequest) => Promise<OrderRequest>;
   onSelectProductDetail?: (product: Product) => void;
+  onSelectOrderDetail?: (order: Order) => void;
 }
 
 export const OrdersTab: React.FC<OrdersTabProps> = ({
@@ -53,6 +54,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
   onReorder,
   onCancelOrderRequest,
   onSelectProductDetail,
+  onSelectOrderDetail,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'history'>('catalog');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -900,63 +902,43 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                 const isPendingConfirm = pendingCancelId === request.id;
                 const isBusy = cancelBusyId === request.id;
                 return (
-                  <div key={request.id} className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-2xs">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <div key={request.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                       <div>
-                        <h4 className="font-mono font-bold text-sm text-slate-900">{request.requestNumber || 'Request'}</h4>
-                        <p className="text-[12.5px] text-slate-500 font-medium">Submitted {formatDate(request.date)}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-sm text-slate-900">{request.requestNumber || 'Request'}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.bg}`}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <p className="text-[12.5px] text-slate-500 mt-0.5">Submitted on {formatDate(request.date)}</p>
                       </div>
+
                       <div className="text-right">
-                        <span className="text-sm font-black text-slate-900 block tabular-nums">{formatCurrency(request.total)}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold capitalize ${badge.bg}`}>
-                          {badge.label}
+                        <span className="text-sm font-medium text-slate-900 block finance-nums">{formatCurrency(request.total)}</span>
+                        <span className="text-[11.5px] text-slate-400">
+                          {request.officialOrderNumber ? `Converted to ${request.officialOrderNumber}` : 'Awaiting ERP review'}
                         </span>
                       </div>
                     </div>
 
-                    <div className="space-y-1 text-xs text-slate-700">
-                      {request.items.length > 0 ? (
-                        request.items.map((item, idx) => (
-                          <div key={idx} className="flex justify-between font-medium">
-                            <span>{item.quantity}x {item.productName}</span>
-                            <span className="text-slate-500 tabular-nums">{formatCurrency(item.total)}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-[11.5px] text-slate-400">Request line items are confirmed by the ERP.</p>
-                      )}
-                      {request.discountTotal ? (
-                        <div className="flex justify-between font-bold text-emerald-700">
-                          <span>Promotion discount</span>
-                          <span>-{formatCurrency(request.discountTotal)}</span>
-                        </div>
-                      ) : null}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11.5px] text-slate-400 font-medium">
+                        {request.items.length} line item{request.items.length !== 1 ? 's' : ''}
+                      </span>
+                      <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
                     </div>
 
-                    <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
-                      <div className="text-slate-500 text-[12.5px] font-medium space-y-0.5">
-                        {request.requestedDeliveryDate && (
-                          <div>Requested delivery: <span className="text-slate-700">{formatDate(request.requestedDeliveryDate)}</span></div>
-                        )}
-                        {request.reorderOfNumber && (
-                          <div>Reorder of <span className="font-mono text-slate-700">{request.reorderOfNumber}</span></div>
-                        )}
-                        {request.officialOrderNumber ? (
-                          <div className="text-emerald-700 font-bold">
-                            Converted to official order <span className="font-mono">{request.officialOrderNumber}</span>
-                          </div>
-                        ) : request.status === 'converted' ? (
-                          <div className="text-emerald-700 font-bold">Converted by the ERP</div>
-                        ) : (
-                          <div>Awaiting ERP review</div>
-                        )}
-                      </div>
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                      <span className="text-[12.5px] text-slate-500 font-medium">
+                        {request.requestedDeliveryDate ? `Requested delivery: ${formatDate(request.requestedDeliveryDate)}` : 'No delivery date specified'}
+                      </span>
                       <div className="flex items-center gap-2">
                         {cancelable && (
                           <button
                             onClick={() => handleCancelRequestClick(request)}
                             disabled={isBusy}
-                            className={`px-3.5 py-1.5 rounded-xl font-bold transition shadow-2xs ${
+                            className={`px-3.5 py-2 rounded-xl font-extrabold transition shadow-xs ${
                               isPendingConfirm
                                 ? 'bg-rose-600 text-white hover:bg-rose-700'
                                 : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
@@ -1005,51 +987,72 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {orders.map((order) => (
-                <div key={order.id} className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-2xs">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                    <div>
-                      <h4 className="font-mono font-bold text-sm text-slate-900">{order.orderNumber}</h4>
-                      <p className="text-[12.5px] text-slate-500 font-medium">Placed on {formatDate(order.date)}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-black text-slate-900 block tabular-nums">{formatCurrency(order.totalAmount)}</span>
-                      <span className="text-[10px] bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-full font-bold capitalize">
-                        {order.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 text-xs text-slate-700">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between font-medium">
-                        <span>{item.quantity}x {item.productName}</span>
-                        <span className="text-slate-500 tabular-nums">{formatCurrency(item.total)}</span>
+              {orders.map((order) => {
+                const badge = {
+                  label: order.status.charAt(0).toUpperCase() + order.status.slice(1),
+                  bg: 'bg-blue-100 text-blue-800 border-blue-200',
+                };
+                const reorderable = canReorderOrder(order);
+                const isBusy = reorderBusyId === order.id;
+                return (
+                  <div
+                    key={order.id}
+                    onClick={() => onSelectOrderDetail?.(order)}
+                    className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-sm text-slate-900">{order.orderNumber}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.bg}`}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <p className="text-[12.5px] text-slate-500 mt-0.5">Placed on {formatDate(order.date)}</p>
                       </div>
-                    ))}
-                  </div>
 
-                  <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <span className="text-slate-500 text-[12.5px] font-medium">Est. Delivery: {formatDate(order.estimatedDelivery)}</span>
-                    {canReorderOrder(order) ? (
-                      <button
-                        onClick={() => handleReorderClick(order)}
-                        disabled={reorderBusyId === order.id}
-                        className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 font-bold text-xs flex items-center gap-1.5 transition shadow-2xs disabled:opacity-50"
-                      >
-                        {reorderBusyId === order.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                        )}
-                        <span>{reorderBusyId === order.id ? 'Submitting...' : 'Reorder 1-Click'}</span>
-                      </button>
-                    ) : (
-                      <span className="text-slate-400 text-[12.5px] font-medium">Not reorderable</span>
-                    )}
+                      <div className="text-right">
+                        <span className="text-sm font-medium text-slate-900 block finance-nums">{formatCurrency(order.totalAmount)}</span>
+                        <span className="text-[11.5px] text-slate-400">
+                          Est. delivery {formatDate(order.estimatedDelivery)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11.5px] text-slate-400 font-medium">
+                        {order.items.length} line item{order.items.length !== 1 ? 's' : ''}
+                      </span>
+                      <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                      <span className="text-[12.5px] text-slate-500 font-medium">
+                        {order.deliveryAddress || 'No delivery address'}
+                      </span>
+                      {reorderable ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReorderClick(order);
+                          }}
+                          disabled={isBusy}
+                          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition disabled:opacity-50"
+                        >
+                          {isBusy ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                          )}
+                          <span>{isBusy ? 'Submitting...' : 'Reorder 1-Click'}</span>
+                        </button>
+                      ) : (
+                        <span className="text-slate-400 text-[12.5px] font-medium">Not reorderable</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

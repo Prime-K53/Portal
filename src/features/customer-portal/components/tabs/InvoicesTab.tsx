@@ -1,39 +1,35 @@
 import React, { useState } from 'react';
 import {
   Calendar,
-  CheckSquare,
   Download,
   FileSpreadsheet,
   FileText,
-  Lock,
+  Landmark,
   Receipt,
   Search,
-  Square,
 } from 'lucide-react';
 import { Invoice } from '../../types';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/formatters';
 import { exportToCSV } from '../../utils/exportUtils';
+import { canRequestPayment } from '../../utils/paymentRequest';
+
+export type InvoiceFilter = 'all' | 'unpaid' | 'overdue' | 'paid';
 
 interface InvoicesTabProps {
   invoices: Invoice[];
-  selectedInvoiceIds: string[];
-  onToggleInvoiceSelection: (id: string) => void;
-  onSelectAllUnpaid: () => void;
-  onClearSelection: () => void;
-  onOpenPaymentModal: () => void;
+  /** Filter applied on mount — used when drilling in from a dashboard KPI. */
+  initialFilter?: InvoiceFilter;
   onSelectInvoiceDetail: (invoice: Invoice) => void;
+  onRequestPayment: (invoice: Invoice) => void;
 }
 
 export const InvoicesTab: React.FC<InvoicesTabProps> = ({
   invoices,
-  selectedInvoiceIds,
-  onToggleInvoiceSelection,
-  onSelectAllUnpaid,
-  onClearSelection,
-  onOpenPaymentModal,
+  initialFilter,
   onSelectInvoiceDetail,
+  onRequestPayment,
 }) => {
-  const [filter, setFilter] = useState<'all' | 'unpaid' | 'overdue' | 'paid'>('unpaid');
+  const [filter, setFilter] = useState<InvoiceFilter>(initialFilter ?? 'unpaid');
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredInvoices = invoices.filter((inv) => {
@@ -52,8 +48,6 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
 
   const unpaidInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid');
   const unpaidTotal = unpaidInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
-  const selectedInvoices = invoices.filter((i) => selectedInvoiceIds.includes(i.id));
-  const selectedTotal = selectedInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
 
   const handleExportCSV = () => {
     exportToCSV(
@@ -179,95 +173,58 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
           </div>
         ) : (
           filteredInvoices.map((inv) => {
+            const statusInfo = getInvoiceStatusBadge(inv.status);
             const isPayable = inv.status === 'unpaid' || inv.status === 'overdue' || inv.status === 'partially_paid';
-            const isChecked = selectedInvoiceIds.includes(inv.id);
 
             return (
               <div
                 key={inv.id}
                 onClick={() => onSelectInvoiceDetail(inv)}
-                className={`p-4 rounded-2xl border transition-all duration-200 bg-white cursor-pointer hover:shadow-xs ${
-                  isChecked
-                    ? 'border-blue-500 ring-2 ring-blue-500/40 bg-blue-50/30'
-                    : 'border-slate-200/90'
-                }`}
+                className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-2.5 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition"
               >
-                {/* Invoice Header Line */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    {isPayable && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleInvoiceSelection(inv.id);
-                        }}
-                        className="text-slate-400 hover:text-slate-900 transition"
-                      >
-                        {isChecked ? (
-                          <CheckSquare className="w-4.5 h-4.5 text-blue-600" />
-                        ) : (
-                          <Square className="w-4.5 h-4.5 text-slate-300" />
-                        )}
-                      </button>
-                    )}
-                    <h3 className="font-mono font-bold text-sm text-slate-500">{inv.invoiceNumber}</h3>
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-sm text-slate-900">{inv.invoiceNumber}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
+                        {statusInfo.label}
+                      </span>
+                    </div>
+                    <p className="text-[12.5px] text-slate-500 mt-0.5">Issued on {formatDate(inv.issueDate)}</p>
                   </div>
 
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wider ${
-                      inv.status === 'overdue'
-                        ? 'bg-rose-100 text-rose-800'
-                        : inv.status === 'paid'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-emerald-100/90 text-emerald-800'
-                    }`}
-                  >
-                    {inv.status === 'overdue' ? 'OVERDUE' : inv.status === 'paid' ? 'PAID' : 'UNPAID'}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-sm font-medium text-slate-900 block finance-nums">{formatCurrency(inv.amount)}</span>
+                    <span className="text-[11.5px] text-slate-400">Due {formatDate(inv.dueDate)}</span>
+                  </div>
                 </div>
 
-                {/* Dates line */}
-                <p className="text-xs text-slate-500 font-normal mt-1">
-                  Issue Date: {inv.issueDate} <span className="text-slate-300">|</span> Due: {inv.dueDate}
-                </p>
-
-                {/* Description & Note */}
-                <div className="mt-2 space-y-0.5">
-                  <p className="text-sm font-normal text-slate-800 line-clamp-1">
-                    {inv.items.map((i) => `${i.quantity}x ${i.description}`).join(', ')}
-                  </p>
-                  {inv.notes && (
-                    <p className="text-xs text-slate-500 line-clamp-1">{inv.notes}</p>
-                  )}
-                </div>
-
-                {/* Footer Action Row */}
-                <div className="flex items-center justify-between gap-3 pt-3 mt-3 border-t border-slate-100">
-                  <span className="text-base font-medium text-slate-900 finance-nums">
-                    {formatCurrency(inv.amount)}
+                <div className="pt-2 flex items-center justify-between gap-2">
+                  <span className="text-[12.5px] text-slate-500 font-medium">
+                    {inv.poNumber ? `PO: ${inv.poNumber}` : 'No PO reference'}
                   </span>
-
                   <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDownloadPDF(inv);
                       }}
-                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
                     >
-                      <FileText className="w-3.5 h-3.5 text-slate-600" />
+                      <FileText className="w-3.5 h-3.5" />
                       <span>PDF</span>
                     </button>
 
-                    {isPayable && (
+                    {isPayable && canRequestPayment(inv) && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onOpenPaymentModal();
+                          onRequestPayment(inv);
                         }}
-                        className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-2xs transition"
+                        className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
                       >
-                        Pay Now
+                        <Landmark className="w-3.5 h-3.5" />
+                        <span>Request Payment</span>
                       </button>
                     )}
                   </div>
@@ -278,24 +235,6 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
         )}
       </div>
 
-      {/* Sticky Bottom Multi-Payment Action Bar */}
-      {selectedInvoiceIds.length > 0 && (
-        <div className="fixed bottom-16 left-0 right-0 z-20 p-3 bg-white/95 border-t border-slate-200 backdrop-blur-md shadow-lg animate-slide-up">
-          <div className="max-w-md mx-auto flex items-center justify-between gap-3">
-            <div>
-              <span className="text-[11.5px] text-slate-500 block font-bold">Selected ({selectedInvoiceIds.length})</span>
-              <span className="text-lg font-black text-slate-900">{formatCurrency(selectedTotal)}</span>
-            </div>
-            <button
-              onClick={onOpenPaymentModal}
-              className="px-6 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-extrabold text-sm shadow-md flex items-center gap-2 transition"
-            >
-              <Lock className="w-4 h-4" />
-              <span>Pay Selected</span>
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

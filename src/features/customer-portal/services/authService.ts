@@ -87,6 +87,20 @@ export interface AuthService {
 /** ERP event dispatched when the session cannot be refreshed/restored. */
 export const PORTAL_SESSION_EXPIRED_EVENT = 'portal-session-expired';
 
+/**
+ * Session-recovery hardening (frontend-only).
+ *
+ * When recovery concludes the persisted session is unrecoverable, the ORIGINAL
+ * failure reason is recorded BEFORE the envelope is cleared and expiry is
+ * broadcast once. The shared API client consults this via its `requestGate`
+ * so queued/in-flight requests fail fast with that reason instead of racing
+ * to the ERP without a token and surfacing a misleading secondary
+ * `401 No authentication token provided` storm while the UI redirects.
+ */
+const STALE_SESSION_MESSAGE = 'Your session has expired. Please sign in again.';
+const UNRECOVERABLE_SESSION_MESSAGE =
+  'Your session could not be restored due to a connection problem. Please sign in again.';
+
 export function dispatchSessionExpired(): void {
   try {
     window.dispatchEvent(new CustomEvent(PORTAL_SESSION_EXPIRED_EVENT));
@@ -124,17 +138,46 @@ export class ErpAuthService implements AuthService {
   /** Proactive refresh timer (ERP client refreshes at 25 minutes). */
   private refreshTimer: number | null = null;
   private disposed = false;
+  /**
+   * Set exactly once when recovery concludes the session is unrecoverable.
+   * While set, the shared API client's requestGate fails new requests with
+   * this reason instead of sending headerless/secondary requests.
+   */
+  private sessionTermination: { reason: string } | null = null;
 
   constructor(baseUrl: string) {
     this.client = createApiClient({
       baseUrl,
       getAccessToken: () => tokenStore.getAccessToken(),
       refreshAccessToken: () => this.refreshAccessToken(),
-      onAuthFailure: () => {
-        this.clearSession();
-        dispatchSessionExpired();
+      onAuthFailure: ({ skipAuth }) => {
+        // Login/refresh endpoint failures are terminal answers for THAT call
+        // (bad credentials, stale refresh token) — the rotation path itself
+        // classifies and terminates. Only a failed AUTHENTICATED request
+        // (data 401 after unrecoverable recovery) tears the session down.
+        if (skipAuth) return;
+        this.terminateSession(STALE_SESSION_MESSAGE);
       },
+      requestGate: () =>
+        this.sessionTermination
+          ? new ApiError(this.sessionTermination.reason, {
+              code: 'UNAUTHORIZED',
+              details: { sessionExpired: true },
+            })
+          : null,
     });
+  }
+
+  /**
+   * Records the original failure reason (first one wins), clears the stored
+   * envelope, and broadcasts the expiry event — in that order — so every part
+   * of the UI observes ONE coherent stale-session story.
+   */
+  private terminateSession(reason: string): void {
+    if (this.sessionTermination) return;
+    this.sessionTermination = { reason };
+    this.clearSession();
+    dispatchSessionExpired();
   }
 
   /** Shared API client — the single refresh pipeline for the whole Portal. */
@@ -190,6 +233,8 @@ export class ErpAuthService implements AuthService {
   }
 
   private establishSession(payload: ErpLoginPayload): AuthSession {
+    // A successful login/activation supersedes any prior termination state.
+    this.sessionTermination = null;
     const user = toPortalUser(payload.user);
     const session: AuthSession = {
       accessToken: payload.access_token,
@@ -235,14 +280,15 @@ export class ErpAuthService implements AuthService {
       );
 
       if (!response.access_token || !response.refresh_token) {
-        this.clearSession();
+        // ERP answered but the rotation payload is incomplete — treat as stale.
+        this.terminateSession(STALE_SESSION_MESSAGE);
         return null;
       }
 
       // Rotation: REPLACE the stored refresh token — the old one is now invalid.
       const previousUser = tokenStore.getUser();
       if (!previousUser) {
-        this.clearSession();
+        this.terminateSession(STALE_SESSION_MESSAGE);
         return null;
       }
       const envelope: ErpStoredSession = {
@@ -252,6 +298,7 @@ export class ErpAuthService implements AuthService {
         user: previousUser,
       };
       tokenStore.writeEnvelope(envelope);
+      this.sessionTermination = null;
       this.armProactiveRefresh();
 
       const session: AuthSession = {
@@ -261,9 +308,14 @@ export class ErpAuthService implements AuthService {
       };
       return session;
     } catch (error) {
-      // Unrecoverable refresh failure → clear the session and notify the UI.
-      this.clearSession();
-      dispatchSessionExpired();
+      // Classify BEFORE clearing so the UI can tell a genuinely stale session
+      // apart from a transient recovery problem.
+      const authRejected =
+        error instanceof ApiError &&
+        error.status !== null &&
+        error.status >= 400 &&
+        error.status < 500;
+      this.terminateSession(authRejected ? STALE_SESSION_MESSAGE : UNRECOVERABLE_SESSION_MESSAGE);
       return null;
     }
   }

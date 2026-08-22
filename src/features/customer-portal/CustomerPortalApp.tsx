@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { useAuth } from './hooks/useAuth';
+import React, { useEffect, useState } from 'react';
 import { useHashRoute } from './router/useHashRoute';
 import { RouteGuard } from './router/RouteGuard';
 import {
@@ -29,11 +28,13 @@ import {
   CartItem,
   DeliveryNotification,
   Invoice,
+  Order,
   OrderRequest,
   PaymentRequest,
   PortalReferral,
   Product,
   QuoteRequestItem,
+  Quotation,
   ReferralCreatePayload,
   ReferralCustomerSearchResult,
   ReferralTimelineEntry,
@@ -42,7 +43,10 @@ import {
 } from './types';
 
 // Auth Component
-import { AuthPage } from './components/AuthPage';
+import { CustomerActivate } from './components/auth/CustomerActivate';
+import { CustomerAuthProvider, useCustomerAuth } from './components/auth/CustomerAuthContext';
+import { CustomerForgotPassword } from './components/auth/CustomerForgotPassword';
+import { CustomerLogin } from './components/auth/CustomerLogin';
 
 // Layout & Navigation
 import { BottomNavigation } from './components/BottomNavigation';
@@ -54,10 +58,11 @@ import { Sidebar } from './components/Sidebar';
 import { CartDrawer } from './components/modals/CartDrawer';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { InvoiceDetailModal } from './components/modals/InvoiceDetailModal';
-import { PaymentModal } from './components/modals/PaymentModal';
+import { OrderDetailModal } from './components/modals/OrderDetailModal';
 import { PaymentRequestModal } from './components/modals/PaymentRequestModal';
 import { ProductDetailModal } from './components/modals/ProductDetailModal';
 import { QuoteRequestModal } from './components/modals/QuoteRequestModal';
+import { QuotationDetailModal } from './components/modals/QuotationDetailModal';
 import { StatementItemDetailModal } from './components/modals/StatementItemDetailModal';
 import { StatementPrintModal } from './components/modals/StatementPrintModal';
 
@@ -66,6 +71,7 @@ import { AccountTab } from './components/tabs/AccountTab';
 import { DashboardTab } from './components/tabs/DashboardTab';
 import { DeliveriesTab } from './components/tabs/DeliveriesTab';
 import { InvoicesTab } from './components/tabs/InvoicesTab';
+import type { InvoiceFilter } from './components/tabs/InvoicesTab';
 import { OrdersTab } from './components/tabs/OrdersTab';
 import { QuotesTab } from './components/tabs/QuotesTab';
 import { ReferralsTab } from './components/tabs/ReferralsTab';
@@ -79,12 +85,12 @@ export interface CustomerPortalAppProps {
   className?: string;
 }
 
-export function CustomerPortalApp({
+function CustomerPortalShell({
   initialTab = 'dashboard',
   initialProfileData,
   className = '',
 }: CustomerPortalAppProps) {
-  const auth = useAuth();
+  const auth = useCustomerAuth();
   const { path, navigate } = useHashRoute();
 
   // ── Portal data (all reads flow through the PortalService boundary) ───────
@@ -125,13 +131,15 @@ export function CustomerPortalApp({
 
   // ── UI state (no business data lives here) ────────────────────────────────
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [selectedInvoiceDetail, setSelectedInvoiceDetail] = useState<Invoice | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<Order | null>(null);
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [selectedStatementEntryDetail, setSelectedStatementEntryDetail] = useState<StatementEntry | null>(null);
+  const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<Quotation | null>(null);
 
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentRequestInvoice, setPaymentRequestInvoice] = useState<Invoice | null>(null);
+  /** Preset list filter applied when drilling in from a dashboard KPI. */
+  const [invoicePresetFilter, setInvoicePresetFilter] = useState<InvoiceFilter | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isStatementPrintModalOpen, setIsStatementPrintModalOpen] = useState(false);
@@ -144,6 +152,12 @@ export function CustomerPortalApp({
   const activeTab: TabType = tabFromPath(path) ?? tabFromPath(defaultPath) ?? 'dashboard';
 
   const handleNavigateTab = (tab: TabType) => navigate(pathForTab(tab));
+
+  // Consume the KPI preset once the user leaves the invoices tab so the next
+  // plain visit starts from the default filter.
+  useEffect(() => {
+    if (activeTab !== 'invoices') setInvoicePresetFilter(null);
+  }, [activeTab]);
 
   // ── Computed values ───────────────────────────────────────────────────────
   const unpaidInvoices = invoices.filter(
@@ -161,26 +175,6 @@ export function CustomerPortalApp({
       setActionError(err instanceof Error ? err.message : 'The operation could not be completed.');
       throw err;
     }
-  };
-
-  // ── Invoice selection ─────────────────────────────────────────────────────
-  const handleToggleInvoiceSelection = (id: string) => {
-    setSelectedInvoiceIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllUnpaid = () => {
-    setSelectedInvoiceIds(unpaidInvoices.map((i) => i.id));
-  };
-
-  const handleClearInvoiceSelection = () => {
-    setSelectedInvoiceIds([]);
-  };
-
-  const handlePaySingleInvoice = (invoiceId: string) => {
-    setSelectedInvoiceIds([invoiceId]);
-    setIsPaymentModalOpen(true);
   };
 
   // ── Bank Transfer payment REQUEST (workflow data only — never a payment) ─
@@ -201,27 +195,6 @@ export function CustomerPortalApp({
       customerQuery.refetch();
       return created;
     });
-  };
-
-  // ── Payment (records each selected invoice in the ERP ledger) ─────────────
-  const handleCompletePayment = async (paidIds: string[], paymentMethod: string): Promise<string> => {
-    const selected = invoices.filter((inv) => paidIds.includes(inv.id));
-    let lastPaymentId = '';
-    for (const inv of selected) {
-      const result = await runAction(() =>
-        portalService.submitPayment({
-          invoiceId: inv.id,
-          amount: inv.amountRemaining,
-          paymentMethod,
-        })
-      );
-      if (result) lastPaymentId = result.paymentId;
-    }
-    setSelectedInvoiceIds([]);
-    invoicesQuery.refetch();
-    statementsQuery.refetch();
-    customerQuery.refetch();
-    return lastPaymentId || 'ERP payment recorded';
   };
 
   // ── Cart ──────────────────────────────────────────────────────────────────
@@ -405,13 +378,17 @@ export function CustomerPortalApp({
     navigate(ROUTES.login);
   };
 
-  const renderUnauthenticated = () => (
-    <AuthPage
-      onLogin={auth.login}
-      onVerifyTwoFactor={auth.verifyTwoFactor}
-      onRequestPasswordReset={auth.requestPasswordReset}
-    />
-  );
+  // Auth screens (public routes) — switched by the current hash path.
+  const renderUnauthenticated = () => {
+    switch (path.split('?')[0].replace(/\/+$/, '')) {
+      case ROUTES.activate:
+        return <CustomerActivate />;
+      case ROUTES.forgotPassword:
+        return <CustomerForgotPassword />;
+      default:
+        return <CustomerLogin />;
+    }
+  };
 
   const renderPortal = () => (
     <div className={`min-h-screen bg-slate-100/70 text-slate-900 font-sans selection:bg-slate-900 selection:text-white flex ${className}`}>
@@ -424,7 +401,7 @@ export function CustomerPortalApp({
         unpaidTotal={unpaidTotal}
         deliveryAlertCount={unreadNotificationCount}
         cartCount={cartCount}
-        onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
+        onOpenPaymentModal={() => handleNavigateTab('invoices')}
         onOpenQuoteModal={() => setIsQuoteModalOpen(true)}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         onSignOut={handleSignOut}
@@ -439,8 +416,6 @@ export function CustomerPortalApp({
             unreadCount={unreadNotificationCount}
             onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
             onOpenAccount={() => handleNavigateTab('account')}
-            onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
-            unpaidTotal={unpaidTotal}
             cartCount={cartCount}
             onOpenCart={() => setIsCartOpen(true)}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
@@ -487,7 +462,11 @@ export function CustomerPortalApp({
                 statements={statements}
                 ads={ads}
                 onNavigateTab={handleNavigateTab}
-                onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
+                onOpenPaymentModal={() => handleNavigateTab('invoices')}
+                onNavigateInvoices={(filter) => {
+                  setInvoicePresetFilter(filter);
+                  handleNavigateTab('invoices');
+                }}
               />
             </PortalDataBoundary>
           )}
@@ -503,12 +482,9 @@ export function CustomerPortalApp({
             >
               <InvoicesTab
                 invoices={invoices}
-                selectedInvoiceIds={selectedInvoiceIds}
-                onToggleInvoiceSelection={handleToggleInvoiceSelection}
-                onSelectAllUnpaid={handleSelectAllUnpaid}
-                onClearSelection={handleClearInvoiceSelection}
-                onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
+                initialFilter={invoicePresetFilter ?? undefined}
                 onSelectInvoiceDetail={(inv) => setSelectedInvoiceDetail(inv)}
+                onRequestPayment={(inv) => setPaymentRequestInvoice(inv)}
               />
             </PortalDataBoundary>
           )}
@@ -546,6 +522,7 @@ export function CustomerPortalApp({
                 onReorder={(order) => handleReorderOrder(order.id)}
                 onCancelOrderRequest={(request) => handleCancelOrderRequest(request.id)}
                 onSelectProductDetail={(product) => setSelectedProductDetail(product)}
+                onSelectOrderDetail={(order) => setSelectedOrderDetail(order)}
               />
             </PortalDataBoundary>
           )}
@@ -565,6 +542,7 @@ export function CustomerPortalApp({
                 onAcceptQuotation={handleAcceptQuotation}
                 onRejectQuotation={handleRejectQuotation}
                 onRequestRevision={handleRequestQuotationRevision}
+                onSelectQuotation={(quotation) => setSelectedQuotationDetail(quotation)}
               />
             </PortalDataBoundary>
           )}
@@ -631,20 +609,19 @@ export function CustomerPortalApp({
       </div>
 
       {/* Modals & Overlays */}
-      <PaymentModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        invoices={invoices}
-        selectedInvoiceIds={selectedInvoiceIds}
-        onToggleInvoiceSelection={handleToggleInvoiceSelection}
-        onCompletePayment={handleCompletePayment}
-      />
-
       <InvoiceDetailModal
         invoice={selectedInvoiceDetail}
         onClose={() => setSelectedInvoiceDetail(null)}
-        onPaySingleInvoice={handlePaySingleInvoice}
-        onRequestPayment={(inv) => setPaymentRequestInvoice(inv)}
+        onRequestPayment={(inv) => {
+          setSelectedInvoiceDetail(null);
+          setPaymentRequestInvoice(inv);
+        }}
+      />
+
+      <OrderDetailModal
+        order={selectedOrderDetail}
+        onClose={() => setSelectedOrderDetail(null)}
+        onReorder={(order) => handleReorderOrder(order.id)}
       />
 
       <PaymentRequestModal
@@ -667,6 +644,7 @@ export function CustomerPortalApp({
         isOpen={isQuoteModalOpen}
         onClose={() => setIsQuoteModalOpen(false)}
         onSubmitQuoteRequest={handleSubmitQuoteRequest}
+        products={products}
       />
 
       <StatementPrintModal
@@ -674,6 +652,11 @@ export function CustomerPortalApp({
         onClose={() => setIsStatementPrintModalOpen(false)}
         profile={profile ?? ({} as AccountProfile)}
         statements={statements}
+      />
+
+      <QuotationDetailModal
+        quotation={selectedQuotationDetail}
+        onClose={() => setSelectedQuotationDetail(null)}
       />
 
       <NotificationDrawer
@@ -728,6 +711,20 @@ export function CustomerPortalApp({
     >
       {renderPortal()}
     </RouteGuard>
+  );
+}
+
+/**
+ * Public entry — mounts the auth context ABOVE the shell so the route guard
+ * and the login/activate/forgot-password screens share ONE session state.
+ * After a successful login the provider flips to authenticated and the guard
+ * swaps the login screen for the portal immediately.
+ */
+export function CustomerPortalApp(props: CustomerPortalAppProps) {
+  return (
+    <CustomerAuthProvider>
+      <CustomerPortalShell {...props} />
+    </CustomerAuthProvider>
   );
 }
 

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { FileUp, MessageSquareQuote, Plus, Trash2, X } from 'lucide-react';
-import { QuoteRequestItem } from '../../types';
+import { Product, QuoteRequestItem } from '../../types';
 
 interface QuoteRequestModalProps {
   isOpen: boolean;
@@ -12,15 +12,47 @@ interface QuoteRequestModalProps {
     priority: 'standard' | 'urgent' | 'express',
     notes: string
   ) => void;
+  products: Product[];
 }
+
+interface ItemState extends QuoteRequestItem {
+  query: string;
+  showSuggestions: boolean;
+  activeIndex: number;
+}
+
+const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
+
+const matchProduct = (product: Product, query: string) => {
+  const q = normalize(query);
+  if (!q) return false;
+  const haystack = normalize(`${product.name} ${product.category} ${product.sku}`);
+  return haystack.includes(q);
+};
+
+const filterProducts = (products: Product[], query: string) => {
+  if (!query.trim()) return [];
+  const seen = new Set<string>();
+  const results: Product[] = [];
+  for (const product of products) {
+    const key = product.id;
+    if (seen.has(key)) continue;
+    if (matchProduct(product, query)) {
+      seen.add(key);
+      results.push(product);
+    }
+  }
+  return results.slice(0, 8);
+};
 
 export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
   isOpen,
   onClose,
   onSubmitQuoteRequest,
+  products,
 }) => {
-  const [items, setItems] = useState<QuoteRequestItem[]>([
-    { id: '1', name: 'Annual Corporate Catalog (5,000 copies, 48 pages)', quantity: 5000, targetPrice: 2.50, notes: 'Full-color silk stock, spot UV cover finish, perfect bound' },
+  const [items, setItems] = useState<ItemState[]>([
+    { id: '1', name: 'Annual Corporate Catalog (5,000 copies, 48 pages)', quantity: 5000, targetPrice: 2.50, notes: 'Full-color silk stock, spot UV cover finish, perfect bound', query: '', showSuggestions: false, activeIndex: 0 },
   ]);
   const [requiredByDate, setRequiredByDate] = useState('2026-08-25');
   const [deliveryLocation, setDeliveryLocation] = useState('742 Enterprise Parkway, Loading Dock B');
@@ -28,12 +60,25 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
   const [generalNotes, setGeneralNotes] = useState('');
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const suggestionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setItems((prev) => prev.map((i) => ({ ...i, showSuggestions: false, activeIndex: 0 })));
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (!isOpen) return null;
 
   const handleAddItem = () => {
     setItems([
       ...items,
-      { id: Date.now().toString(), name: '', quantity: 1, targetPrice: undefined, notes: '' },
+      { id: Date.now().toString(), name: '', quantity: 1, targetPrice: undefined, notes: '', query: '', showSuggestions: false, activeIndex: 0 },
     ]);
   };
 
@@ -42,17 +87,91 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
     setItems(items.filter((i) => i.id !== id));
   };
 
-  const handleItemChange = (id: string, field: keyof QuoteRequestItem, value: any) => {
+  const handleItemChange = (id: string, field: keyof ItemState, value: any) => {
     setItems(
       items.map((i) => (i.id === id ? { ...i, [field]: value } : i))
     );
+  };
+
+  const handleQueryChange = (id: string, value: string) => {
+    const next = items.map((i) => {
+      if (i.id !== id) return i;
+      const suggestions = filterProducts(products, value);
+      return {
+        ...i,
+        query: value,
+        name: value,
+        showSuggestions: suggestions.length > 0,
+        activeIndex: 0,
+      };
+    });
+    setItems(next);
+  };
+
+  const selectProduct = (id: string, product: Product) => {
+    setItems(
+      items.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              name: product.name,
+              query: product.name,
+              showSuggestions: false,
+              activeIndex: 0,
+              quantity: i.quantity < product.minOrderQty ? product.minOrderQty : i.quantity,
+            }
+          : i
+      )
+    );
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item || !item.showSuggestions) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+      }
+      return;
+    }
+
+    const suggestions = filterProducts(products, item.query);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = (item.activeIndex + 1) % suggestions.length;
+      setItems(items.map((i) => (i.id === id ? { ...i, activeIndex: next } : i)));
+      suggestionRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = (item.activeIndex - 1 + suggestions.length) % suggestions.length;
+      setItems(items.map((i) => (i.id === id ? { ...i, activeIndex: next } : i)));
+      suggestionRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const selected = suggestions[item.activeIndex];
+      if (selected) {
+        selectProduct(id, selected);
+      }
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      setItems(items.map((i) => (i.id === id ? { ...i, showSuggestions: false, activeIndex: 0 } : i)));
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (items.some((i) => !i.name.trim())) return;
 
-    onSubmitQuoteRequest(items, requiredByDate, deliveryLocation, priority, generalNotes);
+    const cleaned = items.map(({ query, showSuggestions, activeIndex, ...rest }) => rest);
+    onSubmitQuoteRequest(cleaned, requiredByDate, deliveryLocation, priority, generalNotes);
     onClose();
   };
 
@@ -106,7 +225,7 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
           </div>
 
           {/* Requested Line Items */}
-          <div>
+          <div ref={containerRef}>
             <div className="flex justify-between items-center mb-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                 Requested Items / Services ({items.length})
@@ -122,62 +241,99 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
             </div>
 
             <div className="space-y-3">
-              {items.map((item, idx) => (
-                <div key={item.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs shadow-2xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-extrabold text-slate-500 text-[12.5px]">Item #{idx + 1}</span>
-                    {items.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(item.id)}
-                        className="text-slate-400 hover:text-rose-600 transition"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+              {items.map((item, idx) => {
+                const suggestions = filterProducts(products, item.query);
 
-                  <input
-                    type="text"
-                    placeholder="Product name or detailed specification description..."
-                    value={item.name}
-                    onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
-                    required
-                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 text-xs font-bold focus:outline-none"
-                  />
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11.5px] text-slate-500 font-bold">Quantity Needed</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                        className="w-full bg-white border border-slate-200 rounded-xl p-1.5 text-slate-900 text-xs font-bold"
-                      />
+                return (
+                  <div key={item.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs shadow-2xs relative">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-extrabold text-slate-500 text-[12.5px]">Item #{idx + 1}</span>
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="text-slate-400 hover:text-rose-600 transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    <div>
-                      <label className="text-[11.5px] text-slate-500 font-bold">Target Budget ($/unit)</label>
-                      <input
-                        type="number"
-                        placeholder="Optional"
-                        value={item.targetPrice || ''}
-                        onChange={(e) => handleItemChange(item.id, 'targetPrice', parseFloat(e.target.value) || undefined)}
-                        className="w-full bg-white border border-slate-200 rounded-xl p-1.5 text-slate-900 text-xs font-bold"
-                      />
-                    </div>
-                  </div>
 
-                  <input
-                    type="text"
-                    placeholder="Additional item specifications or CAD drawings note..."
-                    value={item.notes || ''}
-                    onChange={(e) => handleItemChange(item.id, 'notes', e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl p-1.5 text-slate-700 text-[12.5px] font-medium"
-                  />
-                </div>
-              ))}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search products, stationery or services..."
+                        value={item.name}
+                        onChange={(e) => handleQueryChange(item.id, e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, item.id)}
+                        onFocus={() => {
+                          const s = filterProducts(products, item.query);
+                          if (s.length > 0) {
+                            setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, showSuggestions: true, activeIndex: 0 } : i)));
+                          }
+                        }}
+                        required
+                        className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 text-xs font-bold focus:outline-none"
+                      />
+
+                      {item.showSuggestions && suggestions.length > 0 && (
+                        <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                          {suggestions.map((product, suggestionIdx) => (
+                            <button
+                              key={product.id}
+                              ref={(el) => { suggestionRefs.current[suggestionIdx] = el; }}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                selectProduct(item.id, product);
+                              }}
+                              className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition ${
+                                suggestionIdx === item.activeIndex ? 'bg-indigo-50' : 'bg-white hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <span className="block text-slate-900 font-bold truncate">{product.name}</span>
+                                <span className="block text-[11.5px] text-slate-500 truncate">{product.category} · {product.sku}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11.5px] text-slate-500 font-bold">Quantity Needed</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                          className="w-full bg-white border border-slate-200 rounded-xl p-1.5 text-slate-900 text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11.5px] text-slate-500 font-bold">Target Budget ($/unit)</label>
+                        <input
+                          type="number"
+                          placeholder="Optional"
+                          value={item.targetPrice || ''}
+                          onChange={(e) => handleItemChange(item.id, 'targetPrice', parseFloat(e.target.value) || undefined)}
+                          className="w-full bg-white border border-slate-200 rounded-xl p-1.5 text-slate-900 text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Additional item specifications or CAD drawings note..."
+                      value={item.notes || ''}
+                      onChange={(e) => handleItemChange(item.id, 'notes', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-1.5 text-slate-700 text-[12.5px] font-medium"
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
 

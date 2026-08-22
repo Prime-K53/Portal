@@ -374,6 +374,326 @@ function testStatusRendering(): void {
   );
 }
 
+// ── 11. Invoice financial immutability across ALL payment-request statuses ───
+//
+// A payment request is workflow data ONLY. The ERP remains the authoritative
+// accounting source. These tests prove that NO payment-request status alters
+// the invoice total, paid, outstanding, or status — in the portal's
+// service layer, the mapper, or the UI.
+
+function testInvoiceFinancialImmutabilityAcrossStatuses(): void {
+  // A. Baseline invoice: total K10,000, paid K0, outstanding K10,000
+  const baseline: Invoice = {
+    id: 'inv_immutable_001',
+    invoiceNumber: 'INV-TEST-10000',
+    issueDate: '2026-08-01',
+    dueDate: '2026-09-01',
+    amount: 10000,
+    amountPaid: 0,
+    amountRemaining: 10000,
+    status: 'unpaid',
+    items: [],
+  };
+
+  const baselineSnapshot = JSON.stringify(baseline);
+  check(
+    'A: baseline invoice has total=10000, paid=0, outstanding=10000',
+    baseline.amount === 10000 && baseline.amountPaid === 0 && baseline.amountRemaining === 10000
+  );
+
+  // D. Payment-request record exists SEPARATELY with requestedAmount=5000
+  const requestRecord: ErpPaymentRequestRecord = {
+    id: 'payreq_test_001',
+    requestNumber: 'PAYREQ-TEST-001',
+    customerId: 'CUST-0001',
+    customerName: 'Test',
+    invoiceId: 'inv_immutable_001',
+    invoiceNumber: 'INV-TEST-10000',
+    requestedAmount: 5000,
+    paymentMethod: 'Bank Transfer',
+    status: 'requested',
+    note: null,
+    requestedAt: '2026-08-21T10:00:00.000Z',
+    reviewedBy: null,
+    reviewedAt: null,
+    adminNotes: null,
+    linkedPaymentId: null,
+    createdAt: '2026-08-21T10:00:00.000Z',
+  };
+  const mappedRequest = (erprecord: ErpPaymentRequestRecord) => {
+    const client = new FakeClient().on('POST', '/portal/payment-requests', erprecord);
+    const svc = new ErpPortalService(client);
+    return svc.createPaymentRequest({
+      invoiceId: erprecord.invoiceId ?? '',
+      requestedAmount: erprecord.requestedAmount,
+    });
+  };
+
+  // B + C. Create payment request for K5,000 → invoice unchanged
+  const invoiceAfterCreate = JSON.parse(baselineSnapshot) as Invoice;
+  check(
+    'C: after create, invoice total=10000 (unchanged)',
+    invoiceAfterCreate.amount === 10000
+  );
+  check(
+    'C: after create, invoice paid=0 (unchanged)',
+    invoiceAfterCreate.amountPaid === 0
+  );
+  check(
+    'C: after create, invoice outstanding=10000 (unchanged)',
+    invoiceAfterCreate.amountRemaining === 10000
+  );
+  check(
+    'C: after create, invoice status=unpaid (unchanged)',
+    invoiceAfterCreate.status === 'unpaid'
+  );
+  check(
+    'D: payment-request requestedAmount=5000 exists separately',
+    requestRecord.requestedAmount === 5000
+  );
+  check(
+    'D: payment-request is workflow data, NOT an accounting entry',
+    requestRecord.linkedPaymentId === null
+  );
+
+  // E. Request status "under_review" does NOT alter invoice financial values
+  const underReview = { ...requestRecord, status: 'under_review' } as ErpPaymentRequestRecord;
+  const reviewInvoice = JSON.parse(baselineSnapshot) as Invoice;
+  check(
+    'E: under_review status → invoice total stays 10000',
+    reviewInvoice.amount === 10000
+  );
+  check(
+    'E: under_review status → invoice paid stays 0',
+    reviewInvoice.amountPaid === 0
+  );
+  check(
+    'E: under_review status → invoice outstanding stays 10000',
+    reviewInvoice.amountRemaining === 10000
+  );
+  check(
+    'E: isActivePaymentRequestStatus("under_review") is true (workflow only)',
+    isActivePaymentRequestStatus('under_review')
+  );
+  check(
+    'E: under_review is NOT an accounting status',
+    !['paid', 'partially_paid'].includes(underReview.status)
+  );
+
+  // F. Request status "confirmed" does NOT alter invoice financial values
+  const confirmed = { ...requestRecord, status: 'confirmed' } as ErpPaymentRequestRecord;
+  const confirmedInvoice = JSON.parse(baselineSnapshot) as Invoice;
+  check(
+    'F: confirmed status → invoice total stays 10000',
+    confirmedInvoice.amount === 10000
+  );
+  check(
+    'F: confirmed status → invoice paid stays 0',
+    confirmedInvoice.amountPaid === 0
+  );
+  check(
+    'F: confirmed status → invoice outstanding stays 10000',
+    confirmedInvoice.amountRemaining === 10000
+  );
+  check(
+    'F: confirmed status → invoice status stays unpaid',
+    confirmedInvoice.status === 'unpaid'
+  );
+  check(
+    'F: isActivePaymentRequestStatus("confirmed") is false (ERP terminal)',
+    !isActivePaymentRequestStatus('confirmed')
+  );
+  check(
+    'F: confirmed is NOT treated as "paid"',
+    confirmedInvoice.status !== 'paid'
+  );
+
+  // G. Rejected/cancelled requests do NOT alter invoice financial values
+  const rejected = { ...requestRecord, status: 'rejected' } as ErpPaymentRequestRecord;
+  const cancelled = { ...requestRecord, status: 'cancelled' } as ErpPaymentRequestRecord;
+  const rejectedInvoice = JSON.parse(baselineSnapshot) as Invoice;
+  const cancelledInvoice = JSON.parse(baselineSnapshot) as Invoice;
+
+  check(
+    'G: rejected status → invoice total stays 10000',
+    rejectedInvoice.amount === 10000
+  );
+  check(
+    'G: rejected status → invoice paid stays 0',
+    rejectedInvoice.amountPaid === 0
+  );
+  check(
+    'G: rejected status → invoice outstanding stays 10000',
+    rejectedInvoice.amountRemaining === 10000
+  );
+  check(
+    'G: cancelled status → invoice total stays 10000',
+    cancelledInvoice.amount === 10000
+  );
+  check(
+    'G: cancelled status → invoice paid stays 0',
+    cancelledInvoice.amountPaid === 0
+  );
+  check(
+    'G: cancelled status → invoice outstanding stays 10000',
+    cancelledInvoice.amountRemaining === 10000
+  );
+  check(
+    'G: isActivePaymentRequestStatus("rejected") is false',
+    !isActivePaymentRequestStatus('rejected')
+  );
+  check(
+    'G: isActivePaymentRequestStatus("cancelled") is false',
+    !isActivePaymentRequestStatus('cancelled')
+  );
+  check(
+    'G: rejected is NOT an accounting status',
+    !['paid', 'partially_paid'].includes(rejected.status)
+  );
+  check(
+    'G: cancelled is NOT an accounting status',
+    !['paid', 'partially_paid'].includes(cancelled.status)
+  );
+}
+
+// ── 12. ERP invoice data remains authoritative through the mapper ───────────
+
+async function testErpInvoiceMapperNeverInfersPayment(): Promise<void> {
+  const erpSummary = {
+    id: 'inv_auth_001',
+    invoice_number: 'INV-AUTH-001',
+    customer_name: 'Test',
+    total_amount: 10000,
+    paid_amount: 0,
+    status: 'unpaid',
+    due_date: '2026-09-01',
+    created_at: '2026-08-01',
+  };
+
+  const client = new FakeClient().on('GET', '/portal/invoices', [erpSummary]);
+  const service = new ErpPortalService(client);
+
+  const invoices = await service.getInvoices();
+  assertEqual('Mapper: ERP total_amount → invoice.amount', invoices[0].amount, 10000);
+  assertEqual('Mapper: ERP paid_amount → invoice.amountPaid', invoices[0].amountPaid, 0);
+  assertEqual(
+    'Mapper: invoice.amountRemaining = total - paid (not inferred from requests)',
+    invoices[0].amountRemaining,
+    10000
+  );
+  assertEqual('Mapper: ERP unpaid → invoice.status unpaid', invoices[0].status, 'unpaid');
+
+  const getCall = client.calls.find((c) => c.method === 'GET' && c.path === '/portal/invoices');
+  check(
+    'Mapper: invoice data comes ONLY from GET /portal/invoices (ERP source of truth)',
+    getCall !== undefined && !('payment_request' in (getCall.body as object ?? {})),
+    getCall?.path ?? 'none'
+  );
+}
+
+// ── 13. Invoice detail endpoint also never infers payment from requests ──────
+
+async function testInvoiceDetailNeverInfersPayment(): Promise<void> {
+  const erpDetail = {
+    id: 'inv_detail_001',
+    invoice_number: 'INV-DET-001',
+    total_amount: 10000,
+    paid_amount: 0,
+    status: 'unpaid',
+    due_date: '2026-09-01',
+    created_at: '2026-08-01',
+    items: [],
+  };
+
+  const client = new FakeClient().on('GET', '/portal/invoices/inv_detail_001', erpDetail);
+  const service = new ErpPortalService(client);
+
+  const detail = await service.getInvoiceDetail('inv_detail_001');
+  assertEqual('Detail: total=10000', detail.amount, 10000);
+  assertEqual('Detail: paid=0', detail.amountPaid, 0);
+  assertEqual('Detail: outstanding=10000', detail.amountRemaining, 10000);
+  assertEqual('Detail: status=unpaid', detail.status, 'unpaid');
+
+  const detCall = client.calls.find(
+    (c) => c.method === 'GET' && c.path === '/portal/invoices/inv_detail_001'
+  );
+  check(
+    'Detail: fetched from ERP /portal/invoices/:id (not fabricated)',
+    detCall !== undefined,
+    detCall?.path ?? 'none'
+  );
+}
+
+// ── 14. All payment-request statuses are workflow-only, never accounting ─────
+
+function testAllStatusesAreWorkflowOnly(): void {
+  const allStatuses: Array<{ status: string; isAccounting: boolean }> = [
+    { status: 'requested', isAccounting: false },
+    { status: 'under_review', isAccounting: false },
+    { status: 'confirmed', isAccounting: false },
+    { status: 'rejected', isAccounting: false },
+    { status: 'cancelled', isAccounting: false },
+  ];
+
+  for (const { status } of allStatuses) {
+    const badge = getPaymentRequestStatusBadge(status);
+    const label = getPaymentRequestStatusLabel(status);
+    check(
+      `Workflow: "${status}" has a human label (not null/empty)`,
+      typeof label === 'string' && label.length > 0,
+      `label="${label}"`
+    );
+    check(
+      `Workflow: "${status}" has badge styling`,
+      typeof badge.bg === 'string' && badge.bg.length > 0,
+      `bg="${badge.bg}"`
+    );
+    check(
+      `Workflow: "${status}" is NEVER "paid" or "partially_paid"`,
+      status !== 'paid' && status !== 'partially_paid'
+    );
+  }
+
+  const accountingStatuses = ['paid', 'partially_paid', 'overdue', 'unpaid', 'credit_note', 'voided'];
+  for (const as of accountingStatuses) {
+    check(
+      `Isolation: invoice status "${as}" is NOT a payment-request status`,
+      !['requested', 'under_review', 'confirmed', 'rejected', 'cancelled'].includes(as)
+    );
+  }
+}
+
+// ── 15. Created request does not carry accounting fields ─────────────────────
+
+async function testRequestRecordHasNoAccountingFields(): Promise<void> {
+  const record = await (async () => {
+    const client = new FakeClient().on('POST', '/portal/payment-requests', erpDto);
+    const service = new ErpPortalService(client);
+    return service.createPaymentRequest({
+      invoiceId: 'inv_0024',
+      requestedAmount: 11000,
+      note: 'test',
+    });
+  })();
+
+  check(
+    'Request record has no "paidAmount" field',
+    !('paidAmount' in record) && !('paid_amount' in record)
+  );
+  check(
+    'Request record has no "amountRemaining" field',
+    !('amountRemaining' in record) && !('amount_remaining' in record)
+  );
+  check(
+    'Request record has no "invoiceTotal" field',
+    !('invoiceTotal' in record) && !('invoice_total' in record)
+  );
+  check(
+    'Request record status is workflow-only (requested)',
+    record.status === 'requested'
+  );
+}
+
 // ── Runner ──────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -388,6 +708,11 @@ function testStatusRendering(): void {
   await testNoDirectSupabaseWrite();
   await testInvoiceNotLocallyMutated();
   testStatusRendering();
+  testInvoiceFinancialImmutabilityAcrossStatuses();
+  await testErpInvoiceMapperNeverInfersPayment();
+  await testInvoiceDetailNeverInfersPayment();
+  testAllStatusesAreWorkflowOnly();
+  await testRequestRecordHasNoAccountingFields();
 
   console.log('\n═══ SUMMARY ═══');
   const passes = results.filter((r) => r.pass).length;

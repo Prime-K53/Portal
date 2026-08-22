@@ -1,20 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Activity,
+  AlertTriangle,
   Award,
+  Bell,
+  CalendarDays,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock,
   CreditCard,
+  FileText,
   Gift,
+  Landmark,
   MessageSquareQuote,
   Receipt,
+  RefreshCw,
   ShoppingBag,
   Star,
   Truck,
+  Undo2,
   Wallet,
+  X,
+  Zap,
 } from 'lucide-react';
 import { AccountProfile, DeliveryNotification, Invoice, PortalAd, PortalAdImageMeta, StatementEntry, TabType } from '../../types';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, formatDate } from '../../utils/formatters';
+import { usePaymentRequestsData, useUnreadNotificationCount } from '../../hooks/usePortalData';
+import { getPaymentRequestStatusLabel, isActivePaymentRequestStatus } from '../../utils/paymentRequest';
 
 interface DashboardTabProps {
   profile: AccountProfile;
@@ -25,6 +38,11 @@ interface DashboardTabProps {
   ads: PortalAd[];
   onNavigateTab: (tab: TabType) => void;
   onOpenPaymentModal: () => void;
+  /**
+   * Navigates to the invoices tab with a preset list filter (e.g. from the
+   * Overdue / Outstanding KPI cards).
+   */
+  onNavigateInvoices?: (filter: 'unpaid' | 'overdue') => void;
 }
 
 /**
@@ -127,6 +145,50 @@ const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
   );
 };
 
+/** Shared dashboard section header — tinted icon chip + title (+ subtitle / action). */
+const SectionHeader: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
+  iconChipClass: string;
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+}> = ({ icon: Icon, iconChipClass, title, subtitle, action }) => (
+  <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center gap-2.5 min-w-0">
+      <span className={`shrink-0 inline-flex p-1.5 rounded-lg ${iconChipClass}`} aria-hidden="true">
+        <Icon className="w-4 h-4" />
+      </span>
+      <div className="min-w-0">
+        <h3 className="text-sm font-black text-slate-900 tracking-tight leading-tight">{title}</h3>
+        {subtitle && (
+          <p className="text-[11px] text-slate-400 font-medium -mt-0.5 truncate">{subtitle}</p>
+        )}
+      </div>
+    </div>
+    {action}
+  </div>
+);
+
+type IconComponent = React.ComponentType<{ className?: string }>;
+
+/** Human-friendly relative time for the data-freshness indicator. */
+function formatTimeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 5) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
+/** Visual treatment per ledger entry type in the Recent Activity feed. */
+const ACTIVITY_TONES: Record<string, { icon: IconComponent; cls: string }> = {
+  Payment: { icon: Wallet, cls: 'bg-emerald-50 text-emerald-600' },
+  'Credit Note': { icon: Undo2, cls: 'bg-amber-50 text-amber-600' },
+};
+const ACTIVITY_DEFAULT_TONE = { icon: FileText, cls: 'bg-slate-100 text-slate-600' };
+
 export const DashboardTab: React.FC<DashboardTabProps> = ({
   profile,
   invoices,
@@ -135,10 +197,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   ads,
   onNavigateTab,
   onOpenPaymentModal,
+  onNavigateInvoices,
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [slideDirection, setSlideDirection] = useState<'next' | 'prev'>('next');
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  /** Desktop pause-on-hover for the auto-rotating banner. */
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+  const unreadNotificationsQuery = useUnreadNotificationCount();
+  const unreadCount = unreadNotificationsQuery.data ?? 0;
+
+  // Active payment requests (GET /portal/payment-requests) — surfaces the
+  // "under review" chip. In mock/dev mode the query errors and stays hidden.
+  const paymentRequestsQuery = usePaymentRequestsData(true);
+  const paymentRequests = paymentRequestsQuery.data ?? [];
+  const activePaymentRequest = paymentRequests.find((r) => isActivePaymentRequestStatus(r.status));
 
   const bannerSlides: BannerSlide[] = [
     {
@@ -147,7 +222,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       badgeBg: 'bg-amber-400 text-slate-950',
       title: `Welcome back, ${profile.customerName}`,
       subtitle: `Account ID: ${profile.accountNumber} • ${profile.tier || 'Standard'} Tier`,
-      extra: `Available Credit: ${formatCurrency((profile.creditLimit ?? 0) - (profile.currentBalance ?? 0))}`,
       gradientClass: 'from-slate-900 via-indigo-950 to-slate-900',
     },
   ];
@@ -189,12 +263,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   }
 
   useEffect(() => {
+    // Auto-rotate unless the desktop user is hovering/focusing the carousel,
+    // or there is nothing to rotate.
+    if (isCarouselPaused || bannerSlides.length <= 1) return;
     const timer = setInterval(() => {
       setSlideDirection('next');
       setCurrentSlide((prev) => (prev + 1) % bannerSlides.length);
     }, 4500);
     return () => clearInterval(timer);
-  }, [bannerSlides.length]);
+  }, [bannerSlides.length, isCarouselPaused]);
 
   // Clamp so a change in slide count (ads loading/refetch) never indexes past
   // the array and crashes the carousel.
@@ -215,6 +292,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     setCurrentSlide(target);
   };
 
+  const dismissAlert = (id: string) => {
+    setDismissedAlerts((prev) => [...prev, id]);
+  };
+
+  const isAlertDismissed = (id: string) => dismissedAlerts.includes(id);
+
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.touches[0].clientX);
   };
@@ -232,41 +315,112 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     setTouchStartX(null);
   };
 
+  // ── Financial snapshot (invoices are the source of truth) ─────────────────
   const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
-  const sortedStatements = [...statements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const outstandingBalance = sortedStatements.length > 0 ? sortedStatements[sortedStatements.length - 1].balance : 0;
-  const isFullyPaid = outstandingBalance === 0;
+  const payableInvoices = invoices.filter(
+    (i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid'
+  );
+  const outstandingTotal = payableInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
+  const isFullyPaid = outstandingTotal === 0;
+
+  // Overdue: past their due date per ERP status.
+  const overdueInvoices = invoices.filter((i) => i.status === 'overdue');
+  const overdueTotal = overdueInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
+
+  // Due soon: still payable and due within the next 7 days (not already overdue).
+  const dueSoonCutoff = new Date();
+  dueSoonCutoff.setDate(dueSoonCutoff.getDate() + 7);
+  const dueSoonInvoices = payableInvoices.filter((i) => {
+    if (i.status === 'overdue') return false;
+    const due = new Date(i.dueDate);
+    return !Number.isNaN(due.getTime()) && due.getTime() <= dueSoonCutoff.getTime();
+  });
+
+  const recentStatements = [...statements]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 4);
 
   return (
     <div className="space-y-6 pb-24 text-slate-900 animate-fade-in">
       {/* 1. Header Profile & Partner Badge */}
-      <div className="space-y-3">
-        <div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-100 to-amber-50/80 border border-amber-200 text-amber-900 text-xs font-black shadow-md">
-            <Award className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
-            <span>{profile.tier || 'Standard'}</span>
-          </span>
-        </div>
-
+      <div className="space-y-1">
         {/* Title and View Profile Button */}
         <div className="flex items-center justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              {profile.customerName || 'Account'}
-            </h1>
-            {profile.accountNumber && (
-              <p className="text-xs font-medium text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                <span className="font-bold text-slate-800">Customer ID: {profile.accountNumber}</span>
-              </p>
-            )}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                {profile.customerName || 'Account'}
+              </h1>
+              {profile.accountNumber && (
+                <p className="text-xs font-medium text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-slate-800">Customer ID: {profile.accountNumber}</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 to-amber-50/80 border border-amber-200 text-amber-900 text-[10px] font-black shadow-xs">
+                    <Award className="w-3 h-3 text-amber-600 fill-amber-500" />
+                    <span>{profile.tier || 'Standard'}</span>
+                  </span>
+                </p>
+              )}
+            </div>
           </div>
 
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => onNavigateTab('account')}
+              className="relative p-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 rounded-xl shadow-md hover:shadow-lg transition-all"
+              aria-label={`${unreadCount} unread notifications`}
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-black min-w-[16px]">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => onNavigateTab('account')}
+              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-black rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 shrink-0"
+            >
+              <span>View Profile</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Credit utilization bar */}
+        {profile.creditLimit && profile.creditLimit > 0 && (
+          <div className="mt-1.5">
+            <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <span>Credit Utilization</span>
+              <span>{Math.round(((profile.currentBalance ?? 0) / profile.creditLimit) * 100)}%</span>
+            </div>
+            <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  (profile.currentBalance ?? 0) >= profile.creditLimit
+                    ? 'bg-rose-500'
+                    : (profile.currentBalance ?? 0) / profile.creditLimit > 0.8
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.min(100, ((profile.currentBalance ?? 0) / profile.creditLimit) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Data freshness indicator */}
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-[10px] text-slate-400 font-medium">
+            Updated {formatTimeAgo(lastRefreshed)}
+          </span>
           <button
-            onClick={() => onNavigateTab('account')}
-            className="px-4 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-black rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 shrink-0"
+            type="button"
+            onClick={() => setLastRefreshed(new Date())}
+            className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Refresh dashboard"
           >
-            <span>View Profile</span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -275,6 +429,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onMouseEnter={() => setIsCarouselPaused(true)}
+        onMouseLeave={() => setIsCarouselPaused(false)}
+        onFocus={() => setIsCarouselPaused(true)}
+        onBlur={() => setIsCarouselPaused(false)}
+        onKeyDown={(e) => {
+          // Desktop keyboard navigation for the carousel.
+          if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
+          if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
+        }}
+        role="region"
+        aria-roledescription="carousel"
+        aria-live="polite"
+        aria-label="Announcements and account updates"
+        tabIndex={bannerSlides.length > 1 ? 0 : -1}
         className="relative overflow-hidden rounded-2xl aspect-[4/1] w-full bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
       >
         {/* Slide Content — keyed so it remounts and slides in on every slide change */}
@@ -352,191 +520,435 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
           )}
         </div>
+
+        {bannerSlides.length > 1 && (
+          <div
+            role="tablist"
+            aria-label="Slide selector"
+            className="hidden lg:flex absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 gap-1.5"
+          >
+            {bannerSlides.map((slide, idx) => (
+              <button
+                key={`dot_${slide.id}`}
+                type="button"
+                role="tab"
+                aria-selected={idx === currentSlide}
+                aria-label={`Go to slide ${idx + 1} of ${bannerSlides.length}`}
+                onClick={() => goToSlide(idx)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  idx === currentSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* KPI Mini Cards Grid */}
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          {/* Outstanding Summary Card */}
-          <div className="bg-amber-50/80 rounded-2xl p-4 border border-amber-200/80 space-y-1">
-            <div className="flex items-center justify-between text-amber-800">
-              <span className="text-xs font-bold uppercase tracking-wider">Outstanding</span>
-              <Clock className="w-4 h-4 text-amber-600" />
+      {/* 3. Needs Attention Strip — actionable finance alerts (hidden when clear) */}
+      {(overdueInvoices.length > 0 || dueSoonInvoices.length > 0 || activePaymentRequest) && (
+        <div className="flex flex-wrap gap-2" aria-label="Items needing attention">
+          {overdueInvoices.length > 0 && !isAlertDismissed('overdue') && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => onNavigateInvoices?.('overdue')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateInvoices?.('overdue'); }}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold shadow-xs hover:bg-rose-100 transition-colors cursor-pointer"
+            >
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>
+                {formatCurrency(overdueTotal)} overdue · {overdueInvoices.length} invoice{overdueInvoices.length === 1 ? '' : 's'}
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); dismissAlert('overdue'); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); dismissAlert('overdue'); } }}
+                className="shrink-0 p-0.5 rounded hover:bg-rose-200 text-rose-500 hover:text-rose-700 transition-colors cursor-pointer"
+                aria-label="Dismiss overdue alert"
+              >
+                <X className="w-3 h-3" />
+              </span>
             </div>
-            <p className="text-xl font-extrabold font-mono text-amber-950">
-              {formatCurrency(outstandingBalance)}
+          )}
+
+          {dueSoonInvoices.length > 0 && !isAlertDismissed('due-soon') && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => onNavigateInvoices?.('unpaid')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateInvoices?.('unpaid'); }}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold shadow-xs hover:bg-amber-100 transition-colors cursor-pointer"
+            >
+              <CalendarDays className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                {dueSoonInvoices.length} invoice{dueSoonInvoices.length === 1 ? '' : 's'} due within 7 days ·{' '}
+                {formatCurrency(dueSoonInvoices.reduce((sum, i) => sum + i.amountRemaining, 0))}
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); dismissAlert('due-soon'); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); dismissAlert('due-soon'); } }}
+                className="shrink-0 p-0.5 rounded hover:bg-amber-200 text-amber-500 hover:text-amber-700 transition-colors cursor-pointer"
+                aria-label="Dismiss due soon alert"
+              >
+                <X className="w-3 h-3" />
+              </span>
+            </div>
+          )}
+
+          {activePaymentRequest && !isAlertDismissed('payment-request') && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => onNavigateTab('invoices')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateTab('invoices'); }}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 text-xs font-bold shadow-xs hover:bg-sky-100 transition-colors cursor-pointer"
+            >
+              <Landmark className="w-4 h-4 text-sky-600 shrink-0" />
+              <span>
+                Payment request {activePaymentRequest.requestNumber} ·{' '}
+                {getPaymentRequestStatusLabel(activePaymentRequest.status)}
+                {activePaymentRequest.requestedAmount > 0 && ` · ${formatCurrency(activePaymentRequest.requestedAmount)}`}
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); dismissAlert('payment-request'); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); dismissAlert('payment-request'); } }}
+                className="shrink-0 p-0.5 rounded hover:bg-sky-200 text-sky-500 hover:text-sky-700 transition-colors cursor-pointer"
+                aria-label="Dismiss payment request alert"
+              >
+                <X className="w-3 h-3" />
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 4. KPI Mini Cards — invoice-authoritative totals, click to drill in */}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          {/* Outstanding Summary Card */}
+          <button
+            type="button"
+            onClick={() => onNavigateInvoices?.('unpaid')}
+            aria-label={`Outstanding balance ${formatCurrency(outstandingTotal)}. View open invoices.`}
+            className="text-left bg-amber-50/80 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-amber-200/80 space-y-0.5 sm:space-y-1 hover:border-amber-300 hover:shadow-md transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <div className="flex items-center justify-between text-amber-800">
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Outstanding</span>
+              <div className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+                <ChevronRight className="w-3 h-3 text-amber-400 hidden sm:block" />
+              </div>
+            </div>
+            <p className="text-base sm:text-xl font-extrabold font-mono text-amber-950">
+              {formatCurrency(outstandingTotal)}
             </p>
-            <p className="text-[11px] text-amber-700 font-medium">
-              {isFullyPaid ? 'No Unpaid Balance' : 'Has Outstanding Balance'}
+            <p className="text-[10px] sm:text-[11px] text-amber-700 font-medium">
+              {isFullyPaid ? 'No Unpaid Balance' : `${payableInvoices.length} Open Invoice${payableInvoices.length === 1 ? '' : 's'}`}
             </p>
-          </div>
+          </button>
+
+          {/* Overdue Summary Card */}
+          <button
+            type="button"
+            onClick={() => onNavigateInvoices?.('overdue')}
+            aria-label={`Overdue amount ${formatCurrency(overdueTotal)}. View overdue invoices.`}
+            className={`text-left rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border space-y-0.5 sm:space-y-1 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 ${
+              overdueInvoices.length > 0
+                ? 'bg-rose-50/90 border-rose-200 hover:border-rose-300 hover:shadow-md'
+                : 'bg-slate-50/80 border-slate-200/80'
+            }`}
+          >
+            <div
+              className={`flex items-center justify-between ${
+                overdueInvoices.length > 0 ? 'text-rose-700' : 'text-slate-500'
+              }`}
+            >
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Overdue</span>
+              <div className="flex items-center gap-1">
+                <AlertTriangle
+                  className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${overdueInvoices.length > 0 ? 'text-rose-500' : 'text-slate-400'}`}
+                />
+                <ChevronRight className="w-3 h-3 text-rose-400 hidden sm:block" />
+              </div>
+            </div>
+            <p
+              className={`text-base sm:text-xl font-extrabold font-mono ${
+                overdueInvoices.length > 0 ? 'text-rose-900' : 'text-slate-400'
+              }`}
+            >
+              {formatCurrency(overdueTotal)}
+            </p>
+            <p
+              className={`text-[10px] sm:text-[11px] font-medium ${
+                overdueInvoices.length > 0 ? 'text-rose-600' : 'text-slate-400'
+              }`}
+            >
+              {overdueInvoices.length === 0
+                ? 'Nothing Past Due'
+                : `${overdueInvoices.length} Invoice${overdueInvoices.length === 1 ? '' : 's'} Past Due · ${formatCurrency(overdueTotal)}`}
+            </p>
+          </button>
+
+          {/* Due Soon Summary Card */}
+          <button
+            type="button"
+            onClick={() => onNavigateInvoices?.('unpaid')}
+            aria-label={`${dueSoonInvoices.length} invoices due soon. View unpaid invoices.`}
+            className={`text-left rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border space-y-0.5 sm:space-y-1 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+              dueSoonInvoices.length > 0
+                ? 'bg-amber-50/90 border-amber-200 hover:border-amber-300 hover:shadow-md'
+                : 'bg-slate-50/80 border-slate-200/80'
+            }`}
+          >
+            <div
+              className={`flex items-center justify-between ${
+                dueSoonInvoices.length > 0 ? 'text-amber-700' : 'text-slate-500'
+              }`}
+            >
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Due Soon</span>
+              <div className="flex items-center gap-1">
+                <CalendarDays
+                  className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${dueSoonInvoices.length > 0 ? 'text-amber-500' : 'text-slate-400'}`}
+                />
+                <ChevronRight className="w-3 h-3 text-amber-400 hidden sm:block" />
+              </div>
+            </div>
+            <p
+              className={`text-base sm:text-xl font-extrabold font-mono ${
+                dueSoonInvoices.length > 0 ? 'text-amber-900' : 'text-slate-400'
+              }`}
+            >
+              {formatCurrency(dueSoonInvoices.reduce((sum, i) => sum + i.amountRemaining, 0))}
+            </p>
+            <p
+              className={`text-[10px] sm:text-[11px] font-medium ${
+                dueSoonInvoices.length > 0 ? 'text-amber-600' : 'text-slate-400'
+              }`}
+            >
+              {dueSoonInvoices.length === 0
+                ? 'Nothing Due Soon'
+                : `${dueSoonInvoices.length} Invoice${dueSoonInvoices.length === 1 ? '' : 's'} Due Within 7 Days`}
+            </p>
+          </button>
 
           {/* Total Payment Summary Card */}
-          <div
-            className={`rounded-2xl p-4 border transition-all duration-300 space-y-1 ${
+          <button
+            type="button"
+            onClick={() => onNavigateTab('statements')}
+            aria-label={`Total paid ${formatCurrency(totalPayment)}. View statements.`}
+            className={`text-left rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border transition-all duration-300 space-y-0.5 sm:space-y-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
               isFullyPaid
                 ? 'bg-emerald-900 text-white border-emerald-700 shadow-md'
                 : 'bg-slate-900 text-white border-slate-800'
             }`}
           >
             <div className="flex items-center justify-between text-slate-300">
-              <span className="text-xs font-bold uppercase tracking-wider">Total Payment</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Total Paid</span>
+                <ChevronRight className="w-3 h-3 text-slate-400 hidden sm:block" />
+              </div>
               <CheckCircle2
-                className={`w-4 h-4 ${isFullyPaid ? 'text-emerald-400' : 'text-amber-400'}`}
+                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFullyPaid ? 'text-emerald-400' : 'text-amber-400'}`}
               />
             </div>
-            <p className="text-xl font-extrabold font-mono text-white">
+            <p className="text-base sm:text-xl font-extrabold font-mono text-white">
               {formatCurrency(totalPayment)}
             </p>
             <p
-              className={`text-[11px] ${isFullyPaid ? 'text-emerald-300 font-bold' : 'text-slate-400'}`}
+              className={`text-[10px] sm:text-[11px] ${isFullyPaid ? 'text-emerald-300 font-bold' : 'text-slate-400'}`}
             >
-              {isFullyPaid ? 'Fully Settled ✓' : 'Amount Paid'}
+              {isFullyPaid ? 'Fully Settled ✓' : 'All-time Payments Recorded'}
             </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Quick Actions Grid */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-black text-slate-900 tracking-tight relative">
-          Quick Actions
-          <span className="absolute -bottom-1 left-0 w-5 h-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-sm" />
-        </h3>
-
-        <div className="grid grid-cols-3 gap-2.5">
-          <button
-            onClick={onOpenPaymentModal}
-            className="group p-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-blue-200 hover:bg-gradient-to-b hover:from-blue-50/50 hover:to-white transition-all text-center flex flex-col items-center justify-center space-y-2.5 shadow-md hover:shadow-lg"
-          >
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-800 group-hover:from-blue-100 group-hover:to-blue-50 group-hover:scale-110 transition-all">
-              <CreditCard className="w-5 h-5 text-blue-600" />
-            </div>
-            <span className="text-xs font-black text-slate-900">Pay Invoices</span>
-          </button>
-
-          <button
-            onClick={() => onNavigateTab('orders')}
-            className="group p-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-green-200 hover:bg-gradient-to-b hover:from-green-50/50 hover:to-white transition-all text-center flex flex-col items-center justify-center space-y-2.5 shadow-md hover:shadow-lg"
-          >
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-800 group-hover:from-green-100 group-hover:to-green-50 group-hover:scale-110 transition-all">
-              <ShoppingBag className="w-5 h-5 text-green-600" />
-            </div>
-            <span className="text-xs font-black text-slate-900">New Order</span>
-          </button>
-
-          <button
-            onClick={() => onNavigateTab('quotes')}
-            className="group p-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-purple-200 hover:bg-gradient-to-b hover:from-purple-50/50 hover:to-white transition-all text-center flex flex-col items-center justify-center space-y-2.5 shadow-md hover:shadow-lg"
-          >
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-800 group-hover:from-purple-100 group-hover:to-purple-50 group-hover:scale-110 transition-all">
-              <MessageSquareQuote className="w-5 h-5 text-purple-600" />
-            </div>
-            <span className="text-xs font-black text-slate-900">Get Quote</span>
-          </button>
-
-          <button
-            onClick={() => onNavigateTab('deliveries')}
-            className="group p-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-sky-200 hover:bg-gradient-to-b hover:from-sky-50/50 hover:to-white transition-all text-center flex flex-col items-center justify-center space-y-2.5 shadow-md hover:shadow-lg"
-          >
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-800 group-hover:from-sky-100 group-hover:to-sky-50 group-hover:scale-110 transition-all">
-              <Truck className="w-5 h-5 text-sky-600" />
-            </div>
-            <span className="text-xs font-black text-slate-900">Track Shipments</span>
-          </button>
-
-          <button
-            onClick={() => onNavigateTab('referrals')}
-            className="group p-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-amber-200 hover:bg-gradient-to-b hover:from-amber-50/50 hover:to-white transition-all text-center flex flex-col items-center justify-center space-y-2.5 shadow-md hover:shadow-lg"
-          >
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-800 group-hover:from-amber-100 group-hover:to-amber-50 group-hover:scale-110 transition-all">
-              <Gift className="w-5 h-5 text-amber-600" />
-            </div>
-            <span className="text-xs font-black text-slate-900">Refer Business</span>
-          </button>
-
-          <button
-            onClick={() => onNavigateTab('statements')}
-            className="group p-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-indigo-200 hover:bg-gradient-to-b hover:from-indigo-50/50 hover:to-white transition-all text-center flex flex-col items-center justify-center space-y-2.5 shadow-md hover:shadow-lg"
-          >
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-800 group-hover:from-indigo-100 group-hover:to-indigo-50 group-hover:scale-110 transition-all">
-              <Receipt className="w-5 h-5 text-indigo-600" />
-            </div>
-            <span className="text-xs font-black text-slate-900">Statements</span>
           </button>
         </div>
       </div>
 
-      {/* 5. Recent Transactions Section */}
+      {/* 5. Quick Actions — single row on desktop, 2-up on mobile */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-black text-slate-900 tracking-tight relative">
-            Recent Transactions
-            <span className="absolute -bottom-1 left-0 w-5 h-2 bg-gradient-to-r from-amber-500 to-orange-500 rounded-sm" />
-          </h3>
-          <button
-            onClick={() => onNavigateTab('statements')}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 transition"
-          >
-            View All
-          </button>
-        </div>
+        <SectionHeader
+          icon={Zap}
+          iconChipClass="bg-indigo-50 text-indigo-600"
+          title="Quick Actions"
+          subtitle="Common tasks in one tap"
+        />
 
-        <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-md">
-          {[...statements]
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .slice(0, 4)
-            .map((st, index) => (
-            <div
-              key={st.id}
-              onClick={() => onNavigateTab('statements')}
-              className={`px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-all cursor-pointer group ${
-                index % 2 === 1 ? 'bg-slate-50/40' : ''
-              }`}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          {[
+            {
+              key: 'pay',
+              label: 'Pay Invoices',
+              count: payableInvoices.length,
+              icon: CreditCard,
+              chip: 'bg-blue-50 text-blue-600 group-hover:bg-blue-100',
+              ring: 'hover:border-blue-200 hover:bg-blue-50/40',
+              go: onOpenPaymentModal,
+            },
+            {
+              key: 'order',
+              label: 'New Order',
+              count: null,
+              icon: ShoppingBag,
+              chip: 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100',
+              ring: 'hover:border-emerald-200 hover:bg-emerald-50/40',
+              go: () => onNavigateTab('orders'),
+            },
+            {
+              key: 'quote',
+              label: 'Get Quote',
+              count: null,
+              icon: MessageSquareQuote,
+              chip: 'bg-purple-50 text-purple-600 group-hover:bg-purple-100',
+              ring: 'hover:border-purple-200 hover:bg-purple-50/40',
+              go: () => onNavigateTab('quotes'),
+            },
+            {
+              key: 'track',
+              label: 'Track Shipments',
+              count: deliveries.length,
+              icon: Truck,
+              chip: 'bg-sky-50 text-sky-600 group-hover:bg-sky-100',
+              ring: 'hover:border-sky-200 hover:bg-sky-50/40',
+              go: () => onNavigateTab('deliveries'),
+            },
+            {
+              key: 'refer',
+              label: 'Refer Business',
+              count: null,
+              icon: Gift,
+              chip: 'bg-amber-50 text-amber-600 group-hover:bg-amber-100',
+              ring: 'hover:border-amber-200 hover:bg-amber-50/40',
+              go: () => onNavigateTab('referrals'),
+            },
+            {
+              key: 'stmts',
+              label: 'Statements',
+              count: statements.length > 0 ? statements.length : null,
+              icon: Receipt,
+              chip: 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100',
+              ring: 'hover:border-indigo-200 hover:bg-indigo-50/40',
+              go: () => onNavigateTab('statements'),
+            },
+          ].map(({ key, label, count, icon: Icon, chip, ring, go }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={go}
+              aria-label={count !== null ? `${label} (${count})` : label}
+              className={`group p-3.5 sm:p-4 bg-white border border-slate-200/80 rounded-2xl ${ring} hover:shadow-md hover:-translate-y-0.5 transition-all text-center flex flex-col items-center justify-center space-y-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900`}
             >
-              <div className="space-y-0.5 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-black text-xs text-slate-900 group-hover:text-blue-600 transition-colors">
-                    {st.reference}
+              <div className="relative">
+                <span className={`p-2.5 rounded-xl transition-colors ${chip}`} aria-hidden="true">
+                  <Icon className="w-5 h-5" />
+                </span>
+                {count !== null && count > 0 && (
+                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-black min-w-[18px]">
+                    {count}
                   </span>
-                  <span
-                    className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-                      st.type === 'Payment'
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                        : st.type === 'Credit Note'
-                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                        : 'bg-slate-200 text-slate-700 border border-slate-300'
-                    }`}
-                  >
-                    {st.type}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 font-medium line-clamp-1">{st.description}</p>
-                <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                  <span>{st.date}</span>
-                </div>
+                )}
               </div>
-
-              <div className="text-right shrink-0 flex items-center gap-2">
-                <div className="text-right font-medium">
-                  {st.debit > 0 ? (
-                    <span className="text-xs font-black text-slate-900 block tabular-nums">
-                      +{formatCurrency(st.debit)}
-                    </span>
-                  ) : (
-                    <span className="text-xs font-black text-emerald-600 block tabular-nums">
-                      -{formatCurrency(st.credit)}
-                    </span>
-                  )}
-                  <span className="text-[11px] text-slate-400 block font-medium tabular-nums">
-                    Bal: {formatCurrency(st.balance)}
-                  </span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </div>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 transition-colors leading-tight">
+                {label}
+              </span>
+            </button>
           ))}
         </div>
+      </div>
+
+      {/* 6. Recent Activity — ledger feed */}
+      <div className="space-y-3">
+        <SectionHeader
+          icon={Activity}
+          iconChipClass="bg-amber-50 text-amber-600"
+          title="Recent Activity"
+          subtitle="Latest ledger entries"
+          action={
+            <button
+              type="button"
+              onClick={() => onNavigateTab('statements')}
+              className="inline-flex shrink-0 items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:text-slate-900 hover:border-slate-300 transition-colors"
+            >
+              View All
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          }
+        />
+
+        {recentStatements.length === 0 ? (
+          /* Empty state — no ledger entries yet */
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center space-y-2 shadow-md">
+            <Activity className="w-8 h-8 mx-auto stroke-1 text-slate-300" />
+            <p className="font-bold text-sm text-slate-700">No recent activity</p>
+            <p className="text-xs text-slate-500 font-medium">
+              Ledger entries will appear here once financial activity is recorded.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-md">
+            {recentStatements.map((st) => {
+              const tone = ACTIVITY_TONES[st.type] ?? ACTIVITY_DEFAULT_TONE;
+              const ToneIcon = tone.icon;
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => onNavigateTab('statements')}
+                  aria-label={`${st.type} ${st.reference}: ${st.description}. View statements.`}
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group focus:outline-none focus-visible:bg-slate-50"
+                >
+                  {/* Type icon */}
+                  <span
+                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${tone.cls}`}
+                    aria-hidden="true"
+                  >
+                    <ToneIcon className="w-4 h-4" />
+                  </span>
+
+                  {/* Reference, type + description + date */}
+                  <span className="flex-1 min-w-0 space-y-0.5">
+                    <span className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                        {st.reference}
+                      </span>
+                      <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
+                        {st.type}
+                      </span>
+                    </span>
+                    <span className="block text-xs text-slate-600 font-medium line-clamp-1">
+                      {st.description}
+                    </span>
+                    <span className="block text-[11px] text-slate-400 font-medium">
+                      {formatDate(st.date)}
+                    </span>
+                  </span>
+
+                  {/* Amount + balance */}
+                  <span className="text-right shrink-0 flex items-center gap-1.5">
+                    <span className="block font-medium">
+                      {st.debit > 0 ? (
+                        <span className="text-xs font-black text-slate-900 block tabular-nums">
+                          +{formatCurrency(st.debit)}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-black text-emerald-600 block tabular-nums">
+                          -{formatCurrency(st.credit)}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-slate-400 block font-medium tabular-nums">
+                        Bal: {formatCurrency(st.balance)}
+                      </span>
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

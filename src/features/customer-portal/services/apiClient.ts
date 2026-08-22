@@ -85,8 +85,21 @@ export interface ApiClientDependencies {
    * the caller retries the original request exactly once with the fresh token.
    */
   refreshAccessToken: () => Promise<string | null>;
-  /** Invoked when authentication fails and refresh cannot restore it. */
-  onAuthFailure?: () => void;
+  /**
+   * Invoked when authentication fails and refresh cannot restore it. Receives
+   * whether the failing call was a skipAuth endpoint (login/refresh) — those
+   * failures are meaningful answers (bad credentials, stale refresh token),
+   * NOT a reason to tear down an established session.
+   */
+  onAuthFailure?: (source: { skipAuth?: boolean }) => void;
+  /**
+   * Optional gate consulted BEFORE every request. Returning an ApiError fails
+   * the request fast without touching the network — used by the auth layer so
+   * requests queued during session recovery fail with the ORIGINAL stale-
+   * session reason instead of racing out without a token and producing a
+   * misleading secondary `401 No authentication token provided`.
+   */
+  requestGate?: () => ApiError | null;
 }
 
 export interface ApiClient {
@@ -204,10 +217,20 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
       );
     }
 
+    // Session-recovery gate — fails fast with the original stale-session
+    // reason when the auth layer has concluded the session is unrecoverable.
+    // Auth endpoints themselves (login/activate/refresh) are exempt: they are
+    // exactly how the user RECOVERS from that state.
+    const blocked = !options.skipAuth ? deps.requestGate?.() : null;
+    if (blocked) throw blocked;
+
     let response = await perform(method, path, options, 1);
 
     // 401 → single-flight refresh (deps.refreshAccessToken) → retry exactly once.
-    if (response.status === 401) {
+    // skipAuth calls (the login/refresh endpoints themselves) NEVER recurse into
+    // recovery: their 401 IS the terminal answer, and recursing would await the
+    // very rotation promise that is waiting on them — a self-deadlock.
+    if (response.status === 401 && !options.skipAuth) {
       const freshToken = await deps.refreshAccessToken();
       if (freshToken) {
         response = await perform(method, path, options, 2);
@@ -215,7 +238,11 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
     }
 
     if (!response.ok) {
-      if (response.status === 401) deps.onAuthFailure?.();
+      if (response.status === 401) deps.onAuthFailure?.({ skipAuth: !!options.skipAuth });
+      // Prefer the ORIGINAL stale-session reason over the secondary
+      // headerless/invalid-token body whenever recovery has concluded.
+      const terminated = !options.skipAuth ? deps.requestGate?.() : null;
+      if (terminated) throw terminated;
       throw await normalizeError(response);
     }
 

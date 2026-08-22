@@ -10,6 +10,14 @@
 
 export { CustomerPortalApp } from './CustomerPortalApp';
 export { AuthPage } from './components/AuthPage';
+export {
+  CustomerAuthProvider,
+  useCustomerAuth,
+} from './components/auth/CustomerAuthContext';
+export { CustomerLogin } from './components/auth/CustomerLogin';
+export { CustomerForgotPassword } from './components/auth/CustomerForgotPassword';
+export { CustomerActivate } from './components/auth/CustomerActivate';
+export { AuthShell } from './components/auth/AuthShell';
 export { Sidebar } from './components/Sidebar';
 export { MobileHeader } from './components/MobileHeader';
 export { BottomNavigation } from './components/BottomNavigation';
@@ -21,6 +29,7 @@ export { PaymentRequestModal } from './components/modals/PaymentRequestModal';
 export { InvoiceDetailModal } from './components/modals/InvoiceDetailModal';
 export { DeliveryTrackingModal } from './components/modals/DeliveryTrackingModal';
 export { QuoteRequestModal } from './components/modals/QuoteRequestModal';
+export { QuotationDetailModal } from './components/modals/QuotationDetailModal';
 export { CartDrawer } from './components/modals/CartDrawer';
 export { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 

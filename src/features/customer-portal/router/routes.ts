@@ -14,6 +14,8 @@ import type { TabType } from '../types';
 
 export const ROUTES = {
   login: '/login',
+  activate: '/activate',
+  forgotPassword: '/forgot-password',
   dashboard: '/dashboard',
   invoices: '/invoices',
   orders: '/orders',
@@ -59,8 +61,12 @@ export function tabFromPath(path: string): TabType | null {
   return ROUTE_TABS[normalized] ?? null;
 }
 
+/** Routes renderable without a session (auth screens). */
+const PUBLIC_ROUTES: readonly string[] = [ROUTES.login, ROUTES.activate, ROUTES.forgotPassword];
+
 export function isPublicRoute(path: string): boolean {
-  return path.split('?')[0].replace(/\/+$/, '') === ROUTES.login;
+  const normalized = path.split('?')[0].replace(/\/+$/, '') || '/';
+  return PUBLIC_ROUTES.includes(normalized);
 }
 
 /** Every route the Portal can render (used for redirect decisions). */
