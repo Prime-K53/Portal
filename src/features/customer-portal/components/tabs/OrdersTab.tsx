@@ -7,7 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
-  Grid,
+  Layers,
   List,
   Loader2,
   Minus,
@@ -26,6 +26,7 @@ import {
 import { CartItem, Order, OrderRequest, Product } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { canCancelOrderRequest, canReorderOrder, getRequestStatusBadge } from '../../utils/orderRequest';
+import { VariantSelectModal } from '../modals/VariantSelectModal';
 
 interface OrdersTabProps {
   products: Product[];
@@ -59,9 +60,20 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'history'>('catalog');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating' | 'name'>('featured');
   const [inStockOnly, setInStockOnly] = useState(false);
+
+  // Per-product variant selection state
+  const [selectedVariantIds, setSelectedVariantIds] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    products.forEach((p) => {
+      if (p.variants && p.variants.length > 0) {
+        initial[p.id] = p.selectedVariantId || p.variants[0].id;
+      }
+    });
+    return initial;
+  });
 
   // Per-product selected quantity state
   const [productQuantities, setProductQuantities] = useState<Record<string, number>>(() => {
@@ -112,6 +124,50 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
     setProductQuantities((prev) => ({ ...prev, [productId]: updated }));
   };
 
+  const getEffectiveProduct = (product: Product): Product => {
+    const variantId = selectedVariantIds[product.id];
+    if (variantId && product.variants) {
+      const variant = product.variants.find((v) => v.id === variantId);
+      if (variant) {
+        return {
+          ...product,
+          price: variant.sellingPrice,
+          sku: variant.sku || product.sku,
+          selectedVariantId: variant.id,
+        };
+      }
+    }
+    return product;
+  };
+
+  // ── Mandatory variant chooser ────────────────────────────────────────────
+  // Any "Add to Cart" on a product WITH variants opens the VariantSelectModal
+  // first; the add only happens after an explicit option is picked there.
+  // Non-variant products keep the one-click flow.
+  const [variantPickerQueue, setVariantPickerQueue] = useState<Array<{ product: Product; quantity: number }>>([]);
+
+  const requestAddToCart = (product: Product, quantity: number) => {
+    if (product.variants && product.variants.length > 0) {
+      setVariantPickerQueue((prev) => [...prev, { product, quantity }]);
+      return;
+    }
+    onAddToCart(product, quantity);
+    setAddedProductIds((prev) => ({ ...prev, [product.id]: true }));
+    setTimeout(() => {
+      setAddedProductIds((prev) => ({ ...prev, [product.id]: false }));
+    }, 1500);
+  };
+
+  const handleVariantPickerConfirm = (effectiveProduct: Product, quantity: number) => {
+    onAddToCart(effectiveProduct, quantity);
+    setAddedProductIds((prev) => ({ ...prev, [effectiveProduct.id]: true }));
+    setTimeout(() => {
+      setAddedProductIds((prev) => ({ ...prev, [effectiveProduct.id]: false }));
+    }, 1500);
+    setVariantPickerQueue((prev) => prev.slice(1));
+  };
+
+
   const toggleSelectProduct = (productId: string) => {
     setSelectedProductIds((prev) =>
       prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
@@ -133,11 +189,16 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
 
     if (foundProduct) {
       const qty = Math.max(foundProduct.minOrderQty || 1, quickQtyInput);
-      onAddToCart(foundProduct, qty);
-      setQuickSkuFeedback(`Added ${qty}x ${foundProduct.name} to cart!`);
-      setQuickSkuInput('');
-      setQuickQtyInput(10);
-      setTimeout(() => setQuickSkuFeedback(null), 3000);
+      // Variant products open the mandatory chooser instead of adding directly.
+      requestAddToCart(foundProduct, qty);
+      if (!(foundProduct.variants && foundProduct.variants.length > 0)) {
+        setQuickSkuFeedback(`Added ${qty}x ${foundProduct.name} to cart!`);
+        setQuickSkuInput('');
+        setQuickQtyInput(10);
+      } else {
+        setQuickSkuFeedback(`Choose an option for ${foundProduct.name} to finish adding.`);
+      }
+      setTimeout(() => setQuickSkuFeedback(null), 3500);
     } else {
       setQuickSkuFeedback(`Error: SKU "${cleanSku}" not found in catalog.`);
       setTimeout(() => setQuickSkuFeedback(null), 3500);
@@ -184,19 +245,15 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
   const handleAddSingleProduct = (product: Product, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const qty = productQuantities[product.id] || product.minOrderQty || 1;
-    onAddToCart(product, qty);
-
-    setAddedProductIds((prev) => ({ ...prev, [product.id]: true }));
-    setTimeout(() => {
-      setAddedProductIds((prev) => ({ ...prev, [product.id]: false }));
-    }, 1500);
+    requestAddToCart(product, qty);
   };
 
   const handleAddBatchToCart = () => {
     const selectedProds = products.filter((p) => selectedProductIds.includes(p.id));
     selectedProds.forEach((p) => {
       const qty = productQuantities[p.id] || p.minOrderQty || 1;
-      onAddToCart(p, qty);
+      // Variant products queue through the mandatory chooser one by one.
+      requestAddToCart(p, qty);
     });
     setSelectedProductIds([]);
   };
@@ -205,10 +262,11 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
     return products
       .filter((p) => selectedProductIds.includes(p.id))
       .reduce((sum, p) => {
-        const qty = productQuantities[p.id] || p.minOrderQty || 1;
-        return sum + p.price * qty;
+        const effectiveProduct = getEffectiveProduct(p);
+        const qty = productQuantities[p.id] || effectiveProduct.minOrderQty || 1;
+        return sum + effectiveProduct.price * qty;
       }, 0);
-  }, [products, selectedProductIds, productQuantities]);
+  }, [products, selectedProductIds, productQuantities, selectedVariantIds]);
 
   const totalCartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -405,18 +463,18 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-3.5 pointer-events-none" />
                 </div>
 
-                {/* View Switcher (Grid vs Table) */}
+                {/* View Switcher (List vs Table) */}
                 <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
                   <button
                     onClick={() => setViewMode('grid')}
-                    title="Grid View"
+                    title="List View"
                     className={`p-1.5 rounded-lg transition ${
                       viewMode === 'grid'
                         ? 'bg-slate-900 text-white shadow-2xs'
                         : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
-                    <Grid className="w-4 h-4" />
+                    <List className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setViewMode('table')}
@@ -528,151 +586,135 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
             )}
           </div>
 
-          {/* GRID VIEW MODE */}
+          {/* LIST VIEW MODE */}
           {viewMode === 'grid' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-2">
               {filteredProducts.map((product) => {
                 const isAdded = addedProductIds[product.id];
                 const isBookmarked = bookmarkedSkus.includes(product.sku);
                 const isSelected = selectedProductIds.includes(product.id);
                 const qty = product.minOrderQty || 1;
-                const subtotal = product.price * qty;
 
                 return (
                   <div
                     key={product.id}
-                    className={`rounded-2xl bg-white border transition-all duration-200 flex flex-col justify-between overflow-hidden relative group ${
+                    className={`rounded-xl border bg-white ${
                       isSelected
-                        ? 'border-indigo-600 ring-2 ring-indigo-600/20 shadow-md'
-                        : 'border-slate-200/90 hover:border-slate-300 hover:shadow-md'
+                        ? 'border-indigo-600 bg-indigo-50/40'
+                        : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    {/* Compact Card Header Bar (No Pictures) */}
-                    <div className="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        {/* Checkbox for batch select */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleSelectProduct(product.id);
-                          }}
-                          className={`p-1.5 rounded-lg transition ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </button>
-
-                        <span className="text-[10px] font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                          SKU: {product.sku}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11.5px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                          {product.category}
-                        </span>
-
-                        {/* Bookmark Favorite Button */}
-                        <button
-                          onClick={(e) => toggleBookmark(product.sku, e)}
-                          title={isBookmarked ? 'Remove Favorite' : 'Add to Favorites'}
-                          className={`p-1.5 rounded-lg transition ${
-                            isBookmarked
-                              ? 'bg-amber-400 text-slate-950 shadow-xs'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-slate-950' : ''}`} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Card Content Body */}
-                    <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                      <div className="space-y-1.5">
-                        <div
-                          className="cursor-pointer space-y-1"
-                          onClick={() => onSelectProductDetail && onSelectProductDetail(product)}
-                        >
-                          <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-snug">
-                            {product.name}
-                          </h4>
-                          <p className="text-sm font-normal text-slate-500 line-clamp-2">
-                            {product.description}
-                          </p>
-                        </div>
-
-                        {/* Rating & Stock Indicator */}
-                        <div className="flex items-center justify-between pt-1">
-                          {product.rating ? (
-                            <div className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded-lg border border-amber-200 text-[12.5px] font-extrabold">
-                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                              <span>{product.rating}</span>
-                              {product.ratingCount ? (
-                                <span className="text-slate-400 font-normal">({product.ratingCount})</span>
-                              ) : null}
-                            </div>
-                          ) : (
-                            <span />
-                          )}
-
-                          <div className="flex items-center gap-1.5 text-[12.5px] font-bold">
-                            <span className={`w-2 h-2 rounded-full ${product.inStock ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                            <span className={product.inStock ? 'text-emerald-700' : 'text-rose-600'}>
-                              {product.inStock ? 'In Stock' : 'Backorder'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Pricing & Savings Display */}
-                      <div className="pt-3 border-t border-slate-100 space-y-3">
-                        <div className="flex items-baseline justify-between">
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="text-lg font-black text-slate-900 tabular-nums">
-                              {formatCurrency(product.price)} / {product.unit}
-                            </span>
-                            {product.originalPrice && product.originalPrice > product.price && (
-                              <span className="text-xs text-slate-400 line-through font-bold">
-                                {formatCurrency(product.originalPrice)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {product.originalPrice && product.originalPrice > product.price && (
-                          <div className="text-[12.5px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200/80 flex items-center justify-between">
-                            <span>Promotional Savings:</span>
-                            <span className="font-extrabold">Save {formatCurrency(product.originalPrice - product.price)} / {product.unit}</span>
-                          </div>
-                        )}
-
-                        {/* Card Action Row */}
-                        <div className="pt-1">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-3">
+                      {/* Product Info */}
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <button
-                            onClick={(e) => handleAddSingleProduct(product, e)}
-                            className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shrink-0 ${
-                              isAdded
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-slate-950 hover:bg-slate-800 text-white shadow-xs'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelectProduct(product.id);
+                            }}
+                            className={`shrink-0 rounded-md border flex items-center justify-center ${
+                              isSelected
+                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                : 'bg-white border-slate-200 text-slate-600'
+                            }`}
+                            style={{ width: 18, height: 18 }}
+                            aria-label="Select product"
+                          >
+                            {isSelected && <Check className="w-3 h-3" />}
+                          </button>
+
+                          <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                            {product.sku}
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                            {product.category}
+                          </span>
+                          {product.isTopSeller && (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wide">
+                              Top Seller
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => toggleBookmark(product.sku, e)}
+                            title={isBookmarked ? 'Remove Favorite' : 'Add to Favorites'}
+                            className={`shrink-0 p-1 rounded-md transition-colors ${
+                              isBookmarked
+                                ? 'bg-amber-400 text-slate-950 border border-amber-400'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
                             }`}
                           >
-                            {isAdded ? (
-                              <>
-                                <CheckCircle2 className="w-4 h-4" />
-                                <span>Added!</span>
-                              </>
-                            ) : (
-                              <>
-                                <ShoppingCart className="w-4 h-4 text-amber-400" />
-                                <span>Add to Cart</span>
-                              </>
-                            )}
+                            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-slate-950' : ''}`} />
                           </button>
                         </div>
+
+                          <h4
+                            className="font-semibold text-sm text-slate-900 truncate cursor-pointer"
+                            onClick={() => onSelectProductDetail && onSelectProductDetail(getEffectiveProduct(product))}
+                          >
+                            {product.name}
+                          </h4>
+                         {product.description && (
+                           <p className="text-xs text-slate-500 line-clamp-1">
+                             {product.description}
+                           </p>
+                         )}
+                         {product.variants && product.variants.length > 0 && (
+                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-0.5">
+                             <Layers className="w-3 h-3" />
+                             {product.variants.length} options
+                           </span>
+                         )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {product.rating && (
+                            <span className="flex items-center gap-1 text-[11px] font-extrabold text-amber-700">
+                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                              <span>{product.rating}</span>
+                              {product.ratingCount && (
+                                <span className="text-slate-400 font-normal">({product.ratingCount})</span>
+                              )}
+                            </span>
+                          )}
+                          <span className="text-[11px] text-slate-400">•</span>
+                          <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            {product.inStock ? 'In Stock' : 'Backorder'}
+                          </span>
+                          <span className="text-[11px] text-slate-400">•</span>
+                          <span className="text-[11px] text-slate-500">
+                            Min Order: {product.minOrderQty || 1} {product.unit}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Price & Actions */}
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-right">
+                          <span className="text-base font-black text-slate-900 tabular-nums">
+                            {formatCurrency(getEffectiveProduct(product).price)} / {product.unit}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={(e) => handleAddSingleProduct(product, e)}
+                          className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors ${
+                            isAdded
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-slate-950 hover:bg-slate-800 text-white'
+                          }`}
+                        >
+                          {isAdded ? (
+                            <>
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Added!</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShoppingCart className="w-4 h-4 text-amber-400" />
+                              <span>Add to Cart</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -696,13 +738,12 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           className="rounded text-indigo-600 focus:ring-indigo-500"
                         />
                       </th>
-                      <th className="p-3 min-w-[220px]">Product & SKU</th>
-                      <th className="p-3">Category</th>
-                      <th className="p-3">Unit Price</th>
-                      <th className="p-3">Stock</th>
-                      <th className="p-3 min-w-[140px]">Order Quantity</th>
-                      <th className="p-3 text-right">Subtotal</th>
-                      <th className="p-3 text-center">Action</th>
+                       <th className="p-3 min-w-[220px]">Product & SKU</th>
+                        <th className="p-3 hidden md:table-cell">Category</th>
+                        <th className="p-3">Unit Price</th>
+                        <th className="p-3 min-w-[140px] hidden md:table-cell">Order Quantity</th>
+                        <th className="p-3 text-right hidden md:table-cell">Subtotal</th>
+                        <th className="p-3 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -711,7 +752,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                       const isBookmarked = bookmarkedSkus.includes(product.sku);
                       const qty = productQuantities[product.id] || product.minOrderQty || 1;
                       const isSelected = selectedProductIds.includes(product.id);
-                      const subtotal = product.price * qty;
+                      // Subtotal follows the SELECTED variant's ERP price.
+                      const subtotal = getEffectiveProduct(product).price * qty;
 
                       return (
                         <tr
@@ -729,95 +771,80 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                             />
                           </td>
 
-                          {/* Product Info & Thumbnail */}
-                          <td className="p-3 table-body-cell">
-                            <div className="flex items-center gap-3">
-                              <img
-                                src={product.image}
-                                alt={product.name}
-                                className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0 cursor-pointer"
-                                onClick={() => onSelectProductDetail && onSelectProductDetail(product)}
-                              />
+                            {/* Product Info */}
+                            <td className="p-3 table-body-cell">
                               <div>
                                 <div className="flex items-center gap-1.5">
                                   <span
-                                    className="font-medium text-slate-900 hover:text-indigo-600 cursor-pointer text-xs"
-                                    onClick={() => onSelectProductDetail && onSelectProductDetail(product)}
+                                     className="font-semibold text-slate-900 hover:text-indigo-600 cursor-pointer text-xs"
+                                    onClick={() => onSelectProductDetail && onSelectProductDetail(getEffectiveProduct(product))}
                                   >
                                     {product.name}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-2 text-[11.5px] text-slate-500 font-mono mt-0.5">
-                                  <span>SKU: {product.sku}</span>
-                                  <button
-                                    onClick={(e) => toggleBookmark(product.sku, e)}
-                                    className="text-amber-500 hover:text-amber-600"
-                                  >
-                                    <Bookmark className={`w-3 h-3 ${isBookmarked ? 'fill-amber-400' : ''}`} />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
+                                 <div className="flex items-center gap-2 text-[11.5px] text-slate-500 font-mono mt-0.5">
+                                   <span>SKU: {product.sku}</span>
+                                   <button
+                                     onClick={(e) => toggleBookmark(product.sku, e)}
+                                     className="text-amber-500 hover:text-amber-600"
+                                   >
+                                     <Bookmark className={`w-3 h-3 ${isBookmarked ? 'fill-amber-400' : ''}`} />
+                                   </button>
+                                 </div>
+                                 {product.variants && product.variants.length > 0 && (
+                                   <span className="mt-1 inline-flex items-center gap-1 text-[10.5px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-1.5 py-0.5">
+                                     <Layers className="w-3 h-3" />
+                                     {product.variants.length} options
+                                   </span>
+                                 )}
+                               </div>
+                             </td>
 
-                          {/* Category */}
-                          <td className="p-3">
-                            <span className="text-[11.5px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
-                              {product.category}
-                            </span>
-                          </td>
+                            {/* Category */}
+                            <td className="p-3 hidden md:table-cell">
+                              <span className="text-[11.5px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
+                                {product.category}
+                              </span>
+                            </td>
 
-                          {/* Unit Price */}
-                          <td className="p-3 table-body-cell whitespace-nowrap">
-                            <span className="font-medium text-slate-900 finance-nums">
-                              {formatCurrency(product.price)} / {product.unit}
-                            </span>
-                          </td>
+                             {/* Unit Price */}
+                             <td className="p-3 table-body-cell whitespace-nowrap">
+                               <span className="font-medium text-slate-900 finance-nums">
+                                 {formatCurrency(getEffectiveProduct(product).price)} / {product.unit}
+                               </span>
+                             </td>
 
-                          {/* Stock Status */}
-                          <td className="p-3">
-                            <span
-                              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                                product.inStock
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-rose-100 text-rose-800'
-                              }`}
-                            >
-                              {product.inStock ? 'In Stock' : 'Backorder'}
-                            </span>
-                          </td>
+                            {/* Quantity Stepper */}
+                           <td className="p-3 hidden md:table-cell">
+                             <div className="flex items-center gap-1">
+                               <button
+                                 onClick={() => handleQtyChange(product.id, -1, 1)}
+                                 disabled={qty <= 1}
+                                 className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-bold text-slate-700 flex items-center justify-center transition"
+                               >
+                                 <Minus className="w-3 h-3" />
+                               </button>
 
-                          {/* Quantity Stepper */}
-                          <td className="p-3">
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleQtyChange(product.id, -1, 1)}
-                                disabled={qty <= 1}
-                                className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-bold text-slate-700 flex items-center justify-center transition"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
+                               <input
+                                 type="number"
+                                 value={qty}
+                                 onChange={(e) => handleQtyInput(product.id, e.target.value, 1)}
+                                 className="w-12 text-center font-bold text-xs bg-slate-50 border border-slate-200 rounded py-0.5 text-slate-900 focus:outline-none focus:border-slate-900 finance-nums"
+                               />
 
-                              <input
-                                type="number"
-                                value={qty}
-                                onChange={(e) => handleQtyInput(product.id, e.target.value, 1)}
-                                className="w-12 text-center font-bold text-xs bg-slate-50 border border-slate-200 rounded py-0.5 text-slate-900 focus:outline-none focus:border-slate-900 finance-nums"
-                              />
+                               <button
+                                 onClick={() => handleQtyChange(product.id, 1, 1)}
+                                 className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center transition"
+                               >
+                                 <Plus className="w-3 h-3" />
+                               </button>
+                             </div>
+                           </td>
 
-                              <button
-                                onClick={() => handleQtyChange(product.id, 1, 1)}
-                                className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center transition"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </td>
-
-                          {/* Subtotal */}
-                          <td className="p-3 text-right table-body-cell font-medium finance-nums">
-                            {formatCurrency(subtotal)}
-                          </td>
+                           {/* Subtotal */}
+                           <td className="p-3 text-right table-body-cell font-medium finance-nums hidden md:table-cell">
+                             {formatCurrency(subtotal)}
+                           </td>
 
                           {/* Add Button */}
                           <td className="p-3 text-center">
@@ -1080,6 +1107,14 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Mandatory variant chooser — opens for any Add to Cart on a variant product. */}
+      <VariantSelectModal
+        product={variantPickerQueue[0]?.product ?? null}
+        quantity={variantPickerQueue[0]?.quantity ?? 1}
+        onClose={() => setVariantPickerQueue((prev) => prev.slice(1))}
+        onConfirm={handleVariantPickerConfirm}
+      />
     </div>
   );
 };

@@ -9,8 +9,8 @@ interface CartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   cartItems: CartItem[];
-  onUpdateQuantity: (productId: string, quantity: number) => void;
-  onRemoveItem: (productId: string) => void;
+  onUpdateQuantity: (productId: string, quantity: number, variantId?: string) => void;
+  onRemoveItem: (productId: string, variantId?: string) => void;
   onClearCart: () => void;
   /** Submits the order REQUEST through the Portal service (POST /portal/requests,
    * requestType 'order'). Resolves with the ERP-created order request (ODR-...)
@@ -18,10 +18,7 @@ interface CartDrawerProps {
    * explicit error when the ERP cannot accept it. `idempotencyKey` identifies
    * this logical submission attempt and is reused when the attempt is retried. */
   onPlaceOrder: (
-    deliveryAddress: string,
-    paymentTerms: string,
     requestedDeliveryDate?: string,
-    promotionCode?: string,
     idempotencyKey?: string
   ) => Promise<OrderRequest>;
 }
@@ -35,10 +32,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onClearCart,
   onPlaceOrder,
 }) => {
-  const [deliveryAddress, setDeliveryAddress] = React.useState('');
-  const [paymentTerms, setPaymentTerms] = React.useState('Net 30 Credit Terms');
   const [requestedDeliveryDate, setRequestedDeliveryDate] = React.useState('');
-  const [promotionCode, setPromotionCode] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [orderError, setOrderError] = React.useState('');
   const [orderComplete, setOrderComplete] = React.useState(false);
@@ -49,7 +43,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   // its stored response), cleared on success and whenever the submission
   // payload changes (a changed order is a NEW logical submission).
   const submissionKeyRef = React.useRef<string | null>(null);
-  const payloadSignature = JSON.stringify([cartItems, deliveryAddress, paymentTerms, requestedDeliveryDate, promotionCode]);
+  const payloadSignature = JSON.stringify([cartItems, requestedDeliveryDate]);
   const lastPayloadSignatureRef = React.useRef(payloadSignature);
   React.useEffect(() => {
     if (lastPayloadSignatureRef.current !== payloadSignature) {
@@ -82,7 +76,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setIsSubmitting(true);
     setOrderError('');
     try {
-      const created = await onPlaceOrder(deliveryAddress, paymentTerms, requestedDeliveryDate, promotionCode, idempotencyKey);
+      const created = await onPlaceOrder(requestedDeliveryDate, idempotencyKey);
       submissionKeyRef.current = null;
       setSubmittedRequest(created);
       setOrderComplete(true);
@@ -197,93 +191,56 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           ) : (
             <>
               {/* Item List */}
-              <div className="space-y-3">
-                {cartItems.map(({ product, quantity }) => (
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                {cartItems.map(({ product, quantity, variantId }, idx) => (
                   <div
-                    key={product.id}
-                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3 shadow-2xs"
+                    key={`${product.id}-${variantId || ''}`}
+                    className={`flex items-center gap-3 p-3 ${
+                      idx > 0 ? 'border-t border-slate-100' : ''
+                    }`}
                   >
                     <div className="flex-1 min-w-0">
                       <h5 className="font-extrabold text-xs text-slate-900 truncate">{product.name}</h5>
-                      <div className="font-black text-xs text-slate-900 mt-1">
-                        {formatCurrency(product.price * quantity)}
+                      {variantId && product.variants && (
+                        <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                          {product.variants.find((v) => v.id === variantId)?.name || 'Variant'}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[11px] text-slate-500">
+                          {formatCurrency(product.price)} x {quantity}
+                        </span>
+                        <span className="text-[11px] font-black text-slate-900 tabular-nums">
+                          {formatCurrency(product.price * quantity)}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Quantity Controls */}
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => onRemoveItem(product.id)}
-                        className="text-slate-400 hover:text-rose-600 p-1 transition"
+                        onClick={() => onUpdateQuantity(product.id, quantity - 1, variantId)}
+                        disabled={quantity <= 1}
+                        className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-bold text-slate-700 flex items-center justify-center transition"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="text-xs font-extrabold text-slate-900 w-4 text-center">{quantity}</span>
+                      <button
+                        onClick={() => onUpdateQuantity(product.id, quantity + 1, variantId)}
+                        className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center transition"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => onRemoveItem(product.id, variantId)}
+                        className="text-slate-400 hover:text-rose-600 p-1 transition ml-1"
                         title="Remove item"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-
-                      <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-2xs">
-                        <button
-                          onClick={() => onUpdateQuantity(product.id, quantity - 1)}
-                          className="p-1 hover:bg-slate-100 rounded-lg text-slate-600"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="text-xs font-extrabold text-slate-900 px-1">{quantity}</span>
-                        <button
-                          onClick={() => onUpdateQuantity(product.id, quantity + 1)}
-                          className="p-1 hover:bg-slate-100 rounded-lg text-slate-600"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
                     </div>
                   </div>
                 ))}
-              </div>
-
-              {/* Delivery Details */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3 text-xs">
-                <div>
-                  <label className="block text-slate-500 font-bold mb-1">Delivery Address</label>
-                  <input
-                    type="text"
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                    placeholder="Enter the delivery address for this order"
-                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 font-bold focus:outline-none focus:border-slate-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-500 font-bold mb-1">Billing Payment Terms</label>
-                  <select
-                    value={paymentTerms}
-                    onChange={(e) => setPaymentTerms(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 font-bold focus:outline-none"
-                  >
-                    <option value="Net 30 Credit Terms">Net 30 Credit Terms (On Account)</option>
-                    <option value="Net 14 Credit Terms">Net 14 Credit Terms</option>
-                    <option value="Corporate Credit Card">Corporate Credit Card</option>
-                    <option value="Prepaid ACH Transfer">Prepaid ACH Transfer</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-500 font-bold mb-1">Requested Delivery Date</label>
-                  <input
-                    type="date"
-                    value={requestedDeliveryDate}
-                    onChange={(e) => setRequestedDeliveryDate(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 font-bold focus:outline-none focus:border-slate-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-500 font-bold mb-1">Promotion Code</label>
-                  <input
-                    type="text"
-                    value={promotionCode}
-                    onChange={(e) => setPromotionCode(e.target.value)}
-                    placeholder="Enter a portal promotion code (optional)"
-                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 font-bold focus:outline-none focus:border-slate-400"
-                  />
-                </div>
               </div>
 
               {/* Order Calculation Breakdown */}

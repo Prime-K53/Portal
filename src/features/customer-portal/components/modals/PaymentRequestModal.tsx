@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Building,
+  Building2,
   CheckCircle2,
   FileText,
   Landmark,
   Loader2,
   RefreshCcw,
   ShieldCheck,
+  Smartphone,
   X,
 } from 'lucide-react';
 import type { Invoice, PaymentRequest } from '../../types';
@@ -30,7 +33,7 @@ interface PaymentRequestModalProps {
    * /api/portal/payment-requests). Resolves with the created request — never
    * with a payment. Rejects (ApiError) when the ERP refuses the request.
    */
-  onSubmitPaymentRequest: (invoiceId: string, requestedAmount: number, note: string) => Promise<PaymentRequest>;
+  onSubmitPaymentRequest: (invoiceId: string, requestedAmount: number, note: string, paymentMethod: string) => Promise<PaymentRequest>;
 }
 
 /**
@@ -52,6 +55,7 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
 
   const [amountInput, setAmountInput] = useState<string>('');
   const [note, setNote] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [createdRequest, setCreatedRequest] = useState<PaymentRequest | null>(null);
@@ -62,6 +66,7 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
   useEffect(() => {
     setAmountInput(invoice ? String(defaultPaymentRequestAmount(invoice)) : '');
     setNote('');
+    setSelectedPaymentMethod(null);
     setIsSubmitting(false);
     setFormError('');
     setCreatedRequest(null);
@@ -100,17 +105,18 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
       return;
     }
 
+    if (!selectedPaymentMethod) {
+      setFormError('Please select a payment method.');
+      return;
+    }
+
     setIsSubmitting(true);
     setFormError('');
     try {
-      const created = await onSubmitPaymentRequest(invoice.id, amount, note.trim());
+      const created = await onSubmitPaymentRequest(invoice.id, amount, note.trim(), selectedPaymentMethod);
       setCreatedRequest(created);
-      // Phase 9: refresh the payment-request state from the ERP so a re-open
-      // shows the active request instead of a misleading new-request form.
       requestsQuery.refetch();
     } catch (err) {
-      // Real API failure — never a fake success. The ERP message (duplicate,
-      // invalid amount, outstanding changed, invoice not found) is shown as-is.
       setFormError(err instanceof Error ? err.message : 'The payment request could not be submitted. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -134,9 +140,9 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
               <Landmark className="w-5 h-5 text-slate-700" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900">Request Bank Transfer Payment</h3>
+              <h3 className="font-extrabold text-base text-slate-900">Payment Request</h3>
               <p className="text-xs text-slate-500 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-slate-400" /> Request to pay by bank transfer — not a payment
+                <ShieldCheck className="w-3 h-3 text-slate-400" /> Request to pay — not a payment
               </p>
             </div>
           </div>
@@ -325,6 +331,66 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
                 <div className="flex justify-between items-center text-slate-500">
                   <span>Outstanding Balance:</span>
                   <span className="text-slate-900 font-black tabular-nums text-sm">{formatCurrency(invoice.amountRemaining)}</span>
+                </div>
+              </div>
+
+              {/* Payment Method Selector */}
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  Select Payment Method
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPaymentMethod(selectedPaymentMethod === 'national_bank' ? null : 'national_bank')}
+                    className={`p-2.5 rounded-xl border text-xs font-extrabold flex items-center gap-2 transition ${
+                      selectedPaymentMethod === 'national_bank'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Building className="w-4 h-4 text-emerald-500" />
+                    <span className="truncate">National Bank</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPaymentMethod(selectedPaymentMethod === 'first_capital_bank' ? null : 'first_capital_bank')}
+                    className={`p-2.5 rounded-xl border text-xs font-extrabold flex items-center gap-2 transition ${
+                      selectedPaymentMethod === 'first_capital_bank'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Building2 className="w-4 h-4 text-blue-500" />
+                    <span className="truncate">First Capital Bank</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPaymentMethod(selectedPaymentMethod === 'tnm_mpamba' ? null : 'tnm_mpamba')}
+                    className={`p-2.5 rounded-xl border text-xs font-extrabold flex items-center gap-2 transition ${
+                      selectedPaymentMethod === 'tnm_mpamba'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span className="truncate">TNM Mpamba (with withdraw fee)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPaymentMethod(selectedPaymentMethod === 'airtel_agent' ? null : 'airtel_agent')}
+                    className={`p-2.5 rounded-xl border text-xs font-extrabold flex items-center gap-2 transition ${
+                      selectedPaymentMethod === 'airtel_agent'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4 text-rose-500" />
+                    <span className="truncate">Airtel Agent (Dealer to Dealer - no withdraw fee)</span>
+                  </button>
                 </div>
               </div>
 

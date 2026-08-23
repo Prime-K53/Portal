@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Invoice } from '../../types';
 import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/formatters';
+import { downloadOfficialDocument } from '../../utils/officialDocument';
 import { exportToCSV } from '../../utils/exportUtils';
 import { canRequestPayment } from '../../utils/paymentRequest';
 
@@ -75,16 +76,20 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
     );
   };
 
-  const handleDownloadPDF = (inv: Invoice) => {
-    const content = `INVOICE ${inv.invoiceNumber}\nDate: ${inv.issueDate}\nDue Date: ${inv.dueDate}\nStatus: ${inv.status.toUpperCase()}\nAmount: K ${inv.amount.toFixed(2)}\nRemaining: K ${inv.amountRemaining.toFixed(2)}\n\nItems:\n` +
-      inv.items.map(i => `- ${i.description} (${i.quantity}x @ K ${i.unitPrice.toFixed(2)})`).join('\n');
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${inv.invoiceNumber}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Official ERP document download (authoritative PDF, customer-scoped).
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<{ id: string; message: string } | null>(null);
+
+  const handleDownloadPDF = async (inv: Invoice) => {
+    setDownloadError(null);
+    setDownloadingId(inv.id);
+    try {
+      await downloadOfficialDocument('invoice', inv.id);
+    } catch (err) {
+      setDownloadError({ id: inv.id, message: err instanceof Error ? err.message : 'Download failed.' });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
@@ -207,11 +212,17 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDownloadPDF(inv);
+                        void handleDownloadPDF(inv);
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
+                      disabled={downloadingId === inv.id}
+                      title={downloadingId === inv.id ? 'Downloading official ERP document…' : 'Download official ERP invoice (PDF)'}
+                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
                     >
-                      <FileText className="w-3.5 h-3.5" />
+                      {downloadingId === inv.id ? (
+                        <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <FileText className="w-3.5 h-3.5" />
+                      )}
                       <span>PDF</span>
                     </button>
 
@@ -229,6 +240,12 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
                     )}
                   </div>
                 </div>
+
+                {downloadError?.id === inv.id && (
+                  <p className="text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
+                    {downloadError.message}
+                  </p>
+                )}
               </div>
             );
           })

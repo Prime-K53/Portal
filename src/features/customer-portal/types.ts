@@ -204,11 +204,26 @@ export interface Product {
   rating?: number;
   ratingCount?: number;
   isTopSeller?: boolean;
+  variants?: ProductVariant[];
+  selectedVariantId?: string;
+}
+
+export interface ProductVariant {
+  id: string;
+  productId: string;
+  name: string;
+  sku: string | null;
+  attributes: Record<string, string>;
+  sellingPrice: number;
+  costPrice: number;
+  stock: number;
+  active: boolean;
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
+  variantId?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -234,6 +249,7 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  variantId?: string;
 }
 
 /**
@@ -376,6 +392,8 @@ export interface QuoteRequestItem {
   quantity: number;
   targetPrice?: number;
   notes?: string;
+  productId?: string;
+  variantId?: string;
 }
 
 /**
@@ -751,12 +769,16 @@ export interface ErpOrderLine {
 export interface ErpRequestLine {
   productId?: string | null;
   product_id?: string | null;
+  variantId?: string | null;
+  variant_id?: string | null;
   name?: string;
   description?: string;
   quantity?: number;
   qty?: number;
   unitPrice?: number;
   price?: number;
+  /** ERP audit flag: 'master' | 'master_variant' | 'unknown_product' | 'custom_line'. */
+  priceSource?: string;
   lineTotal?: number;
 }
 
@@ -930,6 +952,7 @@ export interface ErpPaymentRequestCreatePayload {
   /** Optional; the ERP defaults to the authoritative outstanding balance. */
   requestedAmount?: number;
   note?: string;
+  paymentMethod?: string;
 }
 
 /**
@@ -1043,6 +1066,20 @@ export interface ErpCatalogItem {
   quantity: number;
   category: string;
   status: string;
+  variants?: ErpVariant[];
+}
+
+/** GET /api/portal/catalog variant. */
+export interface ErpVariant {
+  id: string;
+  productId: string;
+  name: string;
+  sku: string | null;
+  attributes: Record<string, string>;
+  sellingPrice: number;
+  costPrice: number;
+  stock: number;
+  active: boolean;
 }
 
 // ── Advertisements (ERP portal banner ads) ───────────────────────────────────

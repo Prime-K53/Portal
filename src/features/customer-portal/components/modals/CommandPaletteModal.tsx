@@ -14,6 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Invoice, Order, Product, DeliveryNotification, TabType } from '../../types';
+import { VariantSelectModal } from './VariantSelectModal';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -42,6 +43,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  // Mandatory variant chooser for "+ Cart" on variant products.
+  const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -227,6 +230,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                   </button>
                   <button
                     onClick={() => {
+                      if (prod.variants && prod.variants.length > 0) {
+                        // Mandatory: pick an option before the add happens.
+                        setVariantPickerProduct(prod);
+                        return;
+                      }
                       onAddToCart(prod, prod.minOrderQty || 1);
                       onClose();
                     }}
@@ -372,6 +380,18 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           <span className="font-medium text-slate-400">Customer ID B2B Portal</span>
         </div>
       </div>
+
+      {/* Mandatory variant chooser — overlays the palette until an option is picked. */}
+      <VariantSelectModal
+        product={variantPickerProduct}
+        quantity={variantPickerProduct?.minOrderQty || 1}
+        onClose={() => setVariantPickerProduct(null)}
+        onConfirm={(effectiveProduct, quantity) => {
+          onAddToCart(effectiveProduct, quantity);
+          setVariantPickerProduct(null);
+          onClose();
+        }}
+      />
     </div>
   );
 };

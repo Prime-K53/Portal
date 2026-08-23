@@ -82,6 +82,8 @@ export interface AuthService {
   requestPasswordReset(email: string): Promise<void>;
   resetPassword(email: string, code: string, password: string): Promise<void>;
   activate(customerId: string, code: string, password: string): Promise<AuthSession>;
+  /** Authenticated password change (ERP `PUT /portal/profile/password`). */
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
 }
 
 /** ERP event dispatched when the session cannot be refreshed/restored. */
@@ -414,6 +416,26 @@ export class ErpAuthService implements AuthService {
     return this.establishSession(response);
   }
 
+  /**
+   * Authenticated password change — ERP `PUT /portal/profile/password`
+   * `{ currentPassword, newPassword }` (Bearer; 30 req/hour rate limit).
+   * The ERP answers 400 `Current password is incorrect` and enforces the
+   * same min-6-char rule as every other password field.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    if (!currentPassword || !newPassword) {
+      throw new AuthError('Please fill in both your current and new password.', 'INVALID_CREDENTIALS');
+    }
+    if (newPassword.length < 6) {
+      throw new AuthError('New password must be at least 6 characters.', 'INVALID_CREDENTIALS');
+    }
+    await this.client.put<{ message: string }>(
+      '/portal/profile/password',
+      { currentPassword, newPassword },
+      { skipAuth: false }
+    );
+  }
+
   register(): Promise<AuthSession> {
     throw new AuthError(
       'Portal self-registration is not available: the ERP creates customer accounts by invitation. Contact PrimeERP support to activate your account.',
@@ -532,6 +554,18 @@ export class MockAuthService implements AuthService {
 
   async resetPassword(): Promise<void> {
     // No-op in mock mode.
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    if (!currentPassword || !newPassword) {
+      throw new AuthError('Please fill in both your current and new password.', 'INVALID_CREDENTIALS');
+    }
+    if (newPassword.length < 6) {
+      throw new AuthError('New password must be at least 6 characters.', 'INVALID_CREDENTIALS');
+    }
+    if (currentPassword === newPassword) {
+      throw new AuthError('New password must be different from the current one.', 'INVALID_CREDENTIALS');
+    }
   }
 
   async activate(): Promise<AuthSession> {

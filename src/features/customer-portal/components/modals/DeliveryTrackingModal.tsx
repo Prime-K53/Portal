@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   Clock,
+  Download,
   MessageSquare,
   Navigation,
   Package,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import { DeliveryNotification, DeliveryStatus } from '../../types';
 import { formatDateTime, getDeliveryStatusBadge } from '../../utils/formatters';
+import { downloadOfficialDocument } from '../../utils/officialDocument';
 
 interface DeliveryTrackingModalProps {
   delivery: DeliveryNotification | null;
@@ -25,7 +27,34 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  // Official ERP delivery-note PDF download. The ERP endpoint resolves the id
+  // as a delivery-note id OR an order id linked to one — try the order link
+  // first (what the portal shipment carries), then the raw record id.
+  const [noteDownloading, setNoteDownloading] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+
   if (!isOpen || !delivery) return null;
+
+  const handleDownloadDeliveryNote = async () => {
+    setNoteError(null);
+    setNoteDownloading(true);
+    try {
+      try {
+        await downloadOfficialDocument('delivery-note', delivery.orderId || delivery.id);
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 404 && delivery.orderId !== delivery.id) {
+          await downloadOfficialDocument('delivery-note', delivery.id);
+        } else {
+          throw err;
+        }
+      }
+    } catch (err) {
+      setNoteError(err instanceof Error ? err.message : 'Download failed.');
+    } finally {
+      setNoteDownloading(false);
+    }
+  };
 
   const steps: { key: DeliveryStatus; title: string; desc: string }[] = [
     { key: 'order_placed', title: 'Order Placed', desc: 'Order confirmed and generated in ERP system' },
@@ -186,13 +215,33 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl transition"
-          >
-            Close Progress Tracker
-          </button>
+        <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
+          {noteError && (
+            <p className="text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
+              {noteError}
+            </p>
+          )}
+          <div className="flex justify-between gap-2">
+            <button
+              onClick={() => { void handleDownloadDeliveryNote(); }}
+              disabled={noteDownloading}
+              title={noteDownloading ? 'Downloading official ERP delivery note…' : 'Download official ERP delivery note (PDF)'}
+              className="px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-60 text-slate-800 font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition"
+            >
+              {noteDownloading ? (
+                <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>Delivery Note PDF</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl transition"
+            >
+              Close Progress Tracker
+            </button>
+          </div>
         </div>
       </div>
     </div>

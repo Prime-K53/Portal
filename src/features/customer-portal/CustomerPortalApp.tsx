@@ -10,7 +10,9 @@ import {
   useNotificationsData,
   useOrderRequestsData,
   useOrdersData,
+  usePaymentsData,
   usePortalEvents,
+  useQuoteRequestsData,
   useQuotationsData,
   useReferralsData,
   useReferralRewardsData,
@@ -33,6 +35,7 @@ import {
   PaymentRequest,
   PortalReferral,
   Product,
+  QuoteRequest,
   QuoteRequestItem,
   Quotation,
   ReferralCreatePayload,
@@ -53,6 +56,7 @@ import { BottomNavigation } from './components/BottomNavigation';
 import { MobileHeader } from './components/MobileHeader';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { Sidebar } from './components/Sidebar';
+import { PwaInstallChip } from './components/PwaInstallChip';
 
 // Modals
 import { CartDrawer } from './components/modals/CartDrawer';
@@ -100,7 +104,9 @@ function CustomerPortalShell({
   const ordersQuery = useOrdersData();
   const orderRequestsQuery = useOrderRequestsData();
   const quotationsQuery = useQuotationsData();
+  const quoteRequestsQuery = useQuoteRequestsData();
   const statementsQuery = useStatementsData();
+  const paymentsQuery = usePaymentsData();
   const referralsQuery = useReferralsData();
   const referralStatsQuery = useReferralStatsData();
   const referralRewardsQuery = useReferralRewardsData();
@@ -119,6 +125,7 @@ function CustomerPortalShell({
   const orders = ordersQuery.data ?? [];
   const orderRequests = orderRequestsQuery.data ?? [];
   const quotations = quotationsQuery.data ?? [];
+  const quoteRequests = quoteRequestsQuery.data ?? [];
   const statements = statementsQuery.data ?? [];
   const referrals = referralsQuery.data ?? [];
   const referralStats = referralStatsQuery.data ?? null;
@@ -135,7 +142,7 @@ function CustomerPortalShell({
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<Order | null>(null);
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [selectedStatementEntryDetail, setSelectedStatementEntryDetail] = useState<StatementEntry | null>(null);
-  const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<Quotation | null>(null);
+  const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<Quotation | QuoteRequest | null>(null);
 
   const [paymentRequestInvoice, setPaymentRequestInvoice] = useState<Invoice | null>(null);
   /** Preset list filter applied when drilling in from a dashboard KPI. */
@@ -186,8 +193,8 @@ function CustomerPortalShell({
   // after a successful request the ERP state is simply refreshed and the
   // invoice remains unpaid/partial unless the ERP independently records a
   // real accounting payment.
-  const handleSubmitPaymentRequest = (invoiceId: string, requestedAmount: number, note: string): Promise<PaymentRequest> => {
-    return runAction(() => portalService.createPaymentRequest({ invoiceId, requestedAmount, note })).then((created) => {
+  const handleSubmitPaymentRequest = (invoiceId: string, requestedAmount: number, note: string, paymentMethod: string): Promise<PaymentRequest> => {
+    return runAction(() => portalService.createPaymentRequest({ invoiceId, requestedAmount, note, paymentMethod })).then((created) => {
       // Phase 9: refresh ERP state. A request does NOT change invoice
       // financials — this refetch only surfaces real ERP changes.
       invoicesQuery.refetch();
@@ -199,29 +206,36 @@ function CustomerPortalShell({
 
   // ── Cart ──────────────────────────────────────────────────────────────────
   const handleAddToCart = (product: Product, quantity: number) => {
+    const variantId = product.selectedVariantId;
     setCartItems((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id);
+      const existing = prev.find(
+        (item) => item.product.id === product.id && item.variantId === variantId
+      );
       if (existing) {
         return prev.map((item) =>
-          item.product.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+          item.product.id === product.id && item.variantId === variantId
+            ? { ...item, quantity: item.quantity + quantity }
+            : item
         );
       }
-      return [...prev, { product, quantity }];
+      return [...prev, { product, quantity, variantId }];
     });
   };
 
-  const handleUpdateCartQuantity = (productId: string, quantity: number) => {
+  const handleUpdateCartQuantity = (productId: string, quantity: number, variantId?: string) => {
     if (quantity <= 0) {
-      handleRemoveCartItem(productId);
+      handleRemoveCartItem(productId, variantId);
       return;
     }
     setCartItems((prev) =>
-      prev.map((item) => (item.product.id === productId ? { ...item, quantity } : item))
+      prev.map((item) =>
+        item.product.id === productId && item.variantId === variantId ? { ...item, quantity } : item
+      )
     );
   };
 
-  const handleRemoveCartItem = (productId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
+  const handleRemoveCartItem = (productId: string, variantId?: string) => {
+    setCartItems((prev) => prev.filter((item) => !(item.product.id === productId && item.variantId === variantId)));
   };
 
   const handleClearCart = () => {
@@ -229,26 +243,37 @@ function CustomerPortalShell({
   };
 
   const handlePlaceOrder = async (
-    deliveryAddress: string,
-    paymentTerms: string,
-    _requestedDeliveryDate?: string,
-    _promotionCode?: string,
+    requestedDeliveryDate?: string,
     idempotencyKey?: string
   ) => {
     const totalAmount = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
     await runAction(async () => {
       const created = await portalService.createOrder(
         {
-          items: cartItems.map((ci) => ({
-            productId: ci.product.id,
-            productName: ci.product.name,
-            quantity: ci.quantity,
-            unitPrice: ci.product.price,
-            total: ci.product.price * ci.quantity,
-          })),
-          deliveryAddress,
-          paymentTerms,
+          items: cartItems.map((ci) => {
+            // Label the line with the selected variant so ERP staff see the
+            // exact option ordered (variantId is sent alongside; the ERP
+            // re-prices server-side from its own master data).
+            const variant = ci.variantId
+              ? ci.product.variants?.find((v) => v.id === ci.variantId)
+              : undefined;
+            const productName =
+              variant && variant.name && variant.name !== ci.product.name
+                ? `${ci.product.name} (${variant.name})`
+                : ci.product.name;
+            return {
+              productId: ci.product.id,
+              productName,
+              quantity: ci.quantity,
+              unitPrice: ci.product.price,
+              total: ci.product.price * ci.quantity,
+              variantId: ci.variantId,
+            };
+          }),
+          deliveryAddress: '',
+          paymentTerms: 'Net 30 Credit Terms',
           totalAmount,
+          requestedDeliveryDate,
         },
         idempotencyKey ?? generateIdempotencyKey()
       );
@@ -299,6 +324,7 @@ function CustomerPortalShell({
         priority,
         notes,
       });
+      quoteRequestsQuery.refetch();
       quotationsQuery.refetch();
     });
   };
@@ -306,6 +332,7 @@ function CustomerPortalShell({
   const handleAcceptQuotation = (quotationId: string) => {
     runAction(async () => {
       await portalService.acceptQuotation(quotationId);
+      quoteRequestsQuery.refetch();
       quotationsQuery.refetch();
     });
   };
@@ -313,6 +340,7 @@ function CustomerPortalShell({
   const handleRejectQuotation = (quotationId: string) => {
     runAction(async () => {
       await portalService.rejectQuotation(quotationId);
+      quoteRequestsQuery.refetch();
       quotationsQuery.refetch();
     });
   };
@@ -320,6 +348,7 @@ function CustomerPortalShell({
   const handleRequestQuotationRevision = (quotationId: string) => {
     runAction(async () => {
       await portalService.requestQuotationRevision(quotationId);
+      quoteRequestsQuery.refetch();
       quotationsQuery.refetch();
     });
   };
@@ -443,14 +472,15 @@ function CustomerPortalShell({
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {activeTab === 'dashboard' && (
             <PortalDataBoundary
-              isLoading={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, statementsQuery, adsQuery]).isLoading}
-              error={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, statementsQuery, adsQuery]).error}
+              isLoading={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, quoteRequestsQuery, statementsQuery, adsQuery]).isLoading}
+              error={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, quoteRequestsQuery, statementsQuery, adsQuery]).error}
               onRetry={() => {
                 customerQuery.refetch();
                 invoicesQuery.refetch();
                 deliveriesQuery.refetch();
                 ordersQuery.refetch();
                 quotationsQuery.refetch();
+                quoteRequestsQuery.refetch();
                 statementsQuery.refetch();
                 adsQuery.refetch();
               }}
@@ -529,15 +559,19 @@ function CustomerPortalShell({
 
           {activeTab === 'quotes' && (
             <PortalDataBoundary
-              isLoading={quotationsQuery.isLoading}
-              error={quotationsQuery.error}
-              isEmpty={!quotationsQuery.isLoading && !quotationsQuery.error && quotations.length === 0}
+              isLoading={quotationsQuery.isLoading || quoteRequestsQuery.isLoading}
+              error={quotationsQuery.error || quoteRequestsQuery.error}
+              isEmpty={!quotationsQuery.isLoading && !quoteRequestsQuery.isLoading && !quotationsQuery.error && !quoteRequestsQuery.error && quotations.length === 0 && quoteRequests.length === 0}
               emptyTitle="No quotations yet"
               emptyDescription="Commercial quotations issued by the ERP will appear here."
-              onRetry={quotationsQuery.refetch}
+              onRetry={() => {
+                quoteRequestsQuery.refetch();
+                quotationsQuery.refetch();
+              }}
             >
               <QuotesTab
                 quotes={quotations}
+                quoteRequests={quoteRequests}
                 onCreateQuote={() => setIsQuoteModalOpen(true)}
                 onAcceptQuotation={handleAcceptQuotation}
                 onRejectQuotation={handleRejectQuotation}
@@ -681,6 +715,8 @@ function CustomerPortalShell({
       <StatementItemDetailModal
         entry={selectedStatementEntryDetail}
         profile={profile ?? ({} as AccountProfile)}
+        invoices={invoices}
+        payments={paymentsQuery.data ?? []}
         isOpen={Boolean(selectedStatementEntryDetail)}
         onClose={() => setSelectedStatementEntryDetail(null)}
       />
@@ -697,6 +733,9 @@ function CustomerPortalShell({
         onSelectProductDetail={(prod) => setSelectedProductDetail(prod)}
         onAddToCart={handleAddToCart}
       />
+
+      {/* PWA installer chip (hidden while the cart bar owns the bottom edge). */}
+      <PwaInstallChip suppressed={cartCount > 0} />
     </div>
   );
 

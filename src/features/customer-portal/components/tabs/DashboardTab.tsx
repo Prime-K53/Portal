@@ -3,7 +3,6 @@ import {
   Activity,
   AlertTriangle,
   Award,
-  Bell,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
@@ -15,7 +14,6 @@ import {
   Landmark,
   MessageSquareQuote,
   Receipt,
-  RefreshCw,
   ShoppingBag,
   Star,
   Truck,
@@ -26,7 +24,7 @@ import {
 } from 'lucide-react';
 import { AccountProfile, DeliveryNotification, Invoice, PortalAd, PortalAdImageMeta, StatementEntry, TabType } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { usePaymentRequestsData, useUnreadNotificationCount } from '../../hooks/usePortalData';
+import { usePaymentRequestsData } from '../../hooks/usePortalData';
 import { getPaymentRequestStatusLabel, isActivePaymentRequestStatus } from '../../utils/paymentRequest';
 
 interface DashboardTabProps {
@@ -171,17 +169,6 @@ const SectionHeader: React.FC<{
 
 type IconComponent = React.ComponentType<{ className?: string }>;
 
-/** Human-friendly relative time for the data-freshness indicator. */
-function formatTimeAgo(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 5) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
-}
-
 /** Visual treatment per ledger entry type in the Recent Activity feed. */
 const ACTIVITY_TONES: Record<string, { icon: IconComponent; cls: string }> = {
   Payment: { icon: Wallet, cls: 'bg-emerald-50 text-emerald-600' },
@@ -204,10 +191,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   /** Desktop pause-on-hover for the auto-rotating banner. */
   const [isCarouselPaused, setIsCarouselPaused] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
-  const unreadNotificationsQuery = useUnreadNotificationCount();
-  const unreadCount = unreadNotificationsQuery.data ?? 0;
 
   // Active payment requests (GET /portal/payment-requests) — surfaces the
   // "under review" chip. In mock/dev mode the query errors and stays hidden.
@@ -336,7 +320,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return !Number.isNaN(due.getTime()) && due.getTime() <= dueSoonCutoff.getTime();
   });
 
-  const recentStatements = [...statements]
+  const seen = new Set<string>();
+  const uniqueStatements = statements.filter((s) => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
+  const recentStatements = [...uniqueStatements]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 4);
 
@@ -366,19 +356,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => onNavigateTab('account')}
-              className="relative p-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 rounded-xl shadow-md hover:shadow-lg transition-all"
-              aria-label={`${unreadCount} unread notifications`}
-            >
-              <Bell className="w-4 h-4" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-black min-w-[16px]">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => onNavigateTab('account')}
               className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-black rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 shrink-0"
             >
               <span>View Profile</span>
@@ -387,8 +364,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
         </div>
 
-        {/* Credit utilization bar */}
-        {profile.creditLimit && profile.creditLimit > 0 && (
+        {/* Credit utilization bar — hidden until a balance is actually drawn */}
+        {profile.creditLimit > 0 && (profile.currentBalance ?? 0) > 0 && (
           <div className="mt-1.5">
             <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
               <span>Credit Utilization</span>
@@ -408,21 +385,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
           </div>
         )}
-
-        {/* Data freshness indicator */}
-        <div className="flex items-center justify-end gap-2">
-          <span className="text-[10px] text-slate-400 font-medium">
-            Updated {formatTimeAgo(lastRefreshed)}
-          </span>
-          <button
-            type="button"
-            onClick={() => setLastRefreshed(new Date())}
-            className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-            aria-label="Refresh dashboard"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        </div>
       </div>
 
       {/* 2. Interactive Sliding Banner (real data slides — no hardcoded ad images) */}
@@ -644,7 +606,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <ChevronRight className="w-3 h-3 text-amber-400 hidden sm:block" />
               </div>
             </div>
-            <p className="text-base sm:text-xl font-extrabold font-mono text-amber-950">
+            <p className="text-xl sm:text-3xl font-extrabold font-mono text-amber-950">
               {formatCurrency(outstandingTotal)}
             </p>
             <p className="text-[10px] sm:text-[11px] text-amber-700 font-medium">
@@ -672,7 +634,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFullyPaid ? 'text-emerald-400' : 'text-amber-400'}`}
               />
             </div>
-            <p className="text-base sm:text-xl font-extrabold font-mono text-white">
+            <p className="text-xl sm:text-3xl font-extrabold font-mono text-white">
               {formatCurrency(totalPayment)}
             </p>
             <p
@@ -796,7 +758,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-md">
+          <div className="grid grid-cols-1 gap-3">
             {recentStatements.map((st) => {
               const tone = ACTIVITY_TONES[st.type] ?? ACTIVITY_DEFAULT_TONE;
               const ToneIcon = tone.icon;
@@ -806,52 +768,54 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   type="button"
                   onClick={() => onNavigateTab('statements')}
                   aria-label={`${st.type} ${st.reference}: ${st.description}. View statements.`}
-                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group focus:outline-none focus-visible:bg-slate-50"
+                  className="w-full text-left bg-white rounded-2xl border border-slate-200/80 p-4 shadow-md hover:border-slate-300 hover:shadow-lg transition-all cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
-                  {/* Type icon */}
-                  <span
-                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${tone.cls}`}
-                    aria-hidden="true"
-                  >
-                    <ToneIcon className="w-4 h-4" />
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {/* Type icon */}
+                    <span
+                      className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${tone.cls}`}
+                      aria-hidden="true"
+                    >
+                      <ToneIcon className="w-4 h-4" />
+                    </span>
 
-                  {/* Reference, type + description + date */}
-                  <span className="flex-1 min-w-0 space-y-0.5">
-                    <span className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-xs text-slate-900 truncate group-hover:text-blue-600 transition-colors">
-                        {st.reference}
+                    {/* Reference, type + description + date */}
+                    <span className="flex-1 min-w-0 space-y-0.5">
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                          {st.reference}
+                        </span>
+                        <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
+                          {st.type}
+                        </span>
                       </span>
-                      <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
-                        {st.type}
+                      <span className="block text-xs text-slate-600 font-medium line-clamp-1">
+                        {st.description}
+                      </span>
+                      <span className="block text-[11px] text-slate-400 font-medium">
+                        {formatDate(st.date)}
                       </span>
                     </span>
-                    <span className="block text-xs text-slate-600 font-medium line-clamp-1">
-                      {st.description}
-                    </span>
-                    <span className="block text-[11px] text-slate-400 font-medium">
-                      {formatDate(st.date)}
-                    </span>
-                  </span>
 
-                  {/* Amount + balance */}
-                  <span className="text-right shrink-0 flex items-center gap-1.5">
-                    <span className="block font-medium">
-                      {st.debit > 0 ? (
-                        <span className="text-xs font-black text-slate-900 block tabular-nums">
-                          +{formatCurrency(st.debit)}
+                    {/* Amount + balance */}
+                    <span className="text-right shrink-0 flex items-center gap-1.5">
+                      <span className="block font-medium">
+                        {st.debit > 0 ? (
+                          <span className="text-xs font-black text-slate-900 block tabular-nums">
+                            +{formatCurrency(st.debit)}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-black text-emerald-600 block tabular-nums">
+                            -{formatCurrency(st.credit)}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-400 block font-medium tabular-nums">
+                          Bal: {formatCurrency(st.balance)}
                         </span>
-                      ) : (
-                        <span className="text-xs font-black text-emerald-600 block tabular-nums">
-                          -{formatCurrency(st.credit)}
-                        </span>
-                      )}
-                      <span className="text-[11px] text-slate-400 block font-medium tabular-nums">
-                        Bal: {formatCurrency(st.balance)}
                       </span>
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
                     </span>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
-                  </span>
+                  </div>
                 </button>
               );
             })}

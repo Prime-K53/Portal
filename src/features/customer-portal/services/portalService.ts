@@ -397,12 +397,30 @@ function mapAd(ad: ErpPortalAd): PortalAd {
   };
 }
 
-function mapCatalogItem(item: ErpCatalogItem): Product {
+export function mapCatalogItem(item: ErpCatalogItem): Product {
+  const variants = item.variants?.filter((v) => v.active).map((v) => ({
+    id: v.id,
+    productId: v.productId,
+    name: v.name,
+    sku: v.sku ?? null,
+    attributes: v.attributes ?? {},
+    // ERP contract: an unset upstream price arrives as null and is modelled
+    // as 0 here; server-side re-pricing resolves it from ERP master data.
+    sellingPrice: v.sellingPrice ?? 0,
+    costPrice: v.costPrice ?? 0,
+    stock: v.stock,
+    active: v.active,
+  }));
+
+  const selectedVariantId = variants?.[0]?.id;
+
+  const price = selectedVariantId ? (variants.find((v) => v.id === selectedVariantId)?.sellingPrice ?? item.price) : item.price;
+
   return {
     id: item.id,
     name: item.name,
     category: item.category,
-    price: item.price,
+    price,
     unit: item.unit || 'unit',
     description: item.description ?? '',
     image: '', // ERP catalog has no image field (§16 ERP gap list)
@@ -412,6 +430,8 @@ function mapCatalogItem(item: ErpCatalogItem): Product {
     rating: undefined,
     ratingCount: undefined,
     isTopSeller: undefined,
+    variants,
+    selectedVariantId,
   };
 }
 
@@ -515,6 +535,8 @@ function mapErpReward(reward: ErpReferralReward): ReferralReward {
 function mapRequestItemToQuoteItem(item: ErpRequestLine): QuoteRequestItem {
   return {
     id: item.productId ?? item.product_id ?? `ri_${item.name ?? ''}`,
+    productId: item.productId ?? item.product_id ?? undefined,
+    variantId: item.variantId ?? item.variant_id ?? undefined,
     name: item.name ?? item.description ?? 'Item',
     quantity: item.quantity ?? item.qty ?? 1,
     targetPrice: item.unitPrice ?? item.price,
@@ -730,6 +752,7 @@ export class ErpPortalService implements PortalService {
       invoiceId: payload.invoiceId,
       requestedAmount: payload.requestedAmount,
       note: payload.note || undefined,
+      ...(payload.paymentMethod ? { paymentMethod: payload.paymentMethod } : {}),
     });
     return mapPaymentRequest(record);
   }
@@ -796,6 +819,7 @@ export class ErpPortalService implements PortalService {
           name: item.productName,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          variantId: item.variantId || undefined,
         })),
         notes,
         requestedDeliveryDate: payload.requestedDeliveryDate || undefined,
@@ -903,6 +927,8 @@ export class ErpPortalService implements PortalService {
     const request = await this.client.post<ErpRequest>('/portal/requests', {
       requestType: 'quotation',
       items: payload.items.map((item) => ({
+        productId: item.productId || undefined,
+        variantId: item.variantId || undefined,
         name: item.name,
         quantity: item.quantity,
         unitPrice: item.targetPrice,

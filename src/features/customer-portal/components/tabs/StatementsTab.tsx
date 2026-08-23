@@ -3,6 +3,10 @@ import { Calendar, CheckCircle2, ChevronRight, Clock, Download, Eye, FileSpreads
 import { AccountProfile, StatementEntry } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { exportToCSV } from '../../utils/exportUtils';
+import {
+  downloadOfficialDocument,
+  resolveStatementPeriod,
+} from '../../utils/officialDocument';
 
 interface StatementsTabProps {
   profile: AccountProfile;
@@ -47,6 +51,32 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
   const sortedFiltered = [...filteredStatements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const outstandingBalance = sortedFiltered.length > 0 ? sortedFiltered[sortedFiltered.length - 1].balance : 0;
   const isFullyPaid = outstandingBalance === 0;
+
+  // Official ERP statement PDF for the SELECTED period.
+  const [statementDownloading, setStatementDownloading] = useState(false);
+  const [statementError, setStatementError] = useState<string | null>(null);
+
+  const handleDownloadStatementPdf = async () => {
+    setStatementError(null);
+    const period =
+      dateFilter === 'custom'
+        ? resolveStatementPeriod('custom', { startDate, endDate })
+        : resolveStatementPeriod(dateFilter);
+    if (!period.from || !period.to) {
+      setStatementError('Select a period (or Custom dates) to export an official statement.');
+      return;
+    }
+    setStatementDownloading(true);
+    try {
+      await downloadOfficialDocument({
+        path: `/portal/customers/statement/document?from=${period.from}&to=${period.to}`,
+      });
+    } catch (err) {
+      setStatementError(err instanceof Error ? err.message : 'Download failed.');
+    } finally {
+      setStatementDownloading(false);
+    }
+  };
 
   const handleExportCSV = () => {
     exportToCSV(
@@ -94,6 +124,20 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
           </button>
 
           <button
+            onClick={() => { void handleDownloadStatementPdf(); }}
+            disabled={statementDownloading}
+            title="Download the official ERP statement PDF for the selected period"
+            className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
+          >
+            {statementDownloading ? (
+              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            <span>Official PDF</span>
+          </button>
+
+          <button
             onClick={onOpenStatementPrintModal}
             className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
           >
@@ -102,6 +146,12 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
           </button>
         </div>
       </div>
+
+      {statementError && (
+        <p className="text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
+          {statementError}
+        </p>
+      )}
 
       {/* Outstanding & Total Payment KPI */}
       <div className="grid grid-cols-2 gap-3">

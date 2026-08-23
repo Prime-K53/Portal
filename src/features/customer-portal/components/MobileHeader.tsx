@@ -75,9 +75,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             aria-label="Notifications"
           >
             <Bell className="w-4.5 h-4.5 text-slate-800" />
-            <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
-              {unreadCount}
-            </span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
         </div>
       </div>

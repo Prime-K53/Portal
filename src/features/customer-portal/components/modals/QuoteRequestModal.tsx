@@ -119,6 +119,8 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
               showSuggestions: false,
               activeIndex: 0,
               quantity: i.quantity < product.minOrderQty ? product.minOrderQty : i.quantity,
+              productId: product.id,
+              variantId: product.selectedVariantId || undefined,
             }
           : i
       )

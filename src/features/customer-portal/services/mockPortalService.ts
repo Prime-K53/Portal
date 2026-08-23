@@ -230,6 +230,7 @@ export class MockPortalService implements PortalService {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         total: item.total,
+        variantId: item.variantId,
       })),
     };
     this.invoices = [newInvoice, ...this.invoices];

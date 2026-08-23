@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   Download,
@@ -7,12 +7,17 @@ import {
   Receipt,
   X,
 } from 'lucide-react';
-import { AccountProfile, StatementEntry } from '../../types';
+import { AccountProfile, Invoice, Payment, StatementEntry } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { downloadOfficialDocument, findPaymentForStatementEntry } from '../../utils/officialDocument';
 
 interface StatementItemDetailModalProps {
   entry: StatementEntry | null;
   profile?: AccountProfile;
+  /** Loaded customer invoices — used to resolve official ERP documents by number. */
+  invoices?: Invoice[];
+  /** Loaded ERP payments — used to resolve official receipts for payment rows. */
+  payments?: Payment[];
   isOpen: boolean;
   onClose: () => void;
 }
@@ -20,9 +25,15 @@ interface StatementItemDetailModalProps {
 export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> = ({
   entry,
   profile,
+  invoices,
+  payments,
   isOpen,
   onClose,
 }) => {
+  // Official-document download state (ERP-authoritative PDF).
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
   if (!isOpen || !entry) return null;
 
   const companyName = profile?.companyName || 'Customer';
@@ -31,111 +42,49 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
 
   const isPayment = entry.type === 'Payment';
 
-  const handleDownload = () => {
-    // Printable / Downloadable receipt view
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${entry.type} - ${entry.reference}</title>
-          <style>
-            body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; color: #0f172a; max-width: 800px; margin: 0 auto; }
-            .header { display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; }
-            .logo { font-size: 25.5px; font-weight: 900; color: #0f172a; }
-            .badge { background: #f1f5f9; padding: 4px 12px; border-radius: 9999px; font-size: 13.5px; font-weight: 700; display: inline-block; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
-            .info-label { font-size: 11.5px; text-transform: uppercase; color: #64748b; font-weight: 800; letter-spacing: 0.05em; }
-            .info-val { font-size: 15.5px; font-weight: 700; color: #0f172a; margin-top: 2px; }
-            table { width: 100%; border-collapse: collapse; margin: 30px 0; }
-            th { text-align: left; padding: 12px; background: #f1f5f9; font-size: 12.5px; text-transform: uppercase; color: #475569; }
-            td { padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14.5px; }
-            .total-box { margin-left: auto; width: 280px; text-align: right; background: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; }
-            .total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 15.5px; }
-            .grand-total { font-size: 19.5px; font-weight: 900; color: #0f172a; border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 6px; }
-            .footer { margin-top: 50px; text-align: center; font-size: 12.5px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <div class="logo">Prime PORTAL</div>
-              <div style="font-size: 13.5px; color: #64748b; margin-top: 4px;">B2B Customer Portal — ${entry.type} Record</div>
-              <div style="font-size: 12.5px; color: #94a3b8; margin-top: 2px;">Produced from the PrimeERP system ledger</div>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-size: 21.5px; font-weight: 800; color: #0f172a;">${entry.type.toUpperCase()}</div>
-              <div style="font-size: 14.5px; font-family: monospace; font-weight: 700; color: #475569; margin-top: 2px;">${entry.reference}</div>
-              <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;">Date: ${formatDate(entry.date)}</div>
-            </div>
-          </div>
-
-          <div class="info-grid">
-            <div>
-              <div class="info-label">Customer Details</div>
-              <div class="info-val">${companyName}</div>
-              ${accountNumber ? `<div style="font-size: 13.5px; color: #475569;">Account #${accountNumber}</div>` : ''}
-              ${email ? `<div style="font-size: 13.5px; color: #475569;">${email}</div>` : ''}
-            </div>
-            <div>
-              <div class="info-label">Transaction Summary</div>
-              <div class="info-val">${entry.description}</div>
-              <div style="font-size: 13.5px; color: #475569; margin-top: 4px;">
-                Status: Verified & Recorded in Ledger
-              </div>
-            </div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Transaction Reference</th>
-                <th>Description</th>
-                <th>Type</th>
-                <th style="text-align: right;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style="font-family: monospace; font-weight: 700;">${entry.reference}</td>
-                <td>${entry.description}</td>
-                <td>${entry.type}</td>
-                <td style="text-align: right; font-weight: 800;">${formatCurrency(entry.debit || entry.credit)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="total-box">
-            <div class="total-row">
-              <span>Debit Charge:</span>
-              <span>${formatCurrency(entry.debit)}</span>
-            </div>
-            <div class="total-row">
-              <span>Credit Received:</span>
-              <span>${formatCurrency(entry.credit)}</span>
-            </div>
-            <div class="total-row grand-total">
-              <span>Ending Balance:</span>
-              <span>${formatCurrency(entry.balance)}</span>
-            </div>
-          </div>
-
-          <div class="footer">
-            <p>Official record produced by the PrimeERP system ledger.</p>
-            <p>For accounting or billing inquiries, contact your account manager.</p>
-          </div>
-
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+  const handleDownload = async () => {
+    setDownloadError(null);
+    if (isPayment) {
+      // Resolve the ERP customer_payments record this ledger row refers to,
+      // then stream the OFFICIAL receipt PDF from the ERP.
+      const payment = findPaymentForStatementEntry(entry, payments ?? []);
+      if (!payment) {
+        setDownloadError(
+          'We could not match this entry to a recorded payment. Please contact support.'
+        );
+        return;
+      }
+      setDownloading(true);
+      try {
+        await downloadOfficialDocument('receipt', payment.id);
+      } catch (err) {
+        setDownloadError(err instanceof Error ? err.message : 'Download failed.');
+      } finally {
+        setDownloading(false);
+      }
+      return;
+    }
+    if (entry.type !== 'Invoice') {
+      setDownloadError(
+        'The ERP does not yet issue an official document for this statement entry type.'
+      );
+      return;
+    }
+    const invoice = (invoices || []).find(
+      (i) => i.invoiceNumber === entry.reference || i.id === entry.reference
+    );
+    if (!invoice) {
+      setDownloadError('This invoice was not found in your account documents.');
+      return;
+    }
+    setDownloading(true);
+    try {
+      await downloadOfficialDocument('invoice', invoice.id);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'Download failed.');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -241,21 +190,34 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
         </div>
 
         {/* Modal Footer with Download / Print Button */}
-        <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs transition"
-          >
-            Close
-          </button>
+        <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 space-y-2">
+          {downloadError && (
+            <p className="text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
+              {downloadError}
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs transition"
+            >
+              Close
+            </button>
 
-          <button
-            onClick={handleDownload}
-            className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md flex items-center gap-2 transition"
-          >
-            <Download className="w-4 h-4" />
-            <span>Download {isPayment ? 'Receipt' : 'Invoice'} PDF</span>
-          </button>
+            <button
+              onClick={() => { void handleDownload(); }}
+              disabled={downloading}
+              title={downloading ? 'Downloading official ERP document…' : 'Download official ERP document (PDF)'}
+              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-extrabold text-xs shadow-md flex items-center gap-2 transition"
+            >
+              {downloading ? (
+                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>Download {isPayment ? 'Receipt' : 'Invoice'} PDF</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -27,11 +27,25 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 }) => {
   const [qty, setQty] = useState(product?.minOrderQty || 1);
   const [added, setAdded] = useState(false);
+  // Mandatory choice for variant products: start with NOTHING selected so a
+  // variant can never be silently defaulted into the cart.
+  const [selectedVariantId, setSelectedVariantId] = useState('');
 
   if (!isOpen || !product) return null;
 
+  const selectedVariant = product.variants?.find((v) => v.id === selectedVariantId);
+  const effectivePrice = selectedVariant ? selectedVariant.sellingPrice : product.price;
+  const effectiveSku = selectedVariant?.sku || product.sku;
+  const requiresVariantChoice = (product.variants?.length ?? 0) > 0 && !selectedVariant;
+
   const handleAdd = () => {
-    onAddToCart(product, qty);
+    const effectiveProduct = {
+      ...product,
+      price: effectivePrice,
+      sku: effectiveSku,
+      selectedVariantId: selectedVariantId || undefined,
+    };
+    onAddToCart(effectiveProduct, qty);
     setAdded(true);
     setTimeout(() => {
       setAdded(false);
@@ -46,7 +60,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2">
             <span className="text-[11.5px] bg-slate-200 text-slate-800 font-mono font-bold px-2 py-0.5 rounded-md border border-slate-300">
-              SKU: {product.sku}
+              SKU: {effectiveSku}
             </span>
             <span className="text-[10px] bg-blue-100 text-blue-800 font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-blue-200">
               {product.category}
@@ -67,19 +81,39 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <h3 className="text-lg font-black text-slate-900 leading-snug">{product.name}</h3>
             </div>
 
-            {/* Ratings & Stock Status */}
+            {/* Ratings */}
             <div className="flex items-center gap-3 mt-2 text-xs font-bold text-slate-600">
               <div className="flex items-center text-amber-500 font-black gap-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                 <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                 <span>{product.rating || 4.9}</span>
                 <span className="text-slate-400 font-normal">({product.ratingCount || 150} verified B2B reviews)</span>
               </div>
-              <span>•</span>
-              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                In Stock & Ready
-              </span>
             </div>
           </div>
+
+          {product.variants && product.variants.length > 0 && (
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1">
+                Select Variant <span className="text-amber-700">(required)</span>
+              </label>
+              <select
+                value={selectedVariantId}
+                onChange={(e) => setSelectedVariantId(e.target.value)}
+                className={`w-full text-xs font-bold bg-white border rounded-xl p-2.5 focus:outline-none focus:border-slate-900 ${
+                  selectedVariantId ? 'text-slate-900 border-slate-200' : 'text-slate-400 border-amber-300'
+                }`}
+              >
+                <option value="" disabled>
+                  Choose an option…
+                </option>
+                {product.variants.map((variant) => (
+                  <option key={variant.id} value={variant.id}>
+                    {variant.name} - {formatCurrency(variant.sellingPrice)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
             {product.description}
@@ -89,11 +123,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
             <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider block">Price</span>
             <div className="text-xl font-black text-slate-900">
-              {formatCurrency(product.price)} / {product.unit}
+              {formatCurrency(effectivePrice)} / {product.unit}
             </div>
-            {product.originalPrice && product.originalPrice > product.price && (
+            {product.originalPrice && product.originalPrice > effectivePrice && (
               <div className="text-[12.5px] text-emerald-700 font-extrabold">
-                Promotional Savings: Save {formatCurrency(product.originalPrice - product.price)} / {product.unit}
+                Promotional Savings: Save {formatCurrency(product.originalPrice - effectivePrice)} / {product.unit}
               </div>
             )}
           </div>
@@ -144,7 +178,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
 
               <div className="text-xs text-slate-500 font-medium">
-                Total: <span className="font-black text-slate-900 text-sm">{formatCurrency(product.price * qty)}</span>
+                Total: <span className="font-black text-slate-900 text-sm">{formatCurrency(effectivePrice * qty)}</span>
               </div>
             </div>
           </div>
@@ -161,9 +195,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
           <button
             onClick={handleAdd}
-            disabled={added}
+            disabled={added || requiresVariantChoice}
+            title={requiresVariantChoice ? 'Select a variant first' : undefined}
             className={`px-6 py-2.5 rounded-xl font-extrabold text-xs text-white shadow-md flex items-center gap-2 transition ${
-              added ? 'bg-emerald-600' : 'bg-slate-900 hover:bg-slate-800'
+              added
+                ? 'bg-emerald-600'
+                : requiresVariantChoice
+                  ? 'bg-slate-300 cursor-not-allowed'
+                  : 'bg-slate-900 hover:bg-slate-800'
             }`}
           >
             {added ? (
