@@ -10,7 +10,7 @@
  *
  * This script performs NO writes and creates NO payment requests.
  */
-const API = 'http://127.0.0.1:3000/api/portal';
+const API = 'https://primeerpsystem.onrender.com/api/portal';
 const results = [];
 let failCount = 0;
 const check = (name, pass, detail = '') => {

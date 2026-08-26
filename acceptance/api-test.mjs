@@ -1,9 +1,9 @@
 /* Sasa Portal — Phase 2 Functional Workflow Acceptance — API-level harness
- * Uses ONLY real ERP endpoints (127.0.0.1:3000). Read-only unless a safe
+ * Uses ONLY real ERP endpoints (primeerpsystem.onrender.com). Read-only unless a safe
  * staging workflow is explicitly exercised (notifications read, RFQ create +
  * cancel, quotation revision). Never records payments or modifies financials.
  */
-const BASE = 'http://127.0.0.1:3000/api/portal';
+const BASE = 'https://primeerpsystem.onrender.com/api/portal';
 
 let token = '';
 const results = [];

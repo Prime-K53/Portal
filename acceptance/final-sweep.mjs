@@ -1,5 +1,5 @@
 // Final acceptance sweep: every portal module read + tenant isolation + error isolation.
-const BASE = 'http://127.0.0.1:3000/api/portal';
+const BASE = 'https://primeerpsystem.onrender.com/api/portal';
 
 async function login(customerId, name) {
   const r = await fetch(BASE + '/auth/login', {
