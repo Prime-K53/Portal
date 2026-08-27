@@ -4,23 +4,24 @@ import {
   AlertTriangle,
   Award,
   CalendarDays,
+  Camera,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
   CreditCard,
   FileText,
+  FolderUp,
   Gift,
+  Headphones,
   Landmark,
-  Package,
   MessageSquareQuote,
+  Package,
   Receipt,
   ShoppingBag,
   Star,
   Truck,
-  Undo2,
   Wallet,
-  X,
   Zap,
 } from 'lucide-react';
 import {
@@ -63,93 +64,24 @@ function tabForCtaTarget(target: string | null): TabType | null {
   return null;
 }
 
-interface BannerSlide {
-  id: string;
-  badge: string;
-  badgeBg: string;
-  title: string;
-  subtitle: string;
-  extra?: string;
-  gradientClass?: string;
-  gradientCss?: string;
-  imageUrl?: string | null;
-  imageMeta?: PortalAdImageMeta | null;
-  emoji?: string | null;
-  ctaLabel?: string | null;
-  onCta?: () => void;
-}
-
-const BANNER_ASPECT_RATIO = 4;
-
-const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
-  const [imageFailed, setImageFailed] = useState(false);
-  const [isAtLeastWide, setIsAtLeastWide] = useState(() => {
-    const meta = slide.imageMeta;
-    if (meta && Number.isFinite(meta.width) && Number(meta.width) > 0 && Number(meta.height) > 0) {
-      return Number(meta.width) / Number(meta.height) >= BANNER_ASPECT_RATIO;
-    }
-    return true;
-  });
-
-  const gradientLayer = slide.gradientCss ? (
-    <div className="absolute inset-0 z-0" style={{ background: slide.gradientCss }} />
-  ) : (
-    <div
-      className={`absolute inset-0 z-0 bg-gradient-to-r ${
-        slide.gradientClass ?? 'from-slate-900 via-indigo-950 to-slate-900'
-      }`}
-    />
-  );
-
-  return (
-    <>
-      {gradientLayer}
-      {slide.imageUrl && !imageFailed && (
-        <img
-          src={slide.imageUrl}
-          alt={slide.title}
-          onError={() => setImageFailed(true)}
-          onLoad={(e) => {
-            const { naturalWidth, naturalHeight } = e.currentTarget;
-            setIsAtLeastWide(
-              naturalHeight > 0 && naturalWidth / naturalHeight >= BANNER_ASPECT_RATIO
-            );
-          }}
-          className={`absolute inset-0 z-0 w-full h-full ${
-            isAtLeastWide ? 'object-cover' : 'object-contain'
-          }`}
-        />
-      )}
-    </>
-  );
+const ORDER_STATUS_STYLES: Record<string, { label: string; dot: string; bg: string }> = {
+  pending: { label: 'Pending', dot: 'bg-amber-500', bg: 'bg-amber-50 text-amber-700' },
+  processing: { label: 'Processing', dot: 'bg-blue-500', bg: 'bg-blue-50 text-blue-700' },
+  confirmed: { label: 'Confirmed', dot: 'bg-indigo-500', bg: 'bg-indigo-50 text-indigo-700' },
+  shipped: { label: 'Shipped', dot: 'bg-purple-500', bg: 'bg-purple-50 text-purple-700' },
+  delivered: { label: 'Delivered', dot: 'bg-emerald-500', bg: 'bg-emerald-50 text-emerald-700' },
+  cancelled: { label: 'Cancelled', dot: 'bg-slate-400', bg: 'bg-slate-100 text-slate-600' },
+  draft: { label: 'Draft', dot: 'bg-slate-300', bg: 'bg-slate-50 text-slate-500' },
+  fulfilled: { label: 'Fulfilled', dot: 'bg-emerald-600', bg: 'bg-emerald-50 text-emerald-700' },
 };
 
-type IconComponent = React.ComponentType<{ className?: string }>;
-
-const ACTIVITY_TONES: Record<string, { icon: IconComponent; cls: string }> = {
-  Payment: { icon: Wallet, cls: 'bg-emerald-50 text-emerald-600' },
-  'Credit Note': { icon: Undo2, cls: 'bg-amber-50 text-amber-600' },
-};
-const ACTIVITY_DEFAULT_TONE = { icon: FileText, cls: 'bg-slate-100 text-slate-600' };
-
-const ORDER_STATUS_STYLES: Record<string, { label: string; dot: string }> = {
-  pending: { label: 'Pending', dot: 'bg-amber-500' },
-  processing: { label: 'Processing', dot: 'bg-blue-500' },
-  confirmed: { label: 'Confirmed', dot: 'bg-indigo-500' },
-  shipped: { label: 'Shipped', dot: 'bg-purple-500' },
-  delivered: { label: 'Delivered', dot: 'bg-emerald-500' },
-  cancelled: { label: 'Cancelled', dot: 'bg-slate-400' },
-  draft: { label: 'Draft', dot: 'bg-slate-300' },
-  fulfilled: { label: 'Fulfilled', dot: 'bg-emerald-600' },
-};
-
-const DELIVERY_STATUS_STYLES: Record<string, { label: string; dot: string }> = {
-  order_placed: { label: 'Placed', dot: 'bg-slate-400' },
-  processing: { label: 'Processing', dot: 'bg-blue-500' },
-  dispatched: { label: 'Dispatched', dot: 'bg-indigo-500' },
-  out_for_delivery: { label: 'In Transit', dot: 'bg-purple-500' },
-  delivered: { label: 'Delivered', dot: 'bg-emerald-500' },
-  delayed: { label: 'Delayed', dot: 'bg-rose-500' },
+const DELIVERY_STATUS_STYLES: Record<string, { label: string; dot: string; bg: string }> = {
+  order_placed: { label: 'Placed', dot: 'bg-slate-400', bg: 'bg-slate-100 text-slate-600' },
+  processing: { label: 'Processing', dot: 'bg-blue-500', bg: 'bg-blue-50 text-blue-700' },
+  dispatched: { label: 'Dispatched', dot: 'bg-indigo-500', bg: 'bg-indigo-50 text-indigo-700' },
+  out_for_delivery: { label: 'In Transit', dot: 'bg-purple-500', bg: 'bg-purple-50 text-purple-700' },
+  delivered: { label: 'Delivered', dot: 'bg-emerald-500', bg: 'bg-emerald-50 text-emerald-700' },
+  delayed: { label: 'Delayed', dot: 'bg-rose-500', bg: 'bg-rose-50 text-rose-700' },
 };
 
 function getGreeting(): string {
@@ -175,6 +107,18 @@ function timeAgo(dateStr: string): string {
   return formatDate(dateStr);
 }
 
+function formatTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function formatDateTimeShort(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${formatDate(dateStr)}, ${formatTime(dateStr)}`;
+}
+
 export const DashboardTab: React.FC<DashboardTabProps> = ({
   profile,
   invoices,
@@ -186,129 +130,45 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onOpenPaymentModal,
   onNavigateInvoices,
 }) => {
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [slideDirection, setSlideDirection] = useState<'next' | 'prev'>('next');
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
-  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
-
+  // ── Data derivations ──────────────────────────────────────────────────
   const paymentRequestsQuery = usePaymentRequestsData(true);
   const paymentRequests = paymentRequestsQuery.data ?? [];
   const activePaymentRequest = paymentRequests.find((r) => isActivePaymentRequestStatus(r.status));
 
-  // ── Banner slides ──────────────────────────────────────────────────────
-  const bannerSlides: BannerSlide[] = [
-    {
-      id: 'slide_welcome',
-      badge: '👋 WELCOME BACK',
-      badgeBg: 'bg-amber-400 text-slate-950',
-      title: `Welcome back, ${profile.customerName}`,
-      subtitle: `Account ID: ${profile.accountNumber} • ${profile.tier || 'Standard'} Tier`,
-      gradientClass: 'from-slate-900 via-indigo-950 to-slate-900',
-    },
-  ];
-
-  ads.forEach((ad) => {
-    const ctaTab = tabForCtaTarget(ad.ctaTarget);
-    bannerSlides.push({
-      id: `slide_ad_${ad.id}`,
-      badge: ad.badge ?? 'PROMOTION',
-      badgeBg: 'bg-white/20 text-white backdrop-blur-md',
-      title: ad.title || 'Special Offer',
-      subtitle: ad.subtitle ?? '',
-      gradientCss: ad.gradient ?? undefined,
-      imageUrl: ad.imageUrl,
-      imageMeta: ad.imageMeta,
-      emoji: ad.emoji,
-      ctaLabel: ad.ctaLabel,
-      onCta: ctaTab ? () => onNavigateTab(ctaTab) : undefined,
-    });
-  });
-
-  if (deliveries.length > 0) {
-    const latest = deliveries[0];
-    bannerSlides.push({
-      id: 'slide_delivery',
-      badge: '🚚 LIVE SHIPMENT UPDATE',
-      badgeBg: 'bg-sky-400 text-slate-950',
-      title: `Order ${latest.orderId} is ${latest.status === 'delivered' ? 'Delivered' : 'in Transit'}`,
-      subtitle: `Tracking #: ${latest.trackingNumber}`,
-      extra: latest.estimatedArrival
-        ? `Est. Arrival: ${latest.estimatedArrival}${latest.driverName ? ` • Driver: ${latest.driverName}` : ''}`
-        : '',
-      gradientClass: 'from-slate-950 via-sky-950 to-slate-900',
-    });
-  }
-
-  useEffect(() => {
-    if (isCarouselPaused || bannerSlides.length <= 1) return;
-    const timer = setInterval(() => {
-      setSlideDirection('next');
-      setCurrentSlide((prev) => (prev + 1) % bannerSlides.length);
-    }, 4500);
-    return () => clearInterval(timer);
-  }, [bannerSlides.length, isCarouselPaused]);
-
-  const activeSlide = bannerSlides[Math.min(currentSlide, bannerSlides.length - 1)];
-
-  const goNext = () => {
-    setSlideDirection('next');
-    setCurrentSlide((prev) => (prev + 1) % bannerSlides.length);
-  };
-
-  const goPrev = () => {
-    setSlideDirection('prev');
-    setCurrentSlide((prev) => (prev - 1 + bannerSlides.length) % bannerSlides.length);
-  };
-
-  const goToSlide = (target: number) => {
-    setSlideDirection(target > currentSlide ? 'next' : 'prev');
-    setCurrentSlide(target);
-  };
-
-  const dismissAlert = (id: string) => setDismissedAlerts((prev) => [...prev, id]);
-  const isAlertDismissed = (id: string) => dismissedAlerts.includes(id);
-
-  const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX === null) return;
-    const diff = touchStartX - e.changedTouches[0].clientX;
-    if (diff > 40) goNext();
-    else if (diff < -40) goPrev();
-    setTouchStartX(null);
-  };
-
-  // ── Financial data ─────────────────────────────────────────────────────
-  const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
-  const payableInvoices = invoices.filter(
-    (i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid'
-  );
-  const outstandingTotal = payableInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
-  const isFullyPaid = outstandingTotal === 0;
   const overdueInvoices = invoices.filter((i) => i.status === 'overdue');
-  const overdueTotal = overdueInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
-
-  const dueSoonCutoff = new Date();
-  dueSoonCutoff.setDate(dueSoonCutoff.getDate() + 7);
-  const dueSoonInvoices = payableInvoices.filter((i) => {
-    if (i.status === 'overdue') return false;
-    const due = new Date(i.dueDate);
-    return !Number.isNaN(due.getTime()) && due.getTime() <= dueSoonCutoff.getTime();
-  });
-
-  // Invoice counts by status
+  const unpaidInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid');
   const paidInvoices = invoices.filter((i) => i.status === 'paid');
+  const draftInvoices = invoices.filter((i) => i.status === 'draft');
   const partialInvoices = invoices.filter((i) => i.status === 'partially_paid');
 
-  // ── Active orders (non-terminal) ───────────────────────────────────────
+  const outstandingTotal = unpaidInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
+  const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
+
+  // Due this month
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const dueThisMonth = unpaidInvoices.filter((i) => {
+    const d = new Date(i.dueDate);
+    return !Number.isNaN(d.getTime()) && d.getTime() >= startOfMonth.getTime() && d.getTime() <= endOfMonth.getTime();
+  });
+  const dueThisMonthTotal = dueThisMonth.reduce((sum, i) => sum + i.amountRemaining, 0);
+
+  // Last payment
+  const paymentStatements = statements
+    .filter((s) => s.type === 'Payment' && s.credit > 0)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const lastPayment = paymentStatements.length > 0 ? paymentStatements[0] : null;
+
+  // Active orders (non-terminal)
   const activeOrders = orders.filter(
     (o) => !['delivered', 'cancelled', 'fulfilled'].includes(o.status)
   );
 
-  // ── Active deliveries ──────────────────────────────────────────────────
+  // Active deliveries
   const activeDeliveries = deliveries.filter((d) => d.status !== 'delivered');
 
-  // ── Recent statements ──────────────────────────────────────────────────
+  // Recent statements for activity
   const seen = new Set<string>();
   const uniqueStatements = statements.filter((s) => {
     if (seen.has(s.id)) return false;
@@ -317,411 +177,221 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   });
   const recentStatements = [...uniqueStatements]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 5);
+    .slice(0, 4);
 
-  // ── Account snapshot data ──────────────────────────────────────────────
-  const availableCredit = (profile.creditLimit || 0) - (profile.currentBalance || 0);
-  const hasCreditData = profile.creditLimit > 0;
+  // Quick actions
+  const quickActions = [
+    { key: 'pay', label: 'Pay Invoice', icon: CreditCard, chip: 'bg-blue-50 text-blue-600', go: onOpenPaymentModal },
+    { key: 'order', label: 'New Order', icon: ShoppingBag, chip: 'bg-emerald-50 text-emerald-600', go: () => onNavigateTab('orders') },
+    { key: 'quote', label: 'Get Quote', icon: MessageSquareQuote, chip: 'bg-purple-50 text-purple-600', go: () => onNavigateTab('quotes') },
+    { key: 'track', label: 'Track Delivery', icon: Truck, chip: 'bg-sky-50 text-sky-600', go: () => onNavigateTab('deliveries') },
+    { key: 'stmts', label: 'Statements', icon: Receipt, chip: 'bg-indigo-50 text-indigo-600', go: () => onNavigateTab('statements') },
+    { key: 'refer', label: 'Refer Business', icon: Gift, chip: 'bg-amber-50 text-amber-600', go: () => onNavigateTab('referrals') },
+    { key: 'support', label: 'Support', icon: Headphones, chip: 'bg-rose-50 text-rose-600', go: () => onNavigateTab('account') },
+    { key: 'upload', label: 'Upload Document', icon: FolderUp, chip: 'bg-slate-100 text-slate-600', go: () => onNavigateTab('account') },
+  ];
+
+  const isFullyPaid = outstandingTotal === 0;
 
   return (
     <div className="space-y-5 pb-24 text-slate-900 animate-fade-in">
-      {/* ═══ 1. HEADER — Customer Identity ═══════════════════════════════════ */}
+
+      {/* ═══ 1. HEADER — Company Identity ═══════════════════════════════════ */}
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-lg font-black text-slate-900 tracking-tight leading-tight">
-            {profile.customerName || 'Account'}
-          </h1>
-          <div className="flex items-center gap-2 mt-0.5">
-            {profile.accountNumber && (
-              <span className="text-xs font-mono font-bold text-slate-500">
-                {profile.accountNumber}
-              </span>
-            )}
-            {profile.tier && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 to-amber-50/80 border border-amber-200 text-amber-900 text-[10px] font-black shadow-xs">
-                <Award className="w-3 h-3 text-amber-600 fill-amber-500" />
-                {profile.tier}
-              </span>
-            )}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+            <span className="text-sm font-black tracking-tight">
+              {profile.companyName?.substring(0, 2).toUpperCase() || 'PE'}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg font-black text-slate-900 tracking-tight leading-tight truncate">
+              {profile.companyName || profile.customerName || 'Account'}
+            </h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              {profile.accountNumber && (
+                <span className="text-xs text-slate-500 font-medium">
+                  Customer ID: <span className="font-bold text-slate-700">{profile.accountNumber}</span>
+                </span>
+              )}
+              {profile.tier && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
+                  {profile.tier}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <button
           onClick={() => onNavigateTab('account')}
-          className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1 shrink-0"
-          aria-label="View profile"
+          className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 shrink-0"
         >
-          Profile
-          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          View Profile
+          <ChevronRight className="w-4 h-4 text-slate-400" />
         </button>
       </div>
 
-      {/* ═══ 2. BANNER — Ads / Live Shipment ═════════════════════════════════ */}
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onMouseEnter={() => setIsCarouselPaused(true)}
-        onMouseLeave={() => setIsCarouselPaused(false)}
-        onFocus={() => setIsCarouselPaused(true)}
-        onBlur={() => setIsCarouselPaused(false)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
-          if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
-        }}
-        role="region"
-        aria-roledescription="carousel"
-        aria-live="polite"
-        aria-label="Announcements and account updates"
-        tabIndex={bannerSlides.length > 1 ? 0 : -1}
-        className="relative overflow-hidden rounded-2xl aspect-[4/1] w-full bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
-      >
-        <div
-          key={activeSlide.id}
-          className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
-        >
-          <BannerBackground slide={activeSlide} />
-          <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px] z-0" />
-          {(activeSlide.title || activeSlide.subtitle || activeSlide.emoji || activeSlide.onCta) && (
-            <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
-              <div className="w-full px-5 sm:px-7 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
-                  <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
-                    {activeSlide.emoji ? (
-                      <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
-                    ) : (
-                      <Star className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white/80" />
-                    )}
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    {activeSlide.badge && (
-                      <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] text-white/70">
-                        {activeSlide.badge}
-                      </p>
-                    )}
-                    {activeSlide.title && (
-                      <h2 className="text-base sm:text-xl font-black text-white tracking-tight leading-snug drop-shadow-md truncate">
-                        {activeSlide.title}
-                      </h2>
-                    )}
-                    {activeSlide.subtitle && (
-                      <p className="text-xs sm:text-sm text-white/80 font-medium drop-shadow-sm line-clamp-2">
-                        {activeSlide.subtitle}
-                      </p>
-                    )}
-                    {activeSlide.extra && (
-                      <p className="text-[11px] sm:text-xs text-amber-300 font-semibold pt-0.5 drop-shadow-sm">
-                        {activeSlide.extra}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {activeSlide.onCta && activeSlide.ctaLabel && (
-                  <button
-                    onClick={activeSlide.onCta}
-                    className="shrink-0 flex items-center gap-1 text-xs font-black text-white hover:text-white/80 transition-colors"
-                  >
-                    <span>{activeSlide.ctaLabel}</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+      {/* ═══ 2. WELCOME BANNER ═══════════════════════════════════════════════ */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-50 border border-slate-200/80 p-6">
+        <div className="relative z-10 max-w-[70%]">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-2xl">☀️</span>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              {getGreeting()}, {profile.customerName || 'there'}
+            </h2>
+          </div>
+          <p className="text-sm text-slate-500 font-medium mb-2">Here's your account overview.</p>
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+            <Clock className="w-3.5 h-3.5" />
+            Last updated: Just now
+          </div>
         </div>
-        {bannerSlides.length > 1 && (
-          <div
-            role="tablist"
-            aria-label="Slide selector"
-            className="hidden lg:flex absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 gap-1.5"
+        {/* Decorative illustration placeholder */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-20 hidden sm:block">
+          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-indigo-400" />
+        </div>
+      </div>
+
+      {/* ═══ 3. ACCOUNT SUMMARY — 4 cards ═════════════════════════════════════ */}
+      <div>
+        <div className="flex items-center justify-between mb-3 px-0.5">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Account Summary</h3>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('statements')}
+            className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
           >
-            {bannerSlides.map((slide, idx) => (
-              <button
-                key={`dot_${slide.id}`}
-                type="button"
-                role="tab"
-                aria-selected={idx === currentSlide}
-                aria-label={`Go to slide ${idx + 1} of ${bannerSlides.length}`}
-                onClick={() => goToSlide(idx)}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  idx === currentSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'
-                }`}
-              />
-            ))}
+            View statements <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {/* Outstanding Balance */}
+          <button
+            type="button"
+            onClick={() => onNavigateInvoices?.('unpaid')}
+            className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Outstanding Balance</p>
+            <p className="text-base font-extrabold font-mono text-slate-900 leading-tight">{formatCurrency(outstandingTotal)}</p>
+            {overdueInvoices.length > 0 ? (
+              <p className="text-[10px] font-bold text-rose-600 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {overdueInvoices.length} Overdue invoice{overdueInvoices.length > 1 ? 's' : ''}
+              </p>
+            ) : (
+              <p className="text-[10px] text-slate-400 mt-1">No overdue</p>
+            )}
+          </button>
+
+          {/* Due This Month */}
+          <div className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Due This Month</p>
+              <CalendarDays className="w-4 h-4 text-slate-300" />
+            </div>
+            <p className="text-base font-extrabold font-mono text-slate-900 leading-tight">{formatCurrency(dueThisMonthTotal)}</p>
+            <p className="text-[10px] text-slate-400 mt-1">
+              {dueThisMonth.length} Invoice{dueThisMonth.length === 1 ? '' : 's'}
+            </p>
           </div>
-        )}
+
+          {/* Total Paid */}
+          <div className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Paid</p>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            </div>
+            <p className="text-base font-extrabold font-mono text-emerald-600 leading-tight">{formatCurrency(totalPayment)}</p>
+            <p className="text-[10px] text-slate-400 mt-1">All time</p>
+          </div>
+
+          {/* Last Payment */}
+          <div className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Last Payment</p>
+              <Clock className="w-4 h-4 text-slate-300" />
+            </div>
+            {lastPayment ? (
+              <>
+                <p className="text-base font-extrabold font-mono text-slate-900 leading-tight">{formatCurrency(lastPayment.credit)}</p>
+                <p className="text-[10px] text-slate-400 mt-1">{formatDate(lastPayment.date)}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-extrabold font-mono text-slate-400 leading-tight">{formatCurrency(0)}</p>
+                <p className="text-[10px] text-slate-400 mt-1">No payments</p>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* ═══ 3. ATTENTION STRIP ═══════════════════════════════════════════════ */}
-      {(overdueInvoices.length > 0 || dueSoonInvoices.length > 0 || activePaymentRequest) && (
-        <div className="flex flex-wrap gap-2" aria-label="Items needing attention">
-          {overdueInvoices.length > 0 && !isAlertDismissed('overdue') && (
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => onNavigateInvoices?.('overdue')}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateInvoices?.('overdue'); }}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold shadow-xs hover:bg-rose-100 transition-colors cursor-pointer"
-            >
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>
-                {formatCurrency(overdueTotal)} overdue · {overdueInvoices.length} invoice{overdueInvoices.length === 1 ? '' : 's'}
-              </span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => { e.stopPropagation(); dismissAlert('overdue'); }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); dismissAlert('overdue'); } }}
-                className="shrink-0 p-0.5 rounded hover:bg-rose-200 text-rose-500 hover:text-rose-700 transition-colors cursor-pointer"
-                aria-label="Dismiss overdue alert"
-              >
-                <X className="w-3 h-3" />
-              </span>
-            </div>
-          )}
-          {dueSoonInvoices.length > 0 && !isAlertDismissed('due-soon') && (
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => onNavigateInvoices?.('unpaid')}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateInvoices?.('unpaid'); }}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold shadow-xs hover:bg-amber-100 transition-colors cursor-pointer"
-            >
-              <CalendarDays className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>
-                {dueSoonInvoices.length} due within 7 days ·{' '}
-                {formatCurrency(dueSoonInvoices.reduce((sum, i) => sum + i.amountRemaining, 0))}
-              </span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => { e.stopPropagation(); dismissAlert('due-soon'); }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); dismissAlert('due-soon'); } }}
-                className="shrink-0 p-0.5 rounded hover:bg-amber-200 text-amber-500 hover:text-amber-700 transition-colors cursor-pointer"
-                aria-label="Dismiss due soon alert"
-              >
-                <X className="w-3 h-3" />
-              </span>
-            </div>
-          )}
-          {activePaymentRequest && !isAlertDismissed('payment-request') && (
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => onNavigateTab('invoices')}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateTab('invoices'); }}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 text-xs font-bold shadow-xs hover:bg-sky-100 transition-colors cursor-pointer"
-            >
-              <Landmark className="w-4 h-4 text-sky-600 shrink-0" />
-              <span>
-                Payment request {activePaymentRequest.requestNumber} ·{' '}
-                {getPaymentRequestStatusLabel(activePaymentRequest.status)}
-                {activePaymentRequest.requestedAmount > 0 && ` · ${formatCurrency(activePaymentRequest.requestedAmount)}`}
-              </span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => { e.stopPropagation(); dismissAlert('payment-request'); }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); dismissAlert('payment-request'); } }}
-                className="shrink-0 p-0.5 rounded hover:bg-sky-200 text-sky-500 hover:text-sky-700 transition-colors cursor-pointer"
-                aria-label="Dismiss payment request alert"
-              >
-                <X className="w-3 h-3" />
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ═══ 4. FINANCIAL SUMMARY — Account Balance ═══════════════════════════ */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-4 pt-4 pb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex p-1.5 rounded-lg bg-slate-100" aria-hidden="true">
-              <Landmark className="w-4 h-4 text-slate-600" />
-            </span>
-            <h3 className="text-sm font-black text-slate-900 tracking-tight">Account Balance</h3>
-          </div>
-          {invoices.length > 0 && (
-            <button
-              type="button"
-              onClick={() => onNavigateTab('invoices')}
-              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
-            >
-              View invoices <ChevronRight className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-
-        <div className="px-4 pb-4">
-          {isFullyPaid && invoices.length === 0 ? (
-            <div className="text-center py-4">
-              <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-1.5" />
-              <p className="text-sm font-bold text-slate-700">No outstanding balance</p>
-              <p className="text-xs text-slate-500">You're all caught up.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {/* Outstanding */}
-              <button
-                type="button"
-                onClick={() => onNavigateInvoices?.('unpaid')}
-                className="text-left p-3 rounded-xl bg-amber-50 border border-amber-200/80 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                aria-label={`Outstanding balance ${formatCurrency(outstandingTotal)}`}
-              >
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Outstanding</p>
-                <p className="text-base sm:text-lg font-extrabold font-mono text-amber-950 leading-tight">
-                  {formatCurrency(outstandingTotal)}
-                </p>
-                <p className="text-[10px] text-amber-700 font-medium mt-0.5">
-                  {isFullyPaid ? 'No unpaid balance' : `${payableInvoices.length} open`}
-                </p>
-              </button>
-
-              {/* Total Paid */}
-              <div className="text-left p-3 rounded-xl bg-emerald-50 border border-emerald-200/80">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-1">Total Paid</p>
-                <p className="text-base sm:text-lg font-extrabold font-mono text-emerald-900 leading-tight">
-                  {formatCurrency(totalPayment)}
-                </p>
-                <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
-                  {paidInvoices.length} invoice{paidInvoices.length === 1 ? '' : 's'}
-                </p>
-              </div>
-
-              {/* Invoice Count */}
-              <button
-                type="button"
-                onClick={() => onNavigateTab('invoices')}
-                className="text-left p-3 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
-                aria-label={`${invoices.length} total invoices`}
-              >
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Invoices</p>
-                <p className="text-base sm:text-lg font-extrabold font-mono text-slate-900 leading-tight">
-                  {invoices.length}
-                </p>
-                <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                  {overdueInvoices.length > 0 && (
-                    <span className="text-rose-600 font-bold">{overdueInvoices.length} overdue</span>
-                  )}
-                  {overdueInvoices.length === 0 && partialInvoices.length > 0 && (
-                    <span className="text-amber-600">{partialInvoices.length} partial</span>
-                  )}
-                  {overdueInvoices.length === 0 && partialInvoices.length === 0 && 'All time'}
-                </p>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Credit utilization — only when meaningful */}
-        {hasCreditData && outstandingTotal > 0 && (
-          <div className="px-4 pb-4">
-            <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-              <span>Credit Utilization</span>
-              <span>{Math.round(((profile.currentBalance ?? 0) / profile.creditLimit) * 100)}%</span>
-            </div>
-            <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  (profile.currentBalance ?? 0) >= profile.creditLimit
-                    ? 'bg-rose-500'
-                    : (profile.currentBalance ?? 0) / profile.creditLimit > 0.8
-                      ? 'bg-amber-500'
-                      : 'bg-emerald-500'
-                }`}
-                style={{ width: `${Math.min(100, ((profile.currentBalance ?? 0) / profile.creditLimit) * 100)}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ═══ 5. QUICK ACTIONS — compact list cards ═══════════════════════════ */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-2.5 px-0.5">Quick Actions</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {[
-            {
-              key: 'pay',
-              label: 'Pay Invoice',
-              count: payableInvoices.length,
-              icon: CreditCard,
-              chip: 'bg-blue-50 text-blue-600 group-hover:bg-blue-100',
-              go: onOpenPaymentModal,
-            },
-            {
-              key: 'order',
-              label: 'New Order',
-              count: null,
-              icon: ShoppingBag,
-              chip: 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100',
-              go: () => onNavigateTab('orders'),
-            },
-            {
-              key: 'quote',
-              label: 'Get Quote',
-              count: null,
-              icon: MessageSquareQuote,
-              chip: 'bg-purple-50 text-purple-600 group-hover:bg-purple-100',
-              go: () => onNavigateTab('quotes'),
-            },
-            {
-              key: 'track',
-              label: 'Track',
-              count: deliveries.length,
-              icon: Truck,
-              chip: 'bg-sky-50 text-sky-600 group-hover:bg-sky-100',
-              go: () => onNavigateTab('deliveries'),
-            },
-            {
-              key: 'refer',
-              label: 'Refer',
-              count: null,
-              icon: Gift,
-              chip: 'bg-amber-50 text-amber-600 group-hover:bg-amber-100',
-              go: () => onNavigateTab('referrals'),
-            },
-            {
-              key: 'stmts',
-              label: 'Statements',
-              count: statements.length > 0 ? statements.length : null,
-              icon: Receipt,
-              chip: 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100',
-              go: () => onNavigateTab('statements'),
-            },
-          ].map(({ key, label, count, icon: Icon, chip, go }) => (
+      {/* ═══ 4. QUICK ACTIONS — 4×2 grid ═════════════════════════════════════ */}
+      <div>
+        <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 px-0.5">Quick Actions</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {quickActions.map(({ key, label, icon: Icon, chip, go }) => (
             <button
               key={key}
               type="button"
               onClick={go}
-              aria-label={count !== null ? `${label} (${count})` : label}
-              className="group px-2.5 py-2 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all flex items-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 min-w-0"
+              aria-label={label}
+              className="group px-3 py-2.5 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all flex items-center gap-2.5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 min-w-0"
             >
               <span className={`shrink-0 p-1.5 rounded-lg transition-colors ${chip}`} aria-hidden="true">
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-4 h-4" />
               </span>
-              <span className="flex-1 min-w-0 text-[11.5px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors truncate text-left">
+              <span className="text-[11.5px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors truncate text-left">
                 {label}
               </span>
-              {count !== null && count > 0 && (
-                <span className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-black min-w-[16px]">
-                  {count}
-                </span>
-              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ═══ 6. ACTIVE ORDERS ═════════════════════════════════════════════════ */}
-      {activeOrders.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2.5 px-0.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex p-1.5 rounded-lg bg-indigo-50" aria-hidden="true">
-                <Package className="w-4 h-4 text-indigo-600" />
-              </span>
-              <h3 className="text-sm font-black text-slate-900 tracking-tight">Active Orders</h3>
+      {/* ═══ 5. THREE COLUMN — Invoices / Orders / Deliveries ═══════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* ── Invoices Overview ──────────────────────────────────────────── */}
+        <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Invoices Overview</h3>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('invoices')}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
+            >
+              View all <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="px-4 pb-4 space-y-1.5">
+            {[
+              { label: 'Outstanding', count: unpaidInvoices.length, amount: outstandingTotal, dot: 'bg-amber-500', amountClass: 'text-slate-900' },
+              { label: 'Overdue', count: overdueInvoices.length, amount: overdueInvoices.reduce((s, i) => s + i.amountRemaining, 0), dot: 'bg-rose-500', amountClass: 'text-rose-600' },
+              { label: 'Due This Month', count: dueThisMonth.length, amount: dueThisMonthTotal, dot: 'bg-orange-500', amountClass: 'text-orange-600' },
+              { label: 'Paid', count: paidInvoices.length, amount: totalPayment, dot: 'bg-emerald-500', amountClass: 'text-emerald-600' },
+              { label: 'Draft', count: draftInvoices.length, amount: draftInvoices.reduce((s, i) => s + i.amountRemaining, 0), dot: 'bg-slate-300', amountClass: 'text-slate-500' },
+            ].map(({ label, count, amount, dot, amountClass }) => (
+              <div key={label} className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${dot}`} />
+                  <span className="text-xs font-medium text-slate-600">{label}</span>
+                  <span className="text-xs font-bold text-slate-900">{count}</span>
+                </div>
+                <span className={`text-xs font-bold font-mono ${amountClass}`}>{formatCurrency(amount)}</span>
+              </div>
+            ))}
+            <div className="border-t border-slate-100 pt-2 mt-2 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-600">Total Invoices</span>
+              <span className="text-xs font-black text-slate-900">{invoices.length}</span>
             </div>
+          </div>
+        </div>
+
+        {/* ── Active Orders ──────────────────────────────────────────────── */}
+        <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Active Orders</h3>
             <button
               type="button"
               onClick={() => onNavigateTab('orders')}
@@ -730,49 +400,42 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               View all <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="space-y-2">
-            {activeOrders.slice(0, 3).map((order) => {
-              const status = ORDER_STATUS_STYLES[order.status] ?? { label: order.status, dot: 'bg-slate-400' };
-              return (
-                <button
-                  key={order.id}
-                  type="button"
-                  onClick={() => onNavigateTab('orders')}
-                  className="w-full flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${status.dot}`} aria-hidden="true" />
-                    <div className="min-w-0 text-left">
-                      <p className="text-xs font-bold text-slate-900 font-mono truncate group-hover:text-blue-600 transition-colors">
+          <div className="px-4 pb-4 space-y-2">
+            {activeOrders.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">No active orders</p>
+            ) : (
+              activeOrders.slice(0, 3).map((order) => {
+                const st = ORDER_STATUS_STYLES[order.status] ?? { label: order.status, dot: 'bg-slate-400', bg: 'bg-slate-100 text-slate-600' };
+                return (
+                  <button
+                    key={order.id}
+                    type="button"
+                    onClick={() => onNavigateTab('orders')}
+                    className="w-full flex items-center gap-3 p-2.5 bg-slate-50/80 rounded-lg hover:bg-slate-100 transition-all cursor-pointer group"
+                  >
+                    <span className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                      <ShoppingBag className="w-4 h-4 text-emerald-600" />
+                    </span>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-bold font-mono text-blue-600 truncate group-hover:text-blue-700 transition-colors">
                         {order.orderNumber}
                       </p>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        {order.items.length} item{order.items.length === 1 ? '' : 's'}
-                        {order.estimatedDelivery && ` · Est. ${formatDate(order.estimatedDelivery)}`}
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        {order.items.length} item{order.items.length === 1 ? '' : 's'} · {formatCurrency(order.totalAmount)}
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] font-bold text-slate-500">{status.label}</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
-                  </div>
-                </button>
-              );
-            })}
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
-      )}
 
-      {/* ═══ 7. ACTIVE DELIVERIES ═════════════════════════════════════════════ */}
-      {activeDeliveries.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2.5 px-0.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex p-1.5 rounded-lg bg-sky-50" aria-hidden="true">
-                <Truck className="w-4 h-4 text-sky-600" />
-              </span>
-              <h3 className="text-sm font-black text-slate-900 tracking-tight">Shipments in Progress</h3>
-            </div>
+        {/* ── Recent Deliveries ──────────────────────────────────────────── */}
+        <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Recent Deliveries</h3>
             <button
               type="button"
               onClick={() => onNavigateTab('deliveries')}
@@ -781,49 +444,46 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               View all <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="space-y-2">
-            {activeDeliveries.slice(0, 3).map((d) => {
-              const status = DELIVERY_STATUS_STYLES[d.status] ?? { label: d.status, dot: 'bg-slate-400' };
-              return (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => onNavigateTab('deliveries')}
-                  className="w-full flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${status.dot}`} aria-hidden="true" />
-                    <div className="min-w-0 text-left">
-                      <p className="text-xs font-bold text-slate-900 font-mono truncate group-hover:text-blue-600 transition-colors">
+          <div className="px-4 pb-4 space-y-2">
+            {deliveries.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">No recent deliveries</p>
+            ) : (
+              deliveries.slice(0, 3).map((d) => {
+                const st = DELIVERY_STATUS_STYLES[d.status] ?? { label: d.status, dot: 'bg-slate-400', bg: 'bg-slate-100 text-slate-600' };
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => onNavigateTab('deliveries')}
+                    className="w-full flex items-center gap-3 p-2.5 bg-slate-50/80 rounded-lg hover:bg-slate-100 transition-all cursor-pointer group"
+                  >
+                    <span className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center shrink-0">
+                      <Truck className="w-4 h-4 text-sky-600" />
+                    </span>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-bold font-mono text-blue-600 truncate group-hover:text-blue-700 transition-colors">
                         {d.trackingNumber}
                       </p>
-                      <p className="text-[11px] text-slate-500 font-medium">
+                      <p className="text-[10px] text-slate-500 font-medium">
                         {d.title || `Order ${d.orderId}`}
-                        {d.estimatedArrival && ` · ETA ${d.estimatedArrival}`}
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] font-bold text-slate-500">{status.label}</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
-                  </div>
-                </button>
-              );
-            })}
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* ═══ 8. RECENT ACTIVITY ═══════════════════════════════════════════════ */}
-      <div>
-        <div className="flex items-center justify-between mb-2.5 px-0.5">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex p-1.5 rounded-lg bg-amber-50" aria-hidden="true">
-              <Activity className="w-4 h-4 text-amber-600" />
-            </span>
-            <h3 className="text-sm font-black text-slate-900 tracking-tight">Recent Activity</h3>
-          </div>
-          {recentStatements.length > 0 && (
+      {/* ═══ 6. BOTTOM — Recent Activity + Account Snapshot ═══════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* ── Recent Activity ────────────────────────────────────────────── */}
+        <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Recent Activity</h3>
             <button
               type="button"
               onClick={() => onNavigateTab('statements')}
@@ -831,96 +491,78 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             >
               View all <ChevronRight className="w-3 h-3" />
             </button>
-          )}
-        </div>
-
-        {recentStatements.length === 0 ? (
-          <div className="px-4 py-6 text-center border border-dashed border-slate-200 rounded-xl">
-            <Activity className="w-6 h-6 mx-auto stroke-1 text-slate-300 mb-1.5" />
-            <p className="text-xs font-bold text-slate-600">No activity yet</p>
-            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-              Invoices, payments and orders will appear here.
-            </p>
           </div>
-        ) : (
-          <div className="space-y-1.5">
-            {recentStatements.map((st) => {
-              const tone = ACTIVITY_TONES[st.type] ?? ACTIVITY_DEFAULT_TONE;
-              const ToneIcon = tone.icon;
-              return (
-                <button
-                  key={st.id}
-                  type="button"
-                  onClick={() => onNavigateTab('statements')}
-                  aria-label={`${st.type} ${st.reference}: ${st.description}. View statements.`}
-                  className="w-full flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group"
-                >
-                  <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${tone.cls}`} aria-hidden="true">
-                    <ToneIcon className="w-3.5 h-3.5" />
-                  </span>
-                  <span className="flex-1 min-w-0 text-left">
-                    <span className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-[11px] text-slate-900 truncate group-hover:text-blue-600 transition-colors">
-                        {st.reference}
-                      </span>
-                      <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">
-                        {st.type}
-                      </span>
+          <div className="px-4 pb-4 space-y-3">
+            {recentStatements.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">No activity yet</p>
+            ) : (
+              recentStatements.map((st) => {
+                const isCredit = st.type === 'Payment' || st.type === 'Credit Note';
+                const Icon = isCredit ? CheckCircle2 : FileText;
+                const iconBg = isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600';
+                return (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => onNavigateTab('statements')}
+                    className="w-full flex items-center gap-3 group"
+                  >
+                    <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${iconBg}`}>
+                      <Icon className="w-3.5 h-3.5" />
                     </span>
-                    <span className="block text-[11px] text-slate-500 font-medium line-clamp-1 mt-0.5">
-                      {st.description}
-                    </span>
-                  </span>
-                  <span className="text-right shrink-0 flex flex-col items-end gap-0.5">
-                    <span className="text-xs font-black tabular-nums">
-                      {st.debit > 0 ? (
-                        <span className="text-slate-900">+{formatCurrency(st.debit)}</span>
-                      ) : (
-                        <span className="text-emerald-600">-{formatCurrency(st.credit)}</span>
-                      )}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium tabular-nums">
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">
+                        {st.description}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-medium">
+                        {st.type} · {formatCurrency(st.debit > 0 ? st.debit : st.credit)}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap shrink-0">
                       {timeAgo(st.date)}
                     </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ═══ 9. ACCOUNT SNAPSHOT ═══════════════════════════════════════════════ */}
-      {hasCreditData && (
-        <div>
-          <div className="flex items-center justify-between mb-2.5 px-0.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex p-1.5 rounded-lg bg-slate-100" aria-hidden="true">
-                <Wallet className="w-4 h-4 text-slate-600" />
-              </span>
-              <h3 className="text-sm font-black text-slate-900 tracking-tight">Account Snapshot</h3>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200/80 divide-y divide-slate-100">
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs text-slate-500 font-medium">Credit limit</span>
-              <span className="text-xs font-black text-slate-900 tabular-nums">{formatCurrency(profile.creditLimit)}</span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs text-slate-500 font-medium">Available credit</span>
-              <span className={`text-xs font-black tabular-nums ${availableCredit > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
-                {formatCurrency(availableCredit)}
-              </span>
-            </div>
-            {profile.tier && (
-              <div className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-xs text-slate-500 font-medium">Customer tier</span>
-                <span className="text-xs font-black text-slate-900">{profile.tier}</span>
-              </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
-      )}
+
+        {/* ── Account Snapshot ───────────────────────────────────────────── */}
+        <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden">
+          <div className="px-4 pt-4 pb-2">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Account Snapshot</h3>
+          </div>
+          <div className="px-4 pb-4 divide-y divide-slate-100">
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-xs text-slate-500 font-medium">Credit Limit</span>
+              <span className="text-xs font-black text-slate-900 font-mono">{formatCurrency(profile.creditLimit)}</span>
+            </div>
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-xs text-slate-500 font-medium">Available Credit</span>
+              <span className={`text-xs font-black font-mono ${(profile.creditLimit - profile.currentBalance) > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                {formatCurrency(profile.creditLimit - profile.currentBalance)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-xs text-slate-500 font-medium">Payment Terms</span>
+              <span className="text-xs font-bold text-slate-900">30 days</span>
+            </div>
+            {profile.tier && (
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-xs text-slate-500 font-medium">Customer Tier</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
+                  {profile.tier}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-xs text-slate-500 font-medium">Member Since</span>
+              <span className="text-xs font-bold text-slate-900">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
