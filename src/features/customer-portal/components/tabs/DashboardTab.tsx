@@ -1,28 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Activity,
   AlertTriangle,
-  Award,
-  CalendarDays,
-  Camera,
   CheckCircle2,
-  ChevronLeft,
   ChevronRight,
-  Clock,
   CreditCard,
   FileText,
   FolderUp,
   Gift,
   Headphones,
-  Landmark,
   MessageSquareQuote,
-  Package,
   Receipt,
   ShoppingBag,
   Star,
   Truck,
-  Wallet,
-  Zap,
 } from 'lucide-react';
 import {
   AccountProfile,
@@ -35,8 +25,6 @@ import {
   TabType,
 } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { usePaymentRequestsData } from '../../hooks/usePortalData';
-import { getPaymentRequestStatusLabel, isActivePaymentRequestStatus } from '../../utils/paymentRequest';
 
 interface DashboardTabProps {
   profile: AccountProfile;
@@ -84,11 +72,67 @@ const DELIVERY_STATUS_STYLES: Record<string, { label: string; dot: string; bg: s
   delayed: { label: 'Delayed', dot: 'bg-rose-500', bg: 'bg-rose-50 text-rose-700' },
 };
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
+const BANNER_ASPECT_RATIO = 4;
+
+const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+  const [isAtLeastWide, setIsAtLeastWide] = useState(() => {
+    const meta = slide.imageMeta;
+    if (meta && Number.isFinite(meta.width) && Number(meta.width) > 0 && Number(meta.height) > 0) {
+      return Number(meta.width) / Number(meta.height) >= BANNER_ASPECT_RATIO;
+    }
+    return true;
+  });
+
+  const gradientLayer = slide.gradientCss ? (
+    <div className="absolute inset-0 z-0" style={{ background: slide.gradientCss }} />
+  ) : (
+    <div
+      className={`absolute inset-0 z-0 bg-gradient-to-r ${
+        slide.gradientClass ?? 'from-slate-900 via-indigo-950 to-slate-900'
+      }`}
+    />
+  );
+
+  return (
+    <>
+      {gradientLayer}
+      {slide.imageUrl && !imageFailed && (
+        <img
+          src={slide.imageUrl}
+          alt={slide.title}
+          onError={() => setImageFailed(true)}
+          onLoad={(e) => {
+            const { naturalWidth, naturalHeight } = e.currentTarget;
+            setIsAtLeastWide(
+              naturalHeight > 0 && naturalWidth / naturalHeight >= BANNER_ASPECT_RATIO
+            );
+          }}
+          className={`absolute inset-0 z-0 w-full h-full ${
+            isAtLeastWide ? 'object-cover' : 'object-contain'
+          }`}
+        />
+      )}
+    </>
+  );
+};
+
+type IconComponent = React.ComponentType<{ className?: string }>;
+
+interface BannerSlide {
+  id: string;
+  badge: string;
+  badgeBg: string;
+  title: string;
+  subtitle: string;
+  extra?: string;
+  gradientClass?: string;
+  gradientCss?: string;
+  imageUrl?: string | null;
+  imageMeta?: PortalAdImageMeta | null;
+  emoji?: string | null;
+  ctaLabel?: string | null;
+  onCta?: () => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -130,43 +174,25 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onOpenPaymentModal,
   onNavigateInvoices,
 }) => {
-  // ── Data derivations ──────────────────────────────────────────────────
-  const paymentRequestsQuery = usePaymentRequestsData(true);
-  const paymentRequests = paymentRequestsQuery.data ?? [];
-  const activePaymentRequest = paymentRequests.find((r) => isActivePaymentRequestStatus(r.status));
+  // ── Banner carousel state ────────────────────────────────────────────
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [slideDirection, setSlideDirection] = useState<'next' | 'prev'>('next');
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
 
+  // ── Data derivations ──────────────────────────────────────────────────
   const overdueInvoices = invoices.filter((i) => i.status === 'overdue');
   const unpaidInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid');
   const paidInvoices = invoices.filter((i) => i.status === 'paid');
   const draftInvoices = invoices.filter((i) => i.status === 'draft');
-  const partialInvoices = invoices.filter((i) => i.status === 'partially_paid');
 
   const outstandingTotal = unpaidInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
   const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
-
-  // Due this month
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-  const dueThisMonth = unpaidInvoices.filter((i) => {
-    const d = new Date(i.dueDate);
-    return !Number.isNaN(d.getTime()) && d.getTime() >= startOfMonth.getTime() && d.getTime() <= endOfMonth.getTime();
-  });
-  const dueThisMonthTotal = dueThisMonth.reduce((sum, i) => sum + i.amountRemaining, 0);
-
-  // Last payment
-  const paymentStatements = statements
-    .filter((s) => s.type === 'Payment' && s.credit > 0)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const lastPayment = paymentStatements.length > 0 ? paymentStatements[0] : null;
 
   // Active orders (non-terminal)
   const activeOrders = orders.filter(
     (o) => !['delivered', 'cancelled', 'fulfilled'].includes(o.status)
   );
-
-  // Active deliveries
-  const activeDeliveries = deliveries.filter((d) => d.status !== 'delivered');
 
   // Recent statements for activity
   const seen = new Set<string>();
@@ -178,6 +204,85 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const recentStatements = [...uniqueStatements]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 4);
+
+  // ── Banner slides ──────────────────────────────────────────────────────
+  const bannerSlides: BannerSlide[] = [
+    {
+      id: 'slide_welcome',
+      badge: 'WELCOME BACK',
+      badgeBg: 'bg-white/20 text-white backdrop-blur-md',
+      title: `Welcome back, ${profile.customerName}`,
+      subtitle: `Account ID: ${profile.accountNumber} • ${profile.tier || 'Standard'} Tier`,
+      gradientClass: 'from-slate-900 via-indigo-950 to-slate-900',
+    },
+  ];
+
+  ads.forEach((ad) => {
+    const ctaTab = tabForCtaTarget(ad.ctaTarget);
+    bannerSlides.push({
+      id: `slide_ad_${ad.id}`,
+      badge: ad.badge ?? 'PROMOTION',
+      badgeBg: 'bg-white/20 text-white backdrop-blur-md',
+      title: ad.title || 'Special Offer',
+      subtitle: ad.subtitle ?? '',
+      gradientCss: ad.gradient ?? undefined,
+      imageUrl: ad.imageUrl,
+      imageMeta: ad.imageMeta,
+      emoji: ad.emoji,
+      ctaLabel: ad.ctaLabel,
+      onCta: ctaTab ? () => onNavigateTab(ctaTab) : undefined,
+    });
+  });
+
+  if (deliveries.length > 0) {
+    const latest = deliveries[0];
+    bannerSlides.push({
+      id: 'slide_delivery',
+      badge: 'LIVE SHIPMENT UPDATE',
+      badgeBg: 'bg-sky-400 text-slate-950',
+      title: `Order ${latest.orderId} is ${latest.status === 'delivered' ? 'Delivered' : 'in Transit'}`,
+      subtitle: `Tracking #: ${latest.trackingNumber}`,
+      extra: latest.estimatedArrival
+        ? `Est. Arrival: ${latest.estimatedArrival}${latest.driverName ? ` • Driver: ${latest.driverName}` : ''}`
+        : '',
+      gradientClass: 'from-slate-950 via-sky-950 to-slate-900',
+    });
+  }
+
+  useEffect(() => {
+    if (isCarouselPaused || bannerSlides.length <= 1) return;
+    const timer = setInterval(() => {
+      setSlideDirection('next');
+      setCurrentSlide((prev) => (prev + 1) % bannerSlides.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [bannerSlides.length, isCarouselPaused]);
+
+  const activeSlide = bannerSlides[Math.min(currentSlide, bannerSlides.length - 1)];
+
+  const goNext = () => {
+    setSlideDirection('next');
+    setCurrentSlide((prev) => (prev + 1) % bannerSlides.length);
+  };
+
+  const goPrev = () => {
+    setSlideDirection('prev');
+    setCurrentSlide((prev) => (prev - 1 + bannerSlides.length) % bannerSlides.length);
+  };
+
+  const goToSlide = (target: number) => {
+    setSlideDirection(target > currentSlide ? 'next' : 'prev');
+    setCurrentSlide(target);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (diff > 40) goNext();
+    else if (diff < -40) goPrev();
+    setTouchStartX(null);
+  };
 
   // Quick actions
   const quickActions = [
@@ -231,28 +336,118 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </button>
       </div>
 
-      {/* ═══ 2. WELCOME BANNER ═══════════════════════════════════════════════ */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-50 border border-slate-200/80 p-6">
-        <div className="relative z-10 max-w-[70%]">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl">☀️</span>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">
-              {getGreeting()}, {profile.customerName || 'there'}
-            </h2>
-          </div>
-          <p className="text-sm text-slate-500 font-medium mb-2">Here's your account overview.</p>
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-            <Clock className="w-3.5 h-3.5" />
-            Last updated: Just now
-          </div>
+      {/* ═══ 2. AD BANNER CAROUSEL ════════════════════════════════════════════ */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onMouseEnter={() => setIsCarouselPaused(true)}
+        onMouseLeave={() => setIsCarouselPaused(false)}
+        onFocus={() => setIsCarouselPaused(true)}
+        onBlur={() => setIsCarouselPaused(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
+          if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
+        }}
+        role="region"
+        aria-roledescription="carousel"
+        aria-live="polite"
+        aria-label="Announcements and account updates"
+        tabIndex={bannerSlides.length > 1 ? 0 : -1}
+        className="relative overflow-hidden rounded-2xl aspect-[4/1] w-full bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
+      >
+        <div
+          key={activeSlide.id}
+          className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
+        >
+          <BannerBackground slide={activeSlide} />
+          <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px] z-0" />
+          {(activeSlide.title || activeSlide.subtitle || activeSlide.emoji || activeSlide.onCta) && (
+            <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
+              <div className="w-full px-5 sm:px-7 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
+                  <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
+                    {activeSlide.emoji ? (
+                      <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
+                    ) : (
+                      <Star className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white/80" />
+                    )}
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    {activeSlide.badge && (
+                      <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] text-white/70">
+                        {activeSlide.badge}
+                      </p>
+                    )}
+                    {activeSlide.title && (
+                      <h2 className="text-base sm:text-xl font-black text-white tracking-tight leading-snug drop-shadow-md truncate">
+                        {activeSlide.title}
+                      </h2>
+                    )}
+                    {activeSlide.subtitle && (
+                      <p className="text-xs sm:text-sm text-white/80 font-medium drop-shadow-sm line-clamp-2">
+                        {activeSlide.subtitle}
+                      </p>
+                    )}
+                    {activeSlide.extra && (
+                      <p className="text-[11px] sm:text-xs text-amber-300 font-semibold pt-0.5 drop-shadow-sm">
+                        {activeSlide.extra}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {activeSlide.onCta && activeSlide.ctaLabel && (
+                  <button
+                    onClick={activeSlide.onCta}
+                    className="shrink-0 flex items-center gap-1 text-xs font-black text-white hover:text-white/80 transition-colors"
+                  >
+                    <span>{activeSlide.ctaLabel}</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        {/* Decorative illustration placeholder */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-20 hidden sm:block">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-indigo-400" />
-        </div>
+        {bannerSlides.length > 1 && (
+          <>
+            <button
+              onClick={goPrev}
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Previous slide"
+            >
+              <ChevronRight className="w-4 h-4 rotate-180" />
+            </button>
+            <button
+              onClick={goNext}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Next slide"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <div
+              role="tablist"
+              aria-label="Slide selector"
+              className="hidden lg:flex absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 gap-1.5"
+            >
+              {bannerSlides.map((slide, idx) => (
+                <button
+                  key={`dot_${slide.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={idx === currentSlide}
+                  aria-label={`Go to slide ${idx + 1} of ${bannerSlides.length}`}
+                  onClick={() => goToSlide(idx)}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    idx === currentSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ═══ 3. ACCOUNT SUMMARY — 4 cards ═════════════════════════════════════ */}
+      {/* ═══ 3. ACCOUNT SUMMARY — 2 cards ═════════════════════════════════════ */}
       <div>
         <div className="flex items-center justify-between mb-3 px-0.5">
           <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Account Summary</h3>
@@ -264,7 +459,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             View statements <ChevronRight className="w-3 h-3" />
           </button>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 gap-2.5">
           {/* Outstanding Balance */}
           <button
             type="button"
@@ -283,18 +478,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             )}
           </button>
 
-          {/* Due This Month */}
-          <div className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Due This Month</p>
-              <CalendarDays className="w-4 h-4 text-slate-300" />
-            </div>
-            <p className="text-base font-extrabold font-mono text-slate-900 leading-tight">{formatCurrency(dueThisMonthTotal)}</p>
-            <p className="text-[10px] text-slate-400 mt-1">
-              {dueThisMonth.length} Invoice{dueThisMonth.length === 1 ? '' : 's'}
-            </p>
-          </div>
-
           {/* Total Paid */}
           <div className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl">
             <div className="flex items-center justify-between mb-1">
@@ -303,25 +486,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
             <p className="text-base font-extrabold font-mono text-emerald-600 leading-tight">{formatCurrency(totalPayment)}</p>
             <p className="text-[10px] text-slate-400 mt-1">All time</p>
-          </div>
-
-          {/* Last Payment */}
-          <div className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Last Payment</p>
-              <Clock className="w-4 h-4 text-slate-300" />
-            </div>
-            {lastPayment ? (
-              <>
-                <p className="text-base font-extrabold font-mono text-slate-900 leading-tight">{formatCurrency(lastPayment.credit)}</p>
-                <p className="text-[10px] text-slate-400 mt-1">{formatDate(lastPayment.date)}</p>
-              </>
-            ) : (
-              <>
-                <p className="text-base font-extrabold font-mono text-slate-400 leading-tight">{formatCurrency(0)}</p>
-                <p className="text-[10px] text-slate-400 mt-1">No payments</p>
-              </>
-            )}
           </div>
         </div>
       </div>
@@ -368,7 +532,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {[
               { label: 'Outstanding', count: unpaidInvoices.length, amount: outstandingTotal, dot: 'bg-amber-500', amountClass: 'text-slate-900' },
               { label: 'Overdue', count: overdueInvoices.length, amount: overdueInvoices.reduce((s, i) => s + i.amountRemaining, 0), dot: 'bg-rose-500', amountClass: 'text-rose-600' },
-              { label: 'Due This Month', count: dueThisMonth.length, amount: dueThisMonthTotal, dot: 'bg-orange-500', amountClass: 'text-orange-600' },
               { label: 'Paid', count: paidInvoices.length, amount: totalPayment, dot: 'bg-emerald-500', amountClass: 'text-emerald-600' },
               { label: 'Draft', count: draftInvoices.length, amount: draftInvoices.reduce((s, i) => s + i.amountRemaining, 0), dot: 'bg-slate-300', amountClass: 'text-slate-500' },
             ].map(({ label, count, amount, dot, amountClass }) => (
