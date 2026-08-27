@@ -693,7 +693,7 @@ export class ErpPortalService implements PortalService {
         : [];
     const items: InvoiceItem[] = itemsRaw.map((item, idx) => ({
       id: `ii_${idx}`,
-      description: String(item.description ?? item.name ?? item.item_name ?? ''),
+      description: String(item.description ?? item.item_name ?? item.name ?? item.productName ?? item.product_name ?? item.itemName ?? item.desc ?? ''),
       quantity: Number(item.quantity ?? 0),
       unitPrice: Number(item.unitPrice ?? item.unit_price ?? 0),
       total: Number(item.total ?? item.lineTotal ?? item.line_total ?? 0),
