@@ -353,7 +353,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         aria-live="polite"
         aria-label="Announcements and account updates"
         tabIndex={bannerSlides.length > 1 ? 0 : -1}
-        className="relative overflow-hidden rounded-2xl aspect-[4/1] w-full bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
+        className="relative overflow-hidden rounded-2xl aspect-[2.6/1] w-full bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
       >
         <div
           key={activeSlide.id}
@@ -464,29 +464,33 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             type="button"
             onClick={() => onNavigateInvoices?.('unpaid')}
-            className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer"
+            className="text-left p-4 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl hover:shadow-md hover:scale-[0.98] transition-all duration-200 cursor-pointer"
           >
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Outstanding Balance</p>
-            <p className="text-base font-extrabold font-mono text-slate-900 leading-tight">{formatCurrency(outstandingTotal)}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Outstanding Balance</p>
+            <p className="text-lg font-extrabold font-mono text-amber-900 leading-tight">{formatCurrency(outstandingTotal)}</p>
             {overdueInvoices.length > 0 ? (
-              <p className="text-[10px] font-bold text-rose-600 mt-1 flex items-center gap-1">
+              <p className="text-[10px] font-bold text-rose-600 mt-1.5 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" />
                 {overdueInvoices.length} Overdue invoice{overdueInvoices.length > 1 ? 's' : ''}
               </p>
             ) : (
-              <p className="text-[10px] text-slate-400 mt-1">No overdue</p>
+              <p className="text-[10px] text-amber-600/70 mt-1.5">No overdue</p>
             )}
           </button>
 
           {/* Total Paid */}
-          <div className="text-left p-3.5 bg-white border border-slate-200/80 rounded-xl">
+          <button
+            type="button"
+            onClick={() => onNavigateTab('statements')}
+            className="text-left p-4 bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200/80 rounded-xl hover:shadow-md hover:scale-[0.98] transition-all duration-200 cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Paid</p>
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Total Paid</p>
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             </div>
-            <p className="text-base font-extrabold font-mono text-emerald-600 leading-tight">{formatCurrency(totalPayment)}</p>
-            <p className="text-[10px] text-slate-400 mt-1">All time</p>
-          </div>
+            <p className="text-lg font-extrabold font-mono text-emerald-800 leading-tight">{formatCurrency(totalPayment)}</p>
+            <p className="text-[10px] text-emerald-600/70 mt-1.5">All time</p>
+          </button>
         </div>
       </div>
 
