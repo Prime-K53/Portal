@@ -310,14 +310,19 @@ export class ErpAuthService implements AuthService {
       };
       return session;
     } catch (error) {
-      // Classify BEFORE clearing so the UI can tell a genuinely stale session
-      // apart from a transient recovery problem.
+      // Only terminate the session when the ERP explicitly rejects the refresh
+      // token (4xx). Network errors, timeouts and 500s are transient — the
+      // session in sessionStorage may still be valid. Terminating on a
+      // transient error destroys a valid session and triggers a "session
+      // expired" storm in the UI.
       const authRejected =
         error instanceof ApiError &&
         error.status !== null &&
         error.status >= 400 &&
         error.status < 500;
-      this.terminateSession(authRejected ? STALE_SESSION_MESSAGE : UNRECOVERABLE_SESSION_MESSAGE);
+      if (authRejected) {
+        this.terminateSession(STALE_SESSION_MESSAGE);
+      }
       return null;
     }
   }
