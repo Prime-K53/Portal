@@ -12,6 +12,7 @@ import {
   FileText,
   Gift,
   Landmark,
+  Package,
   MessageSquareQuote,
   Receipt,
   ShoppingBag,
@@ -22,7 +23,16 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { AccountProfile, DeliveryNotification, Invoice, PortalAd, PortalAdImageMeta, StatementEntry, TabType } from '../../types';
+import {
+  AccountProfile,
+  DeliveryNotification,
+  Invoice,
+  Order,
+  PortalAd,
+  PortalAdImageMeta,
+  StatementEntry,
+  TabType,
+} from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { usePaymentRequestsData } from '../../hooks/usePortalData';
 import { getPaymentRequestStatusLabel, isActivePaymentRequestStatus } from '../../utils/paymentRequest';
@@ -30,24 +40,15 @@ import { getPaymentRequestStatusLabel, isActivePaymentRequestStatus } from '../.
 interface DashboardTabProps {
   profile: AccountProfile;
   invoices: Invoice[];
+  orders: Order[];
   deliveries: DeliveryNotification[];
   statements: StatementEntry[];
-  /** ERP banner ads (GET /portal/ads) — displayed as carousel slides. */
   ads: PortalAd[];
   onNavigateTab: (tab: TabType) => void;
   onOpenPaymentModal: () => void;
-  /**
-   * Navigates to the invoices tab with a preset list filter (e.g. from the
-   * Overdue / Outstanding KPI cards).
-   */
   onNavigateInvoices?: (filter: 'unpaid' | 'overdue') => void;
 }
 
-/**
- * Maps an ERP ad CTA target (e.g. "/portal/orders") to a Sasa tab. Unknown
- * targets yield null — the slide renders without a CTA rather than navigating
- * to the wrong screen.
- */
 function tabForCtaTarget(target: string | null): TabType | null {
   if (!target) return null;
   const t = target.toLowerCase();
@@ -69,40 +70,20 @@ interface BannerSlide {
   title: string;
   subtitle: string;
   extra?: string;
-  /** Tailwind gradient utility classes (Sasa-built slides). */
   gradientClass?: string;
-  /** Full CSS gradient string from the ERP ad record (e.g. linear-gradient(...)). */
   gradientCss?: string;
   imageUrl?: string | null;
-  /** ERP pipeline asset metadata (dimensions of the actual stored banner). */
   imageMeta?: PortalAdImageMeta | null;
   emoji?: string | null;
   ctaLabel?: string | null;
   onCta?: () => void;
 }
 
-/** Canonical banner aspect ratio — the ERP artwork is displayed at 4:1. */
 const BANNER_ASPECT_RATIO = 4;
 
-/**
- * Banner backdrop. The ERP gradient (or default Sasa gradient) always renders
- * behind the artwork so a slow/failed image never shows a blank or broken
- * region, and the 4:1 container height is reserved before the image arrives
- * (no dashboard layout shift).
- *
- * Image fitting is intrinsic-ratio aware so artwork is NEVER stretched:
- *  - ratio >= 4:1 (correct 1600×400 or wider) → object-cover fills the banner;
- *  - ratio < 4:1 (legacy square/tall uploads) → object-contain shows the full
- *    image undistorted, with the gradient visible in the letterbox.
- * A malformed/failed image URL silently falls back to the gradient instead of
- * breaking the dashboard.
- */
 const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
   const [imageFailed, setImageFailed] = useState(false);
   const [isAtLeastWide, setIsAtLeastWide] = useState(() => {
-    // Decide the initial fit from the ERP pipeline metadata (no flash of the
-    // wrong fit, no runtime probe needed for prepared assets). Legacy banners
-    // without metadata default to cover and correct themselves on load.
     const meta = slide.imageMeta;
     if (meta && Number.isFinite(meta.width) && Number(meta.width) > 0 && Number(meta.height) > 0) {
       return Number(meta.width) / Number(meta.height) >= BANNER_ASPECT_RATIO;
@@ -143,42 +124,61 @@ const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
   );
 };
 
-/** Shared dashboard section header — tinted icon chip + title (+ subtitle / action). */
-const SectionHeader: React.FC<{
-  icon: React.ComponentType<{ className?: string }>;
-  iconChipClass: string;
-  title: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-}> = ({ icon: Icon, iconChipClass, title, subtitle, action }) => (
-  <div className="flex items-center justify-between gap-3">
-    <div className="flex items-center gap-2.5 min-w-0">
-      <span className={`shrink-0 inline-flex p-1.5 rounded-lg ${iconChipClass}`} aria-hidden="true">
-        <Icon className="w-4 h-4" />
-      </span>
-      <div className="min-w-0">
-        <h3 className="text-sm font-black text-slate-900 tracking-tight leading-tight">{title}</h3>
-        {subtitle && (
-          <p className="text-[11px] text-slate-400 font-medium -mt-0.5 truncate">{subtitle}</p>
-        )}
-      </div>
-    </div>
-    {action}
-  </div>
-);
-
 type IconComponent = React.ComponentType<{ className?: string }>;
 
-/** Visual treatment per ledger entry type in the Recent Activity feed. */
 const ACTIVITY_TONES: Record<string, { icon: IconComponent; cls: string }> = {
   Payment: { icon: Wallet, cls: 'bg-emerald-50 text-emerald-600' },
   'Credit Note': { icon: Undo2, cls: 'bg-amber-50 text-amber-600' },
 };
 const ACTIVITY_DEFAULT_TONE = { icon: FileText, cls: 'bg-slate-100 text-slate-600' };
 
+const ORDER_STATUS_STYLES: Record<string, { label: string; dot: string }> = {
+  pending: { label: 'Pending', dot: 'bg-amber-500' },
+  processing: { label: 'Processing', dot: 'bg-blue-500' },
+  confirmed: { label: 'Confirmed', dot: 'bg-indigo-500' },
+  shipped: { label: 'Shipped', dot: 'bg-purple-500' },
+  delivered: { label: 'Delivered', dot: 'bg-emerald-500' },
+  cancelled: { label: 'Cancelled', dot: 'bg-slate-400' },
+  draft: { label: 'Draft', dot: 'bg-slate-300' },
+  fulfilled: { label: 'Fulfilled', dot: 'bg-emerald-600' },
+};
+
+const DELIVERY_STATUS_STYLES: Record<string, { label: string; dot: string }> = {
+  order_placed: { label: 'Placed', dot: 'bg-slate-400' },
+  processing: { label: 'Processing', dot: 'bg-blue-500' },
+  dispatched: { label: 'Dispatched', dot: 'bg-indigo-500' },
+  out_for_delivery: { label: 'In Transit', dot: 'bg-purple-500' },
+  delivered: { label: 'Delivered', dot: 'bg-emerald-500' },
+  delayed: { label: 'Delayed', dot: 'bg-rose-500' },
+};
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function timeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffMs = now - then;
+  if (diffMs < 0) return formatDate(dateStr);
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatDate(dateStr);
+}
+
 export const DashboardTab: React.FC<DashboardTabProps> = ({
   profile,
   invoices,
+  orders,
   deliveries,
   statements,
   ads,
@@ -189,16 +189,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [currentSlide, setCurrentSlide] = useState(0);
   const [slideDirection, setSlideDirection] = useState<'next' | 'prev'>('next');
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  /** Desktop pause-on-hover for the auto-rotating banner. */
   const [isCarouselPaused, setIsCarouselPaused] = useState(false);
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
-  // Active payment requests (GET /portal/payment-requests) — surfaces the
-  // "under review" chip. In mock/dev mode the query errors and stays hidden.
   const paymentRequestsQuery = usePaymentRequestsData(true);
   const paymentRequests = paymentRequestsQuery.data ?? [];
   const activePaymentRequest = paymentRequests.find((r) => isActivePaymentRequestStatus(r.status));
 
+  // ── Banner slides ──────────────────────────────────────────────────────
   const bannerSlides: BannerSlide[] = [
     {
       id: 'slide_welcome',
@@ -210,9 +208,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     },
   ];
 
-  // Real ERP advertisements (GET /portal/ads) — rendered exactly as the ERP
-  // serves them: real image when provided, otherwise the ERP gradient/emoji
-  // presentation. No hardcoded or placeholder ad content.
   ads.forEach((ad) => {
     const ctaTab = tabForCtaTarget(ad.ctaTarget);
     bannerSlides.push({
@@ -230,7 +225,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     });
   });
 
-  // The live-shipment slide only renders with real ERP shipment data.
   if (deliveries.length > 0) {
     const latest = deliveries[0];
     bannerSlides.push({
@@ -247,8 +241,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   }
 
   useEffect(() => {
-    // Auto-rotate unless the desktop user is hovering/focusing the carousel,
-    // or there is nothing to rotate.
     if (isCarouselPaused || bannerSlides.length <= 1) return;
     const timer = setInterval(() => {
       setSlideDirection('next');
@@ -257,8 +249,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return () => clearInterval(timer);
   }, [bannerSlides.length, isCarouselPaused]);
 
-  // Clamp so a change in slide count (ads loading/refetch) never indexes past
-  // the array and crashes the carousel.
   const activeSlide = bannerSlides[Math.min(currentSlide, bannerSlides.length - 1)];
 
   const goNext = () => {
@@ -276,42 +266,28 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     setCurrentSlide(target);
   };
 
-  const dismissAlert = (id: string) => {
-    setDismissedAlerts((prev) => [...prev, id]);
-  };
-
+  const dismissAlert = (id: string) => setDismissedAlerts((prev) => [...prev, id]);
   const isAlertDismissed = (id: string) => dismissedAlerts.includes(id);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.touches[0].clientX);
-  };
-
+  const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (touchStartX === null) return;
     const diff = touchStartX - e.changedTouches[0].clientX;
-    if (diff > 40) {
-      // Swipe left -> Next slide
-      goNext();
-    } else if (diff < -40) {
-      // Swipe right -> Prev slide
-      goPrev();
-    }
+    if (diff > 40) goNext();
+    else if (diff < -40) goPrev();
     setTouchStartX(null);
   };
 
-  // ── Financial snapshot (invoices are the source of truth) ─────────────────
+  // ── Financial data ─────────────────────────────────────────────────────
   const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
   const payableInvoices = invoices.filter(
     (i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid'
   );
   const outstandingTotal = payableInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
   const isFullyPaid = outstandingTotal === 0;
-
-  // Overdue: past their due date per ERP status.
   const overdueInvoices = invoices.filter((i) => i.status === 'overdue');
   const overdueTotal = overdueInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
 
-  // Due soon: still payable and due within the next 7 days (not already overdue).
   const dueSoonCutoff = new Date();
   dueSoonCutoff.setDate(dueSoonCutoff.getDate() + 7);
   const dueSoonInvoices = payableInvoices.filter((i) => {
@@ -320,6 +296,19 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return !Number.isNaN(due.getTime()) && due.getTime() <= dueSoonCutoff.getTime();
   });
 
+  // Invoice counts by status
+  const paidInvoices = invoices.filter((i) => i.status === 'paid');
+  const partialInvoices = invoices.filter((i) => i.status === 'partially_paid');
+
+  // ── Active orders (non-terminal) ───────────────────────────────────────
+  const activeOrders = orders.filter(
+    (o) => !['delivered', 'cancelled', 'fulfilled'].includes(o.status)
+  );
+
+  // ── Active deliveries ──────────────────────────────────────────────────
+  const activeDeliveries = deliveries.filter((d) => d.status !== 'delivered');
+
+  // ── Recent statements ──────────────────────────────────────────────────
   const seen = new Set<string>();
   const uniqueStatements = statements.filter((s) => {
     if (seen.has(s.id)) return false;
@@ -328,66 +317,45 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   });
   const recentStatements = [...uniqueStatements]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 4);
+    .slice(0, 5);
+
+  // ── Account snapshot data ──────────────────────────────────────────────
+  const availableCredit = (profile.creditLimit || 0) - (profile.currentBalance || 0);
+  const hasCreditData = profile.creditLimit > 0;
 
   return (
-    <div className="space-y-6 pb-24 text-slate-900 animate-fade-in">
-      {/* 1. Header Profile & Partner Badge */}
-      <div className="space-y-1">
-        {/* Title and View Profile Button */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="min-w-0">
-              <h1 className="text-lg font-black text-slate-900 tracking-tight">
-                {profile.customerName || 'Account'}
-              </h1>
-              {profile.accountNumber && (
-                <p className="text-xs font-medium text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                  <span className="font-bold text-slate-800">Customer ID: {profile.accountNumber}</span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 to-amber-50/80 border border-amber-200 text-amber-900 text-[10px] font-black shadow-xs">
-                    <Award className="w-3 h-3 text-amber-600 fill-amber-500" />
-                    <span>{profile.tier || 'Standard'}</span>
-                  </span>
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => onNavigateTab('account')}
-              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-black rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 shrink-0"
-            >
-              <span>View Profile</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
+    <div className="space-y-5 pb-24 text-slate-900 animate-fade-in">
+      {/* ═══ 1. HEADER — Customer Identity ═══════════════════════════════════ */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-black text-slate-900 tracking-tight leading-tight">
+            {profile.customerName || 'Account'}
+          </h1>
+          <div className="flex items-center gap-2 mt-0.5">
+            {profile.accountNumber && (
+              <span className="text-xs font-mono font-bold text-slate-500">
+                {profile.accountNumber}
+              </span>
+            )}
+            {profile.tier && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 to-amber-50/80 border border-amber-200 text-amber-900 text-[10px] font-black shadow-xs">
+                <Award className="w-3 h-3 text-amber-600 fill-amber-500" />
+                {profile.tier}
+              </span>
+            )}
           </div>
         </div>
-
-        {/* Credit utilization bar — hidden until a balance is actually drawn */}
-        {profile.creditLimit > 0 && (profile.currentBalance ?? 0) > 0 && (
-          <div className="mt-1.5">
-            <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-              <span>Credit Utilization</span>
-              <span>{Math.round(((profile.currentBalance ?? 0) / profile.creditLimit) * 100)}%</span>
-            </div>
-            <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  (profile.currentBalance ?? 0) >= profile.creditLimit
-                    ? 'bg-rose-500'
-                    : (profile.currentBalance ?? 0) / profile.creditLimit > 0.8
-                      ? 'bg-amber-500'
-                      : 'bg-emerald-500'
-                }`}
-                style={{ width: `${Math.min(100, ((profile.currentBalance ?? 0) / profile.creditLimit) * 100)}%` }}
-              />
-            </div>
-          </div>
-        )}
+        <button
+          onClick={() => onNavigateTab('account')}
+          className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1 shrink-0"
+          aria-label="View profile"
+        >
+          Profile
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+        </button>
       </div>
 
-      {/* 2. Interactive Sliding Banner (real data slides — no hardcoded ad images) */}
+      {/* ═══ 2. BANNER — Ads / Live Shipment ═════════════════════════════════ */}
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -396,7 +364,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         onFocus={() => setIsCarouselPaused(true)}
         onBlur={() => setIsCarouselPaused(false)}
         onKeyDown={(e) => {
-          // Desktop keyboard navigation for the carousel.
           if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
           if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
         }}
@@ -407,27 +374,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         tabIndex={bannerSlides.length > 1 ? 0 : -1}
         className="relative overflow-hidden rounded-2xl aspect-[4/1] w-full bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
       >
-        {/* Slide Content — keyed so it remounts and slides in on every slide change */}
         <div
           key={activeSlide.id}
           className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
         >
-          {/* Banner Background — real ERP image when provided, otherwise the
-              ERP ad's CSS gradient, otherwise the default Sasa gradient. Never
-              a placeholder/stock image. The artwork always fills the reserved
-              4:1 space without stretching (see BannerBackground). */}
           <BannerBackground slide={activeSlide} />
-
-          {/* Texture overlay */}
           <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px] z-0" />
-
-          {/* Main Slide Content */}
           {(activeSlide.title || activeSlide.subtitle || activeSlide.emoji || activeSlide.onCta) && (
             <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
               <div className="w-full px-5 sm:px-7 flex items-center justify-between gap-4">
-                {/* Left: Icon + Text */}
                 <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
-                  {/* Icon Box */}
                   <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
                     {activeSlide.emoji ? (
                       <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
@@ -435,31 +391,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       <Star className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white/80" />
                     )}
                   </div>
-
-                  {/* Text Content */}
                   <div className="space-y-1 min-w-0">
-                    {/* Badge/Label */}
                     {activeSlide.badge && (
                       <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] text-white/70">
                         {activeSlide.badge}
                       </p>
                     )}
-
-                    {/* Title */}
                     {activeSlide.title && (
                       <h2 className="text-base sm:text-xl font-black text-white tracking-tight leading-snug drop-shadow-md truncate">
                         {activeSlide.title}
                       </h2>
                     )}
-
-                    {/* Subtitle */}
                     {activeSlide.subtitle && (
                       <p className="text-xs sm:text-sm text-white/80 font-medium drop-shadow-sm line-clamp-2">
                         {activeSlide.subtitle}
                       </p>
                     )}
-
-                    {/* Extra Info */}
                     {activeSlide.extra && (
                       <p className="text-[11px] sm:text-xs text-amber-300 font-semibold pt-0.5 drop-shadow-sm">
                         {activeSlide.extra}
@@ -467,8 +414,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     )}
                   </div>
                 </div>
-
-                {/* Right: CTA Button */}
                 {activeSlide.onCta && activeSlide.ctaLabel && (
                   <button
                     onClick={activeSlide.onCta}
@@ -482,7 +427,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
           )}
         </div>
-
         {bannerSlides.length > 1 && (
           <div
             role="tablist"
@@ -506,7 +450,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         )}
       </div>
 
-      {/* 3. Needs Attention Strip — actionable finance alerts (hidden when clear) */}
+      {/* ═══ 3. ATTENTION STRIP ═══════════════════════════════════════════════ */}
       {(overdueInvoices.length > 0 || dueSoonInvoices.length > 0 || activePaymentRequest) && (
         <div className="flex flex-wrap gap-2" aria-label="Items needing attention">
           {overdueInvoices.length > 0 && !isAlertDismissed('overdue') && (
@@ -533,7 +477,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </span>
             </div>
           )}
-
           {dueSoonInvoices.length > 0 && !isAlertDismissed('due-soon') && (
             <div
               role="button"
@@ -544,7 +487,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             >
               <CalendarDays className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                {dueSoonInvoices.length} invoice{dueSoonInvoices.length === 1 ? '' : 's'} due within 7 days ·{' '}
+                {dueSoonInvoices.length} due within 7 days ·{' '}
                 {formatCurrency(dueSoonInvoices.reduce((sum, i) => sum + i.amountRemaining, 0))}
               </span>
               <span
@@ -559,7 +502,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </span>
             </div>
           )}
-
           {activePaymentRequest && !isAlertDismissed('payment-request') && (
             <div
               role="button"
@@ -589,77 +531,119 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       )}
 
-      {/* 4. KPI Mini Cards — invoice-authoritative totals, click to drill in */}
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-          {/* Outstanding Summary Card */}
-          <button
-            type="button"
-            onClick={() => onNavigateInvoices?.('unpaid')}
-            aria-label={`Outstanding balance ${formatCurrency(outstandingTotal)}. View open invoices.`}
-            className="text-left bg-amber-50/80 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-amber-200/80 space-y-0.5 sm:space-y-1 hover:border-amber-300 hover:shadow-md transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-          >
-            <div className="flex items-center justify-between text-amber-800">
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Outstanding</span>
-              <div className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
-                <ChevronRight className="w-3 h-3 text-amber-400 hidden sm:block" />
-              </div>
-            </div>
-            <p className="text-xl sm:text-3xl font-extrabold font-mono text-amber-950">
-              {formatCurrency(outstandingTotal)}
-            </p>
-            <p className="text-[10px] sm:text-[11px] text-amber-700 font-medium">
-              {isFullyPaid ? 'No Unpaid Balance' : `${payableInvoices.length} Open Invoice${payableInvoices.length === 1 ? '' : 's'}`}
-            </p>
-          </button>
+      {/* ═══ 4. FINANCIAL SUMMARY — Account Balance ═══════════════════════════ */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex p-1.5 rounded-lg bg-slate-100" aria-hidden="true">
+              <Landmark className="w-4 h-4 text-slate-600" />
+            </span>
+            <h3 className="text-sm font-black text-slate-900 tracking-tight">Account Balance</h3>
+          </div>
+          {invoices.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('invoices')}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
+            >
+              View invoices <ChevronRight className="w-3 h-3" />
+            </button>
+          )}
+        </div>
 
-          {/* Total Payment Summary Card */}
-          <button
-            type="button"
-            onClick={() => onNavigateTab('statements')}
-            aria-label={`Total paid ${formatCurrency(totalPayment)}. View statements.`}
-            className={`text-left rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border transition-all duration-300 space-y-0.5 sm:space-y-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
-              isFullyPaid
-                ? 'bg-emerald-900 text-white border-emerald-700 shadow-md'
-                : 'bg-slate-900 text-white border-slate-800'
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-300">
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Total Paid</span>
-                <ChevronRight className="w-3 h-3 text-slate-400 hidden sm:block" />
+        <div className="px-4 pb-4">
+          {isFullyPaid && invoices.length === 0 ? (
+            <div className="text-center py-4">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-1.5" />
+              <p className="text-sm font-bold text-slate-700">No outstanding balance</p>
+              <p className="text-xs text-slate-500">You're all caught up.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {/* Outstanding */}
+              <button
+                type="button"
+                onClick={() => onNavigateInvoices?.('unpaid')}
+                className="text-left p-3 rounded-xl bg-amber-50 border border-amber-200/80 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                aria-label={`Outstanding balance ${formatCurrency(outstandingTotal)}`}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Outstanding</p>
+                <p className="text-base sm:text-lg font-extrabold font-mono text-amber-950 leading-tight">
+                  {formatCurrency(outstandingTotal)}
+                </p>
+                <p className="text-[10px] text-amber-700 font-medium mt-0.5">
+                  {isFullyPaid ? 'No unpaid balance' : `${payableInvoices.length} open`}
+                </p>
+              </button>
+
+              {/* Total Paid */}
+              <div className="text-left p-3 rounded-xl bg-emerald-50 border border-emerald-200/80">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-1">Total Paid</p>
+                <p className="text-base sm:text-lg font-extrabold font-mono text-emerald-900 leading-tight">
+                  {formatCurrency(totalPayment)}
+                </p>
+                <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                  {paidInvoices.length} invoice{paidInvoices.length === 1 ? '' : 's'}
+                </p>
               </div>
-              <CheckCircle2
-                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFullyPaid ? 'text-emerald-400' : 'text-amber-400'}`}
+
+              {/* Invoice Count */}
+              <button
+                type="button"
+                onClick={() => onNavigateTab('invoices')}
+                className="text-left p-3 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                aria-label={`${invoices.length} total invoices`}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Invoices</p>
+                <p className="text-base sm:text-lg font-extrabold font-mono text-slate-900 leading-tight">
+                  {invoices.length}
+                </p>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                  {overdueInvoices.length > 0 && (
+                    <span className="text-rose-600 font-bold">{overdueInvoices.length} overdue</span>
+                  )}
+                  {overdueInvoices.length === 0 && partialInvoices.length > 0 && (
+                    <span className="text-amber-600">{partialInvoices.length} partial</span>
+                  )}
+                  {overdueInvoices.length === 0 && partialInvoices.length === 0 && 'All time'}
+                </p>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Credit utilization — only when meaningful */}
+        {hasCreditData && outstandingTotal > 0 && (
+          <div className="px-4 pb-4">
+            <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <span>Credit Utilization</span>
+              <span>{Math.round(((profile.currentBalance ?? 0) / profile.creditLimit) * 100)}%</span>
+            </div>
+            <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  (profile.currentBalance ?? 0) >= profile.creditLimit
+                    ? 'bg-rose-500'
+                    : (profile.currentBalance ?? 0) / profile.creditLimit > 0.8
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.min(100, ((profile.currentBalance ?? 0) / profile.creditLimit) * 100)}%` }}
               />
             </div>
-            <p className="text-xl sm:text-3xl font-extrabold font-mono text-white">
-              {formatCurrency(totalPayment)}
-            </p>
-            <p
-              className={`text-[10px] sm:text-[11px] ${isFullyPaid ? 'text-emerald-300 font-bold' : 'text-slate-400'}`}
-            >
-              {isFullyPaid ? 'Fully Settled ✓' : 'All-time Payments Recorded'}
-            </p>
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* 5. Quick Actions — small list cards in a 3×2 grid */}
+      {/* ═══ 5. QUICK ACTIONS — compact list cards ═══════════════════════════ */}
       <div className="space-y-3">
-        <SectionHeader
-          icon={Zap}
-          iconChipClass="bg-indigo-50 text-indigo-600"
-          title="Quick Actions"
-          subtitle="Common tasks in one tap"
-        />
-
+        <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-2.5 px-0.5">Quick Actions</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {[
             {
               key: 'pay',
-              label: 'Pay Invoices',
+              label: 'Pay Invoice',
+              count: payableInvoices.length,
               icon: CreditCard,
               chip: 'bg-blue-50 text-blue-600 group-hover:bg-blue-100',
               go: onOpenPaymentModal,
@@ -667,6 +651,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'order',
               label: 'New Order',
+              count: null,
               icon: ShoppingBag,
               chip: 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100',
               go: () => onNavigateTab('orders'),
@@ -674,20 +659,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'quote',
               label: 'Get Quote',
+              count: null,
               icon: MessageSquareQuote,
               chip: 'bg-purple-50 text-purple-600 group-hover:bg-purple-100',
               go: () => onNavigateTab('quotes'),
             },
             {
               key: 'track',
-              label: 'Track Shipments',
+              label: 'Track',
+              count: deliveries.length,
               icon: Truck,
               chip: 'bg-sky-50 text-sky-600 group-hover:bg-sky-100',
               go: () => onNavigateTab('deliveries'),
             },
             {
               key: 'refer',
-              label: 'Refer Business',
+              label: 'Refer',
+              count: null,
               icon: Gift,
               chip: 'bg-amber-50 text-amber-600 group-hover:bg-amber-100',
               go: () => onNavigateTab('referrals'),
@@ -695,16 +683,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'stmts',
               label: 'Statements',
+              count: statements.length > 0 ? statements.length : null,
               icon: Receipt,
               chip: 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100',
               go: () => onNavigateTab('statements'),
             },
-          ].map(({ key, label, icon: Icon, chip, go }) => (
+          ].map(({ key, label, count, icon: Icon, chip, go }) => (
             <button
               key={key}
               type="button"
               onClick={go}
-              aria-label={label}
+              aria-label={count !== null ? `${label} (${count})` : label}
               className="group px-2.5 py-2 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all flex items-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 min-w-0"
             >
               <span className={`shrink-0 p-1.5 rounded-lg transition-colors ${chip}`} aria-hidden="true">
@@ -713,41 +702,148 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <span className="flex-1 min-w-0 text-[11.5px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors truncate text-left">
                 {label}
               </span>
+              {count !== null && count > 0 && (
+                <span className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-black min-w-[16px]">
+                  {count}
+                </span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* 6. Recent Activity — ledger feed */}
-      <div className="space-y-3">
-        <SectionHeader
-          icon={Activity}
-          iconChipClass="bg-amber-50 text-amber-600"
-          title="Recent Activity"
-          subtitle="Latest ledger entries"
-          action={
+      {/* ═══ 6. ACTIVE ORDERS ═════════════════════════════════════════════════ */}
+      {activeOrders.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2.5 px-0.5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex p-1.5 rounded-lg bg-indigo-50" aria-hidden="true">
+                <Package className="w-4 h-4 text-indigo-600" />
+              </span>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight">Active Orders</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('orders')}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
+            >
+              View all <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {activeOrders.slice(0, 3).map((order) => {
+              const status = ORDER_STATUS_STYLES[order.status] ?? { label: order.status, dot: 'bg-slate-400' };
+              return (
+                <button
+                  key={order.id}
+                  type="button"
+                  onClick={() => onNavigateTab('orders')}
+                  className="w-full flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${status.dot}`} aria-hidden="true" />
+                    <div className="min-w-0 text-left">
+                      <p className="text-xs font-bold text-slate-900 font-mono truncate group-hover:text-blue-600 transition-colors">
+                        {order.orderNumber}
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {order.items.length} item{order.items.length === 1 ? '' : 's'}
+                        {order.estimatedDelivery && ` · Est. ${formatDate(order.estimatedDelivery)}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-bold text-slate-500">{status.label}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ 7. ACTIVE DELIVERIES ═════════════════════════════════════════════ */}
+      {activeDeliveries.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2.5 px-0.5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex p-1.5 rounded-lg bg-sky-50" aria-hidden="true">
+                <Truck className="w-4 h-4 text-sky-600" />
+              </span>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight">Shipments in Progress</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('deliveries')}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
+            >
+              View all <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {activeDeliveries.slice(0, 3).map((d) => {
+              const status = DELIVERY_STATUS_STYLES[d.status] ?? { label: d.status, dot: 'bg-slate-400' };
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => onNavigateTab('deliveries')}
+                  className="w-full flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${status.dot}`} aria-hidden="true" />
+                    <div className="min-w-0 text-left">
+                      <p className="text-xs font-bold text-slate-900 font-mono truncate group-hover:text-blue-600 transition-colors">
+                        {d.trackingNumber}
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {d.title || `Order ${d.orderId}`}
+                        {d.estimatedArrival && ` · ETA ${d.estimatedArrival}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-bold text-slate-500">{status.label}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ 8. RECENT ACTIVITY ═══════════════════════════════════════════════ */}
+      <div>
+        <div className="flex items-center justify-between mb-2.5 px-0.5">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex p-1.5 rounded-lg bg-amber-50" aria-hidden="true">
+              <Activity className="w-4 h-4 text-amber-600" />
+            </span>
+            <h3 className="text-sm font-black text-slate-900 tracking-tight">Recent Activity</h3>
+          </div>
+          {recentStatements.length > 0 && (
             <button
               type="button"
               onClick={() => onNavigateTab('statements')}
-              className="inline-flex shrink-0 items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:text-slate-900 hover:border-slate-300 transition-colors"
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
             >
-              View All
-              <ChevronRight className="w-3.5 h-3.5" />
+              View all <ChevronRight className="w-3 h-3" />
             </button>
-          }
-        />
+          )}
+        </div>
 
         {recentStatements.length === 0 ? (
-          /* Empty state — no ledger entries yet */
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center space-y-2 shadow-md">
-            <Activity className="w-8 h-8 mx-auto stroke-1 text-slate-300" />
-            <p className="font-bold text-sm text-slate-700">No recent activity</p>
-            <p className="text-xs text-slate-500 font-medium">
-              Ledger entries will appear here once financial activity is recorded.
+          <div className="px-4 py-6 text-center border border-dashed border-slate-200 rounded-xl">
+            <Activity className="w-6 h-6 mx-auto stroke-1 text-slate-300 mb-1.5" />
+            <p className="text-xs font-bold text-slate-600">No activity yet</p>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+              Invoices, payments and orders will appear here.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3">
+          <div className="space-y-1.5">
             {recentStatements.map((st) => {
               const tone = ACTIVITY_TONES[st.type] ?? ACTIVITY_DEFAULT_TONE;
               const ToneIcon = tone.icon;
@@ -757,61 +853,74 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   type="button"
                   onClick={() => onNavigateTab('statements')}
                   aria-label={`${st.type} ${st.reference}: ${st.description}. View statements.`}
-                  className="w-full text-left bg-white rounded-2xl border border-slate-200/80 p-4 shadow-md hover:border-slate-300 hover:shadow-lg transition-all cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="w-full flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group"
                 >
-                  <div className="flex items-center gap-3">
-                    {/* Type icon */}
-                    <span
-                      className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${tone.cls}`}
-                      aria-hidden="true"
-                    >
-                      <ToneIcon className="w-4 h-4" />
-                    </span>
-
-                    {/* Reference, type + description + date */}
-                    <span className="flex-1 min-w-0 space-y-0.5">
-                      <span className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-slate-900 truncate group-hover:text-blue-600 transition-colors">
-                          {st.reference}
-                        </span>
-                        <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
-                          {st.type}
-                        </span>
+                  <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${tone.cls}`} aria-hidden="true">
+                    <ToneIcon className="w-3.5 h-3.5" />
+                  </span>
+                  <span className="flex-1 min-w-0 text-left">
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-mono font-bold text-[11px] text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                        {st.reference}
                       </span>
-                      <span className="block text-xs text-slate-600 font-medium line-clamp-1">
-                        {st.description}
-                      </span>
-                      <span className="block text-[11px] text-slate-400 font-medium">
-                        {formatDate(st.date)}
+                      <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">
+                        {st.type}
                       </span>
                     </span>
-
-                    {/* Amount + balance */}
-                    <span className="text-right shrink-0 flex items-center gap-1.5">
-                      <span className="block font-medium">
-                        {st.debit > 0 ? (
-                          <span className="text-xs font-black text-slate-900 block tabular-nums">
-                            +{formatCurrency(st.debit)}
-                          </span>
-                        ) : (
-                          <span className="text-xs font-black text-emerald-600 block tabular-nums">
-                            -{formatCurrency(st.credit)}
-                          </span>
-                        )}
-                        <span className="text-[11px] text-slate-400 block font-medium tabular-nums">
-                          Bal: {formatCurrency(st.balance)}
-                        </span>
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
+                    <span className="block text-[11px] text-slate-500 font-medium line-clamp-1 mt-0.5">
+                      {st.description}
                     </span>
-                  </div>
+                  </span>
+                  <span className="text-right shrink-0 flex flex-col items-end gap-0.5">
+                    <span className="text-xs font-black tabular-nums">
+                      {st.debit > 0 ? (
+                        <span className="text-slate-900">+{formatCurrency(st.debit)}</span>
+                      ) : (
+                        <span className="text-emerald-600">-{formatCurrency(st.credit)}</span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium tabular-nums">
+                      {timeAgo(st.date)}
+                    </span>
+                  </span>
                 </button>
               );
             })}
           </div>
         )}
       </div>
+
+      {/* ═══ 9. ACCOUNT SNAPSHOT ═══════════════════════════════════════════════ */}
+      {hasCreditData && (
+        <div>
+          <div className="flex items-center justify-between mb-2.5 px-0.5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex p-1.5 rounded-lg bg-slate-100" aria-hidden="true">
+                <Wallet className="w-4 h-4 text-slate-600" />
+              </span>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight">Account Snapshot</h3>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200/80 divide-y divide-slate-100">
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-xs text-slate-500 font-medium">Credit limit</span>
+              <span className="text-xs font-black text-slate-900 tabular-nums">{formatCurrency(profile.creditLimit)}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-xs text-slate-500 font-medium">Available credit</span>
+              <span className={`text-xs font-black tabular-nums ${availableCredit > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                {formatCurrency(availableCredit)}
+              </span>
+            </div>
+            {profile.tier && (
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-xs text-slate-500 font-medium">Customer tier</span>
+                <span className="text-xs font-black text-slate-900">{profile.tier}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-

@@ -507,6 +507,7 @@ function CustomerPortalShell({
               <DashboardTab
                 profile={profile ?? ({} as AccountProfile)}
                 invoices={invoices}
+                orders={orders}
                 deliveries={deliveries}
                 statements={statements}
                 ads={ads}
@@ -656,7 +657,6 @@ function CustomerPortalShell({
           setActiveTab={handleNavigateTab}
           unpaidCount={unpaidInvoices.length}
           deliveryAlertCount={notificationBadgeCount}
-          cartCount={cartCount}
         />
       </div>
 
