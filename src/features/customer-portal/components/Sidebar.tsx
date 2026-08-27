@@ -15,7 +15,6 @@ import {
   ShoppingBag,
   Truck,
   User,
-  Wallet,
 } from 'lucide-react';
 import { AccountProfile, TabType } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -142,33 +141,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* Quick Actions & Credit Balance */}
+      {/* Quick Actions */}
       <div className="space-y-3 pt-4 border-t border-slate-100">
-        <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-extrabold text-slate-600 flex items-center gap-1.5">
-              <Wallet className="w-4 h-4 text-emerald-600" />
-              Available Credit
-            </span>
-            <span className="font-black text-emerald-600">
-              {profile ? formatCurrency((profile.creditLimit || 0) - (profile.currentBalance || 0)) : formatCurrency(0)}
-            </span>
-          </div>
-          <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-            <div
-              className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-              style={{
-                width: profile
-                  ? `${Math.min(100, Math.max(0, ((profile.creditLimit || 0) - (profile.currentBalance || 0)) / (profile.creditLimit || 1)) * 100)}%`
-                  : '0%',
-              }}
-            />
-          </div>
-          <div className="text-[11.5px] text-slate-400 font-medium text-right">
-            Limit: {profile ? formatCurrency(profile.creditLimit || 0) : formatCurrency(0)}
-          </div>
-        </div>
-
         {unpaidTotal > 0 && (
           <button
             onClick={onOpenPaymentModal}
