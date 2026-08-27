@@ -13,7 +13,6 @@ interface BottomNavigationProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   unpaidCount: number;
-  deliveryAlertCount: number;
   onOpenMore?: () => void;
 }
 
@@ -21,7 +20,6 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   activeTab,
   setActiveTab,
   unpaidCount,
-  deliveryAlertCount,
 }) => {
   const primaryTabs: {
     id: TabType;
@@ -33,7 +31,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'invoices', label: 'Invoices', icon: FileText, badge: unpaidCount, badgeColor: 'bg-rose-600' },
     { id: 'orders', label: 'Orders', icon: ShoppingBag },
-    { id: 'deliveries', label: 'Deliveries', icon: Truck, badge: deliveryAlertCount, badgeColor: 'bg-emerald-600' },
+    { id: 'deliveries', label: 'Deliveries', icon: Truck },
   ];
 
   const isMoreTab = !['dashboard', 'invoices', 'orders', 'deliveries'].includes(activeTab);

@@ -173,32 +173,13 @@ function CustomerPortalShell({
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   // ── Notification badge ────────────────────────────────────────────────────
-  // The bell consolidates ERP unread items PLUS pending Quick Action work
-  // (open invoices / shipments to track / statement entries). Opening the
-  // drawer marks everything seen: ERP unread is cleared via read-all and the
-  // Quick Action portion latches off until new unread notifications arrive.
-  const [notificationsSeen, setNotificationsSeen] = useState(false);
+  // Badge shows only the real ERP unread notification count.
+  // No inflation with invoice/delivery/statement totals.
+  const notificationBadgeCount = unreadNotificationCount;
 
   const handleOpenNotifications = () => {
     setIsNotificationDrawerOpen(true);
-    if (!notificationsSeen) {
-      setNotificationsSeen(true);
-      portalService
-        .markAllNotificationsRead()
-        .then(() => {
-          notificationsQuery.refetch();
-          unreadQuery.refetch();
-        })
-        .catch(() => {
-          // Badge clearing is cosmetic — never block the drawer.
-          notificationsQuery.refetch();
-          unreadQuery.refetch();
-        });
-    }
   };
-
-  const notificationBadgeCount =
-    unreadNotificationCount + (notificationsSeen ? 0 : unpaidInvoices.length + deliveries.length + statements.length);
 
   // ── Action helpers ────────────────────────────────────────────────────────
   const runAction = async <T,>(action: () => Promise<T>): Promise<T> => {
@@ -447,7 +428,6 @@ function CustomerPortalShell({
         profile={profile}
         unpaidCount={unpaidInvoices.length}
         unpaidTotal={unpaidTotal}
-        deliveryAlertCount={notificationBadgeCount}
         cartCount={cartCount}
         onOpenPaymentModal={() => handleNavigateTab('invoices')}
         onOpenQuoteModal={() => setIsQuoteModalOpen(true)}
@@ -656,7 +636,6 @@ function CustomerPortalShell({
           activeTab={activeTab}
           setActiveTab={handleNavigateTab}
           unpaidCount={unpaidInvoices.length}
-          deliveryAlertCount={notificationBadgeCount}
         />
       </div>
 

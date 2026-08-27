@@ -26,7 +26,6 @@ interface SidebarProps {
   profile: AccountProfile | null;
   unpaidCount: number;
   unpaidTotal: number;
-  deliveryAlertCount: number;
   cartCount: number;
   onOpenPaymentModal: () => void;
   onOpenQuoteModal: () => void;
@@ -40,7 +39,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   profile,
   unpaidCount,
   unpaidTotal,
-  deliveryAlertCount,
   cartCount,
   onOpenPaymentModal,
   onOpenQuoteModal,
@@ -51,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'invoices', label: 'Customer Invoices', icon: FileText, badge: unpaidCount, badgeColor: 'bg-rose-600' },
     { id: 'orders', label: 'Orders & Catalog', icon: ShoppingBag, badge: cartCount, badgeColor: 'bg-slate-900' },
-    { id: 'deliveries', label: 'Shipments & Tracking', icon: Truck, badge: deliveryAlertCount, badgeColor: 'bg-emerald-600' },
+    { id: 'deliveries', label: 'Shipments & Tracking', icon: Truck },
     { id: 'quotes', label: 'Quotations', icon: MessageSquareQuote },
     { id: 'statements', label: 'Account Ledger', icon: Receipt },
     { id: 'referrals', label: 'Partner Rewards', icon: Gift },
