@@ -353,7 +353,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         aria-live="polite"
         aria-label="Announcements and account updates"
         tabIndex={bannerSlides.length > 1 ? 0 : -1}
-        className="relative overflow-hidden rounded-2xl aspect-[2.6/1] w-full bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
+        className="relative overflow-hidden rounded-2xl aspect-[2.6/1] mx-4 w-[calc(100%-2rem)] bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
       >
         <div
           key={activeSlide.id}
