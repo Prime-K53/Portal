@@ -38,17 +38,28 @@ export function useAuth(): UseAuthResult {
 
   useEffect(() => {
     let active = true;
-    authService
-      .refreshSession()
-      .then((restored) => {
-        if (active) setSession(restored);
-      })
-      .catch(() => {
-        if (active) setSession(null);
-      })
-      .finally(() => {
-        if (active) setIsRestoring(false);
-      });
+    // If a valid session already exists (e.g. just established by login or
+    // already restored by CustomerAuthProvider), trust it immediately instead
+    // of starting a redundant refresh. This avoids a race condition where a
+    // second refresh call conflicts with in-flight data requests and
+    // terminates the session before the data hooks finish loading.
+    const existing = authService.getSession();
+    if (existing) {
+      setSession(existing);
+      setIsRestoring(false);
+    } else {
+      authService
+        .refreshSession()
+        .then((restored) => {
+          if (active) setSession(restored);
+        })
+        .catch(() => {
+          if (active) setSession(null);
+        })
+        .finally(() => {
+          if (active) setIsRestoring(false);
+        });
+    }
     return () => {
       active = false;
     };

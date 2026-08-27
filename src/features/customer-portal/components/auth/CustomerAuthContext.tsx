@@ -92,7 +92,20 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       if (outcome.type === 'two_factor') {
         return { requiresTwoFactor: true, pendingToken: 'pending' };
       }
-      setUser(outcome.session.user);
+      // Validate the freshly-created session by rotating it through the ERP
+      // BEFORE navigation. This ensures the access token in sessionStorage is
+      // the validated one (not the raw login token), preventing 401s on the
+      // first data-fetch cycle. If the refresh fails for any reason, fall back
+      // to the original login token — the API client's 401-retry logic will
+      // handle the rest.
+      let finalUser = outcome.session.user;
+      try {
+        const refreshed = await authService.refreshSession();
+        if (refreshed?.user) finalUser = refreshed.user;
+      } catch {
+        // Best-effort: proceed with the login token if refresh fails.
+      }
+      setUser(finalUser);
       return { requiresTwoFactor: false };
     },
     [syncFromStore]
