@@ -16,7 +16,6 @@ import {
   AccountProfile,
   PortalReferral,
   ReferralCreatePayload,
-  ReferralCustomerSearchResult,
   ReferralReward,
   ReferralStats,
   ReferralTimelineEntry,
@@ -32,12 +31,10 @@ interface ReferralsTabProps {
   stats: ReferralStats | null;
   rewards: ReferralReward[];
   wallet: Wallet | null;
-  /** Creates a referral of an EXISTING ERP customer. `idempotencyKey`
-   * identifies this logical submission attempt and is reused when the attempt
-   * is retried (the ERP replays its stored response for the same key). */
+  /** Creates a prospective-person referral. `idempotencyKey` identifies this
+   * logical submission attempt and is reused when the attempt is retried
+   * (the ERP replays its stored response for the same key). */
   onCreateReferral: (payload: ReferralCreatePayload, idempotencyKey: string) => Promise<PortalReferral>;
-  /** Searches ERP customers by name/email (min 2 chars, ERP-side). */
-  onSearchCustomers: (query: string) => Promise<ReferralCustomerSearchResult[]>;
   /** Loads the ERP-tracked lifecycle timeline for one referral. */
   onLoadTimeline: (referralId: string) => Promise<ReferralTimelineEntry[]>;
 }
@@ -61,27 +58,21 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
   rewards,
   wallet,
   onCreateReferral,
-  onSearchCustomers,
   onLoadTimeline,
 }) => {
-  // ── Refer-a-customer flow ────────────────────────────────────────────────
+  // ── Refer-a-person flow ──────────────────────────────────────────────────
   const [isFlowOpen, setIsFlowOpen] = React.useState(false);
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [searchResults, setSearchResults] = React.useState<ReferralCustomerSearchResult[]>([]);
-  const [isSearching, setIsSearching] = React.useState(false);
-  const [searchError, setSearchError] = React.useState('');
-  const [selectedCustomer, setSelectedCustomer] = React.useState<ReferralCustomerSearchResult | null>(null);
+  const [referredName, setReferredName] = React.useState('');
+  const [referredEmail, setReferredEmail] = React.useState('');
+  const [referredPhone, setReferredPhone] = React.useState('');
   const [notes, setNotes] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [createError, setCreateError] = React.useState('');
   const [createdReferral, setCreatedReferral] = React.useState<PortalReferral | null>(null);
 
-  // Idempotency key for the CURRENT logical submission attempt: generated on
-  // the first attempt, reused while retrying the SAME attempt (the ERP replays
-  // its stored response), cleared on success and whenever the submission
-  // payload changes (a different customer/notes is a NEW logical submission).
+  // Idempotency key for the CURRENT logical submission attempt.
   const submissionKeyRef = React.useRef<string | null>(null);
-  const payloadSignature = JSON.stringify([selectedCustomer?.id ?? null, notes.trim()]);
+  const payloadSignature = JSON.stringify([referredName.trim(), referredEmail.trim(), referredPhone.trim(), notes.trim()]);
   const lastPayloadSignatureRef = React.useRef(payloadSignature);
   React.useEffect(() => {
     if (lastPayloadSignatureRef.current !== payloadSignature) {
@@ -90,44 +81,10 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
     }
   }, [payloadSignature]);
 
-  const searchCustomersRef = React.useRef(onSearchCustomers);
-  searchCustomersRef.current = onSearchCustomers;
-
-  // Debounced ERP customer search (ERP requires >= 2 chars).
-  React.useEffect(() => {
-    const q = searchQuery.trim();
-    if (q.length < 2) {
-      setSearchResults([]);
-      setSearchError('');
-      return;
-    }
-    let active = true;
-    setIsSearching(true);
-    setSearchError('');
-    const timer = window.setTimeout(async () => {
-      try {
-        const results = await searchCustomersRef.current(q);
-        if (active) setSearchResults(results);
-      } catch (err) {
-        if (active) {
-          setSearchResults([]);
-          setSearchError(err instanceof Error ? err.message : 'Customer search failed.');
-        }
-      } finally {
-        if (active) setIsSearching(false);
-      }
-    }, 350);
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [searchQuery]);
-
   const handleSubmitReferral = async () => {
-    if (!selectedCustomer) return;
+    if (!referredName.trim()) return;
+    if (!referredEmail.trim() && !referredPhone.trim()) return;
 
-    // One key per logical submission attempt — kept across retries of THIS
-    // attempt, cleared on success (and by the payload-signature effect).
     if (!submissionKeyRef.current) {
       submissionKeyRef.current = generateIdempotencyKey();
     }
@@ -137,17 +94,21 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
     setCreateError('');
     try {
       const created = await onCreateReferral(
-        { referredCustomerId: selectedCustomer.id, notes: notes.trim() || undefined },
+        {
+          referredName: referredName.trim(),
+          referredEmail: referredEmail.trim() || undefined,
+          referredPhone: referredPhone.trim() || undefined,
+          notes: notes.trim() || undefined,
+        },
         idempotencyKey
       );
       submissionKeyRef.current = null;
       setCreatedReferral(created);
-      setSelectedCustomer(null);
+      setReferredName('');
+      setReferredEmail('');
+      setReferredPhone('');
       setNotes('');
-      setSearchQuery('');
-      setSearchResults([]);
     } catch (err) {
-      // Keep the key — a retry of the same attempt must reuse it.
       setCreateError(err instanceof Error ? err.message : 'The referral could not be submitted.');
     } finally {
       setIsSubmitting(false);
@@ -197,7 +158,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
         </div>
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight">Partner Referral Program</h2>
-          <p className="text-xs text-slate-500">Refer existing customers — the ERP tracks conversions and rewards</p>
+          <p className="text-xs text-slate-500">Refer new people — the ERP tracks conversions and rewards</p>
         </div>
       </div>
 
@@ -244,7 +205,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                 </div>
                 <div>
                   <h3 className="font-extrabold text-sm text-slate-900">Refer a Customer</h3>
-                  <p className="text-[11px] text-slate-500">Search for an existing customer in the ERP</p>
+                  <p className="text-[11px] text-slate-500">Refer a new or prospective person</p>
                 </div>
               </div>
               {!isFlowOpen && (
@@ -259,78 +220,49 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
 
             {isFlowOpen && (
               <div className="mt-3 space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                    Search Customer (min 2 characters)
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Name <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Name or email…"
+                      value={referredName}
+                      onChange={(e) => setReferredName(e.target.value)}
+                      placeholder="Full name of the person"
                       disabled={isSubmitting}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/60"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/60"
                     />
                   </div>
 
-                  {isSearching && (
-                    <p className="mt-2 flex items-center gap-2 text-xs text-slate-500 font-medium">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Searching the ERP…
-                    </p>
-                  )}
-                  {!isSearching && searchError && (
-                    <p className="mt-2 flex items-center gap-1.5 text-xs text-rose-600 font-medium">
-                      <AlertTriangle className="w-3.5 h-3.5" /> {searchError}
-                    </p>
-                  )}
-                  {!isSearching && !searchError && searchResults.length > 0 && (
-                    <ul className="mt-2 rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-                      {searchResults.map((customer) => {
-                        const isSelected = selectedCustomer?.id === customer.id;
-                        return (
-                          <li key={customer.id}>
-                            <button
-                              onClick={() => {
-                                setSelectedCustomer(customer);
-                                setSearchResults([]);
-                                setSearchQuery('');
-                              }}
-                              className={`w-full text-left px-3 py-2.5 hover:bg-amber-50 transition-colors ${
-                                isSelected ? 'bg-amber-50' : 'bg-white'
-                              }`}
-                            >
-                              <p className="text-sm font-bold text-slate-900">{customer.name}</p>
-                              <p className="text-xs text-slate-500 font-medium">{customer.email}</p>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                  {!isSearching && !searchError && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-                    <p className="mt-2 text-xs text-slate-500 font-medium">
-                      No matching customers found in the ERP.
-                    </p>
-                  )}
-                </div>
-
-                {selectedCustomer && (
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-900 truncate">{selectedCustomer.name}</p>
-                      <p className="text-xs text-slate-500 font-medium truncate">{selectedCustomer.email}</p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedCustomer(null)}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Email <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={referredEmail}
+                      onChange={(e) => setReferredEmail(e.target.value)}
+                      placeholder="email@example.com"
                       disabled={isSubmitting}
-                      className="text-xs font-bold text-slate-500 hover:text-rose-600 shrink-0"
-                    >
-                      Change
-                    </button>
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/60"
+                    />
                   </div>
-                )}
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={referredPhone}
+                      onChange={(e) => setReferredPhone(e.target.value)}
+                      placeholder="+265 ..."
+                      disabled={isSubmitting}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/60"
+                    />
+                  </div>
+                </div>
 
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
@@ -341,7 +273,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Context for the referral…"
                     rows={2}
-                    disabled={!selectedCustomer || isSubmitting}
+                    disabled={isSubmitting}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/60 disabled:opacity-50"
                   />
                 </div>
@@ -354,14 +286,14 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
 
                 <button
                   onClick={handleSubmitReferral}
-                  disabled={!selectedCustomer || isSubmitting}
+                  disabled={!referredName.trim() || (!referredEmail.trim() && !referredPhone.trim()) || isSubmitting}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 text-slate-950 text-sm font-extrabold px-4 py-3 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
                   {isSubmitting ? 'Submitting…' : 'Submit Referral'}
                 </button>
                 <p className="text-[11px] text-slate-400 font-medium text-center">
-                  The referral is created for this ERP customer — no invitation email is sent from here.
+                  Existing customers cannot be referred. Only new/prospective people are eligible.
                 </p>
               </div>
             )}
@@ -374,7 +306,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
         <h3 className="font-extrabold text-sm text-slate-900 mb-3">My Referrals</h3>
         {referrals.length === 0 ? (
           <p className="text-xs text-slate-500 font-medium py-2">
-            No referrals yet. Use “Refer a Customer” above to refer an existing customer.
+            No referrals yet. Use "Refer Someone" above to refer a new person.
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -392,7 +324,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                       <p className="text-sm font-bold text-slate-900 truncate">
                         {referral.referredCustomerName || referral.referredCustomerId}
                       </p>
-                      <p className="text-xs text-slate-500 font-medium">Referred {formatDate(referral.createdAt)}</p>
+                      <p className="text-xs text-slate-500 font-medium">{referral.referredCustomerEmail || referral.referredCustomerPhone || ''} · Referred {formatDate(referral.createdAt)}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${statusBadge.bg}`}>

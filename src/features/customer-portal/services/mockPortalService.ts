@@ -30,7 +30,6 @@ import type {
   Quotation,
   QuoteRequest,
   ReferralCreatePayload,
-  ReferralCustomerSearchResult,
   ReferralReward,
   ReferralSettings,
   ReferralStats,
@@ -412,13 +411,8 @@ export class MockPortalService implements PortalService {
 
   // ── Referrals ─────────────────────────────────────────────────────────────
   //
-  // DELIBERATELY NOT mocked. Referrals refer EXISTING ERP customers
-  // (search → select → create), the ERP tracks the lifecycle and staff manage
-  // rewards + wallet crediting — no customer-facing claim or invite flow
-  // exists. The mock surfaces an explicit UNAVAILABLE error (same pattern as
-  // payment requests), so the dev UI never pretends a referral exists, was
-  // created, or that a reward can be claimed. The mock must not contradict
-  // the real ERP API contract.
+  // DELIBERATELY NOT mocked. Referrals are prospective-person invitations
+  // managed by the ERP. The mock surfaces an explicit UNAVAILABLE error.
 
   private referralUnavailable(): Promise<never> {
     return Promise.reject(
@@ -427,10 +421,6 @@ export class MockPortalService implements PortalService {
         { code: 'UNAVAILABLE' }
       )
     );
-  }
-
-  searchReferralCustomers(_query: string): Promise<ReferralCustomerSearchResult[]> {
-    return this.referralUnavailable();
   }
 
   getReferrals(): Promise<PortalReferral[]> {

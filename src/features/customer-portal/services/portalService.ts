@@ -21,7 +21,6 @@ import type {
   ErpReferral,
   ErpReferralCreatePayload,
   ErpReferralCreateResult,
-  ErpReferralCustomerSearchResult,
   ErpReferralReward,
   ErpReferralSettings,
   ErpReferralStats,
@@ -50,7 +49,6 @@ import type {
   QuoteRequestItem,
   QuoteStatus,
   ReferralCreatePayload,
-  ReferralCustomerSearchResult,
   ReferralReward,
   ReferralSettings,
   ReferralStats,
@@ -134,7 +132,6 @@ export interface PortalService {
   getStatements(startDate?: string, endDate?: string): Promise<StatementEntry[]>;
 
   // ── Referrals ───────────────────────────────────────────────────────────────
-  searchReferralCustomers(query: string): Promise<ReferralCustomerSearchResult[]>;
   getReferrals(): Promise<PortalReferral[]>;
   getReferral(referralId: string): Promise<PortalReferral>;
   getReferralTimeline(referralId: string): Promise<ReferralTimelineEntry[]>;
@@ -458,10 +455,13 @@ function mapNotification(notification: ErpNotification): PortalNotification {
 function mapErpReferral(referral: ErpReferral): PortalReferral {
   return {
     id: referral.id,
-    referredCustomerId: referral.referred_customer_id,
-    referredCustomerName: referral.referred_customer_name,
+    referredCustomerId: referral.customer_id || referral.registered_customer_id || null,
+    referredCustomerName: referral.referred_customer_name || referral.customer_id || null,
     referredCustomerEmail: referral.referred_customer_email,
-    status: referral.status,
+    referredCustomerPhone: referral.referred_customer_phone ?? null,
+    registeredCustomerId: referral.registered_customer_id ?? null,
+    registeredAt: referral.registered_at ?? null,
+    status: (referral.status as PortalReferral['status']) || 'pending',
     pendingInvoiceId: referral.pending_invoice_id,
     pendingInvoiceAmount: referral.pending_invoice_amount,
     convertedInvoiceId: referral.converted_invoice_id,
@@ -482,10 +482,13 @@ function mapErpReferral(referral: ErpReferral): PortalReferral {
 function mapErpReferralCreateResult(result: ErpReferralCreateResult): PortalReferral {
   return {
     id: result.id,
-    referredCustomerId: result.customer_id,
-    referredCustomerName: '',
-    referredCustomerEmail: null,
-    status: (result.status as PortalReferral['status']) || 'active',
+    referredCustomerId: result.customer_id || result.registered_customer_id || null,
+    referredCustomerName: result.referred_name || result.customer_id || null,
+    referredCustomerEmail: result.referred_email ?? null,
+    referredCustomerPhone: result.referred_phone ?? null,
+    registeredCustomerId: result.registered_customer_id ?? null,
+    registeredAt: result.registered_at ?? null,
+    status: (result.status as PortalReferral['status']) || 'pending',
     pendingInvoiceId: result.pending_invoice_id,
     pendingInvoiceAmount: result.pending_invoice_amount ?? 0,
     convertedInvoiceId: result.converted_invoice_id,
@@ -961,21 +964,8 @@ export class ErpPortalService implements PortalService {
 
   // ── Referrals ───────────────────────────────────────────────────────────────
 
-  /**
-   * GET /api/portal/referrals/customers/search?q=... — searches the ERP
-   * customer directory (name/email). The ERP enforces the minimum 2-char
-   * query, excludes the authenticated customer and caps results at 20; Sasa
-   * mirrors the minimum length client-side so no request is wasted. The query
-   * is embedded in the path because the ApiClient has no generic params bag.
-   */
-  async searchReferralCustomers(query: string): Promise<ReferralCustomerSearchResult[]> {
-    const q = query.trim();
-    if (q.length < 2) return [];
-    const data = await this.client.get<ErpReferralCustomerSearchResult[]>(
-      `/portal/referrals/customers/search?q=${encodeURIComponent(q)}`
-    );
-    return (data ?? []).map((r) => ({ id: r.id, name: r.name, email: r.email }));
-  }
+  // searchReferralCustomers removed — prospective-person referrals do not
+  // search the ERP customer directory.
 
   async getReferrals(): Promise<PortalReferral[]> {
     const data = await this.client.get<
@@ -1015,13 +1005,17 @@ export class ErpPortalService implements PortalService {
    */
   async createReferral(payload: ReferralCreatePayload, idempotencyKey: string): Promise<PortalReferral> {
     const body: ErpReferralCreatePayload = {
-      referredCustomerId: payload.referredCustomerId,
+      referredName: payload.referredName,
+      ...(payload.referredEmail ? { referredEmail: payload.referredEmail } : {}),
+      ...(payload.referredPhone ? { referredPhone: payload.referredPhone } : {}),
       ...(payload.notes ? { notes: payload.notes } : {}),
     };
     const data = await this.client.post<ErpReferralCreateResult | ErpReferral>('/portal/referrals', body, {
       headers: { 'Idempotency-Key': idempotencyKey },
     });
-    return 'customer_id' in data ? mapErpReferralCreateResult(data) : mapErpReferral(data);
+    return 'id' in data && 'referred_name' in data
+      ? mapErpReferralCreateResult(data as ErpReferralCreateResult)
+      : mapErpReferral(data as ErpReferral);
   }
 
   async getReferralRewards(): Promise<ReferralReward[]> {

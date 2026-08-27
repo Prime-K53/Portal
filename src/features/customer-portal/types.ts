@@ -482,18 +482,21 @@ export type StatementEntry = Statement;
 // Referrals
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface ReferralCustomerSearchResult {
-  id: string;
-  name: string;
-  email: string | null;
-}
-
 export interface PortalReferral {
   id: string;
-  referredCustomerId: string;
-  referredCustomerName: string;
+  /** The referred customer's ID (only set after registration). */
+  referredCustomerId: string | null;
+  /** The prospective person's name (set at referral creation). */
+  referredCustomerName: string | null;
+  /** The prospective person's email (set at referral creation). */
   referredCustomerEmail: string | null;
-  status: 'active' | 'converted' | 'expired' | 'cancelled';
+  /** The prospective person's phone (set at referral creation). */
+  referredCustomerPhone: string | null;
+  /** Customer ID after registration/activation (linked by the system). */
+  registeredCustomerId: string | null;
+  /** When the referred person registered/activated. */
+  registeredAt: string | null;
+  status: 'pending' | 'registered' | 'active' | 'converted' | 'expired' | 'cancelled';
   pendingInvoiceId: string | null;
   pendingInvoiceAmount: number;
   convertedInvoiceId: string | null;
@@ -503,8 +506,11 @@ export interface PortalReferral {
   updatedAt: string;
 }
 
+/** POST /api/portal/referrals request body — prospective-person referral. */
 export interface ReferralCreatePayload {
-  referredCustomerId: string;
+  referredName: string;
+  referredEmail?: string;
+  referredPhone?: string;
   notes?: string;
 }
 
@@ -1183,20 +1189,17 @@ export type ErpSseEvent =
 
 // ── Referrals ───────────────────────────────────────────────────────────────────
 
-/** GET /api/portal/referrals/customers/search result item. */
-export interface ErpReferralCustomerSearchResult {
-  id: string;
-  name: string;
-  email: string | null;
-}
-
-/** GET /api/portal/referrals list item. */
+/** GET /api/portal/referrals list item (snake_case from ERP). */
 export interface ErpReferral {
   id: string;
-  referred_customer_id: string;
-  referred_customer_name: string;
+  customer_id: string | null;
+  referred_customer_id: string | null;
+  referred_customer_name: string | null;
   referred_customer_email: string | null;
-  status: 'active' | 'converted' | 'expired' | 'cancelled';
+  referred_customer_phone: string | null;
+  registered_customer_id: string | null;
+  registered_at: string | null;
+  status: string;
   pending_invoice_id: string | null;
   pending_invoice_amount: number;
   converted_invoice_id: string | null;
@@ -1232,9 +1235,11 @@ export interface ErpReferralTimelineEntry {
   version?: number;
 }
 
-/** POST /api/portal/referrals request body. */
+/** POST /api/portal/referrals request body — prospective-person referral. */
 export interface ErpReferralCreatePayload {
-  referredCustomerId: string;
+  referredName: string;
+  referredEmail?: string;
+  referredPhone?: string;
   notes?: string;
 }
 
@@ -1248,11 +1253,16 @@ export interface ErpReferralCreatePayload {
  */
 export interface ErpReferralCreateResult {
   id: string;
-  customer_id: string;
-  referred_by_id: string;
+  customer_id: string | null;
+  referred_by_id: string | null;
   referred_by_name: string | null;
   referral_code: string | null;
   status: string;
+  referred_name: string | null;
+  referred_email: string | null;
+  referred_phone: string | null;
+  registered_customer_id: string | null;
+  registered_at: string | null;
   pending_invoice_id: string | null;
   pending_invoice_amount: number | null;
   converted_invoice_id: string | null;

@@ -23,6 +23,9 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   const detailQuery = useInvoiceDetailData(invoice?.id ?? null);
   const detail = detailQuery.data;
 
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
   if (!invoice) return null;
 
   const effectiveInvoice: Invoice = detail ?? invoice;
@@ -32,10 +35,6 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   const handlePrint = () => {
     window.print();
   };
-
-  // Official ERP document download (authoritative PDF, customer-scoped).
-  const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const handleDownload = async () => {
     setDownloadError(null);

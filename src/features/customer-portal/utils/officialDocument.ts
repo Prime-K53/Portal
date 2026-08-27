@@ -180,28 +180,54 @@ export interface OfficialDocumentDownload {
 }
 
 /**
+ * Hard cap for a single official-document download. Normal generation takes
+ * a few seconds; the ceiling only exists so the busy spinner can NEVER spin
+ * indefinitely when the ERP stalls (stale/hung process, network black hole).
+ * It deliberately exceeds apiTimeoutMs because a cold first call also loads
+ * the renderer bundle.
+ */
+export const OFFICIAL_DOCUMENT_TIMEOUT_MS = 90_000;
+
+/** Message for a download that hit the ceiling. */
+export function mapDownloadTimeout(): Error {
+  return new Error(
+    'Unable to download the official document — the ERP did not respond in time. Please try again.'
+  );
+}
+
+/**
  * Fetch an official ERP document as bytes using the SAME authentication the
  * JSON API client uses (Bearer access token from the portal session store).
+ * The request is time-boxed (AbortController) so the UI busy state ALWAYS
+ * resolves, even when the ERP accepts the connection but never responds.
  */
 export async function fetchOfficialDocument(
   kindOrPath: OfficialDocumentKind | { path: string },
-  id?: string
+  id?: string,
+  timeoutMs: number = OFFICIAL_DOCUMENT_TIMEOUT_MS
 ): Promise<OfficialDocumentDownload> {
   if (!env.apiUrl) throw new Error('ERP API origin is not configured.');
   const apiPath =
     typeof kindOrPath === 'string' ? officialDocumentPath(kindOrPath, id ?? '') : kindOrPath.path;
 
   const token = tokenStore.getAccessToken();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   let response: Response;
   try {
     response = await fetch(`${env.apiUrl.replace(/\/+$/, '')}/api${apiPath}`, {
       method: 'GET',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       credentials: 'omit',
+      signal: controller.signal,
     });
   } catch (err) {
+    clearTimeout(timer);
+    if (controller.signal.aborted) throw mapDownloadTimeout();
     throw mapFetchError(err);
   }
+  clearTimeout(timer);
 
   const contentType = response.headers.get('Content-Type') || '';
   if (!response.ok || !contentType.includes('application/pdf')) {

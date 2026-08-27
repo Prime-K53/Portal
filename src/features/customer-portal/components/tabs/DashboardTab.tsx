@@ -660,7 +660,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'pay',
               label: 'Pay Invoices',
-              count: payableInvoices.length,
               icon: CreditCard,
               chip: 'bg-blue-50 text-blue-600 group-hover:bg-blue-100',
               go: onOpenPaymentModal,
@@ -668,7 +667,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'order',
               label: 'New Order',
-              count: null,
               icon: ShoppingBag,
               chip: 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100',
               go: () => onNavigateTab('orders'),
@@ -676,7 +674,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'quote',
               label: 'Get Quote',
-              count: null,
               icon: MessageSquareQuote,
               chip: 'bg-purple-50 text-purple-600 group-hover:bg-purple-100',
               go: () => onNavigateTab('quotes'),
@@ -684,7 +681,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'track',
               label: 'Track Shipments',
-              count: deliveries.length,
               icon: Truck,
               chip: 'bg-sky-50 text-sky-600 group-hover:bg-sky-100',
               go: () => onNavigateTab('deliveries'),
@@ -692,7 +688,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'refer',
               label: 'Refer Business',
-              count: null,
               icon: Gift,
               chip: 'bg-amber-50 text-amber-600 group-hover:bg-amber-100',
               go: () => onNavigateTab('referrals'),
@@ -700,17 +695,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {
               key: 'stmts',
               label: 'Statements',
-              count: statements.length > 0 ? statements.length : null,
               icon: Receipt,
               chip: 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100',
               go: () => onNavigateTab('statements'),
             },
-          ].map(({ key, label, count, icon: Icon, chip, go }) => (
+          ].map(({ key, label, icon: Icon, chip, go }) => (
             <button
               key={key}
               type="button"
               onClick={go}
-              aria-label={count !== null ? `${label} (${count})` : label}
+              aria-label={label}
               className="group px-2.5 py-2 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all flex items-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 min-w-0"
             >
               <span className={`shrink-0 p-1.5 rounded-lg transition-colors ${chip}`} aria-hidden="true">
@@ -719,11 +713,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <span className="flex-1 min-w-0 text-[11.5px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors truncate text-left">
                 {label}
               </span>
-              {count !== null && count > 0 && (
-                <span className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-black min-w-[16px]">
-                  {count}
-                </span>
-              )}
             </button>
           ))}
         </div>

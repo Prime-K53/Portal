@@ -39,7 +39,6 @@ import {
   QuoteRequestItem,
   Quotation,
   ReferralCreatePayload,
-  ReferralCustomerSearchResult,
   ReferralTimelineEntry,
   StatementEntry,
   TabType,
@@ -172,6 +171,34 @@ function CustomerPortalShell({
   );
   const unpaidTotal = unpaidInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // ── Notification badge ────────────────────────────────────────────────────
+  // The bell consolidates ERP unread items PLUS pending Quick Action work
+  // (open invoices / shipments to track / statement entries). Opening the
+  // drawer marks everything seen: ERP unread is cleared via read-all and the
+  // Quick Action portion latches off until new unread notifications arrive.
+  const [notificationsSeen, setNotificationsSeen] = useState(false);
+
+  const handleOpenNotifications = () => {
+    setIsNotificationDrawerOpen(true);
+    if (!notificationsSeen) {
+      setNotificationsSeen(true);
+      portalService
+        .markAllNotificationsRead()
+        .then(() => {
+          notificationsQuery.refetch();
+          unreadQuery.refetch();
+        })
+        .catch(() => {
+          // Badge clearing is cosmetic — never block the drawer.
+          notificationsQuery.refetch();
+          unreadQuery.refetch();
+        });
+    }
+  };
+
+  const notificationBadgeCount =
+    unreadNotificationCount + (notificationsSeen ? 0 : unpaidInvoices.length + deliveries.length + statements.length);
 
   // ── Action helpers ────────────────────────────────────────────────────────
   const runAction = async <T,>(action: () => Promise<T>): Promise<T> => {
@@ -353,31 +380,23 @@ function CustomerPortalShell({
     });
   };
 
-  // ── Referrals (ERP referral contract: refer EXISTING ERP customers) ───────
+  // ── Referrals (prospective-person referrals) ─────────────────────────────
   //
-  // Creates a referral of an existing ERP customer (POST /api/portal/referrals,
-  // body { referredCustomerId, notes }). The ERP derives customer identity from
-  // the JWT, validates the referral (no self-referral, no duplicates, customer
-  // must exist), and owns the lifecycle (active → converted/expired/cancelled)
-  // plus rewards. Sasa never fabricates referral codes/links and there is no
+  // Creates a prospective-person referral (POST /api/portal/referrals,
+  // body { referredName, referredEmail?, referredPhone?, notes? }).
+  // The ERP derives customer identity from the JWT, validates the referral
+  // (no self-referral, no existing customers, no duplicates), and owns the
+  // lifecycle (pending → registered → converted/expired/cancelled) plus
+  // rewards. Sasa never fabricates referral codes/links and there is no
   // customer-facing claim: rewards are approved and credited by ERP staff.
-  // `idempotencyKey` identifies this logical submission attempt and is reused
-  // by the UI when the same attempt is retried (the ERP replays its stored
-  // response for the same key).
   const handleCreateReferral = (payload: ReferralCreatePayload, idempotencyKey: string): Promise<PortalReferral> => {
     return runAction(() => portalService.createReferral(payload, idempotencyKey)).then((created) => {
-      // Refetch ERP state — this only surfaces real ERP changes.
       referralsQuery.refetch();
       referralStatsQuery.refetch();
       referralRewardsQuery.refetch();
       walletQuery.refetch();
       return created;
     });
-  };
-
-  // Read-only ERP lookups — the tab surfaces errors inline.
-  const handleSearchReferralCustomers = (query: string): Promise<ReferralCustomerSearchResult[]> => {
-    return portalService.searchReferralCustomers(query);
   };
 
   const handleLoadReferralTimeline = (referralId: string): Promise<ReferralTimelineEntry[]> => {
@@ -428,7 +447,7 @@ function CustomerPortalShell({
         profile={profile}
         unpaidCount={unpaidInvoices.length}
         unpaidTotal={unpaidTotal}
-        deliveryAlertCount={unreadNotificationCount}
+        deliveryAlertCount={notificationBadgeCount}
         cartCount={cartCount}
         onOpenPaymentModal={() => handleNavigateTab('invoices')}
         onOpenQuoteModal={() => setIsQuoteModalOpen(true)}
@@ -442,8 +461,8 @@ function CustomerPortalShell({
         {activeTab === 'dashboard' && (
           <MobileHeader
             profile={profile}
-            unreadCount={unreadNotificationCount}
-            onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
+            unreadCount={notificationBadgeCount}
+            onOpenNotifications={handleOpenNotifications}
             onOpenAccount={() => handleNavigateTab('account')}
             cartCount={cartCount}
             onOpenCart={() => setIsCartOpen(true)}
@@ -615,7 +634,6 @@ function CustomerPortalShell({
                 rewards={referralRewards}
                 wallet={wallet}
                 onCreateReferral={handleCreateReferral}
-                onSearchCustomers={handleSearchReferralCustomers}
                 onLoadTimeline={handleLoadReferralTimeline}
               />
             </PortalDataBoundary>
@@ -637,7 +655,7 @@ function CustomerPortalShell({
           activeTab={activeTab}
           setActiveTab={handleNavigateTab}
           unpaidCount={unpaidInvoices.length}
-          deliveryAlertCount={unreadNotificationCount}
+          deliveryAlertCount={notificationBadgeCount}
           cartCount={cartCount}
         />
       </div>
