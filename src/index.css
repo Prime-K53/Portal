@@ -6,9 +6,9 @@
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
-  --font-weight-bold: 600;
-  --font-weight-extrabold: 600;
-  --font-weight-black: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-weight-black: 900;
 
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
@@ -99,6 +99,34 @@
   .no-scrollbar {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+  }
+  /* Safe area insets for notched devices (iPhone X+, Android gesture nav) */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  /* Min-height: 100vh accounting for mobile browser chrome */
+  .min-h-screen-safe {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  /* Touch-friendly minimum target (Apple HIG 44pt) */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Currency-aware tabular sizing — prevents jitter and overflow */
+  .currency-display {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "ss01" 1;
   }
 }
 

@@ -36,26 +36,26 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const initials = getInitials(profile?.customerName || profile?.companyName || 'U');
 
   return (
-    <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-200/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
+    <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-200/50 pt-safe">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
         {/* Left — Logo + Title */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-600/20">
-            <span className="text-xs font-black tracking-tight">P</span>
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-600/20">
+            <span className="text-[11px] sm:text-xs font-black tracking-tight">P</span>
           </div>
           <div className="min-w-0">
-            <h1 className="font-extrabold text-base text-slate-900 tracking-tight leading-none">
+            <h1 className="font-black text-sm sm:text-base text-slate-900 tracking-tight leading-none">
               Prime<span className="text-blue-600"> PORTAL</span>
             </h1>
           </div>
         </div>
 
         {/* Right — Actions */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
           {onOpenCommandPalette && (
             <button
               onClick={onOpenCommandPalette}
-              className="p-2 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 transition-all focus:outline-none"
+              className="p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[44px] min-w-[44px]"
               title="Search (Cmd+K)"
               aria-label="Search"
             >
@@ -66,7 +66,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           {onOpenCart && (
             <button
               onClick={onOpenCart}
-              className="relative p-2 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 transition-all focus:outline-none"
+              className="relative p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[44px] min-w-[44px]"
               aria-label="Cart"
             >
               <ShoppingBag className="w-[18px] h-[18px]" />
@@ -78,7 +78,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
           <button
             onClick={onOpenNotifications}
-            className="relative p-2 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 transition-all focus:outline-none"
+            className="relative p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[44px] min-w-[44px]"
             aria-label="Notifications"
           >
             <Bell className="w-[18px] h-[18px]" />
@@ -92,7 +92,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           {/* Profile avatar */}
           <button
             onClick={onOpenAccount}
-            className="ml-1 w-8 h-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-[11px] font-bold shadow-sm hover:shadow-md transition-shadow"
+            className="ml-0.5 sm:ml-1 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-[10px] sm:text-[11px] font-bold shadow-sm hover:shadow-md active:scale-95 transition-all min-h-[44px] min-w-[44px]"
             aria-label="Account"
           >
             {initials}

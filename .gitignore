@@ -6,6 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.development
+!.env.production
 
 # Local scratch / verification output
 build-check.txt
