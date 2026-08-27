@@ -691,13 +691,31 @@ export class ErpPortalService implements PortalService {
       : Array.isArray(raw.line_items)
         ? (raw.line_items as Array<Record<string, unknown>>)
         : [];
-    const items: InvoiceItem[] = itemsRaw.map((item, idx) => ({
-      id: `ii_${idx}`,
-      description: String(item.description ?? item.item_name ?? item.name ?? item.productName ?? item.product_name ?? item.itemName ?? item.desc ?? ''),
-      quantity: Number(item.quantity ?? 0),
-      unitPrice: Number(item.unitPrice ?? item.unit_price ?? 0),
-      total: Number(item.total ?? item.lineTotal ?? item.line_total ?? 0),
-    }));
+    const items: InvoiceItem[] = itemsRaw.map((item, idx) => {
+      // Authoritative item name resolution — covers every field name the ERP
+      // may return (supabase mapper → item_name; examination/exam/stationery
+      // adapters → name/description; sales-order POST → line_items with
+      // productName/desc; etc.). Empty strings fall through to the next
+      // candidate so a legacy "" never wins over a real name.
+      const candidate = [
+        item.item_name,
+        item.description,
+        item.name,
+        item.productName,
+        item.product_name,
+        item.itemName,
+        item.desc,
+        item.title,
+        item.label,
+      ].find((v) => typeof v === 'string' && v.trim().length > 0);
+      return {
+        id: `ii_${idx}`,
+        description: String(candidate ?? ''),
+        quantity: Number(item.quantity ?? 0),
+        unitPrice: Number(item.unitPrice ?? item.unit_price ?? 0),
+        total: Number(item.total ?? item.lineTotal ?? item.line_total ?? 0),
+      };
+    });
     const totalAmount = Number(raw.total_amount ?? raw.totalAmount ?? 0);
     const paidAmount = Number(raw.paid_amount ?? raw.paidAmount ?? 0);
     return {
