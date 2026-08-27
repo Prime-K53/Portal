@@ -5,9 +5,7 @@ import {
   ChevronRight,
   CreditCard,
   FileText,
-  FolderUp,
   Gift,
-  Headphones,
   MessageSquareQuote,
   Receipt,
   ShoppingBag,
@@ -292,8 +290,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     { key: 'track', label: 'Track Delivery', icon: Truck, chip: 'bg-sky-50 text-sky-600', go: () => onNavigateTab('deliveries') },
     { key: 'stmts', label: 'Statements', icon: Receipt, chip: 'bg-indigo-50 text-indigo-600', go: () => onNavigateTab('statements') },
     { key: 'refer', label: 'Refer Business', icon: Gift, chip: 'bg-amber-50 text-amber-600', go: () => onNavigateTab('referrals') },
-    { key: 'support', label: 'Support', icon: Headphones, chip: 'bg-rose-50 text-rose-600', go: () => onNavigateTab('account') },
-    { key: 'upload', label: 'Upload Document', icon: FolderUp, chip: 'bg-slate-100 text-slate-600', go: () => onNavigateTab('account') },
   ];
 
   const isFullyPaid = outstandingTotal === 0;
@@ -467,7 +463,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             className="text-left p-4 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl hover:shadow-md hover:scale-[0.98] transition-all duration-200 cursor-pointer"
           >
             <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Outstanding Balance</p>
-            <p className="text-lg font-extrabold font-mono text-amber-900 leading-tight">{formatCurrency(outstandingTotal)}</p>
+            <p className="text-2xl font-extrabold font-mono text-amber-900 leading-tight">{formatCurrency(outstandingTotal)}</p>
             {overdueInvoices.length > 0 ? (
               <p className="text-[10px] font-bold text-rose-600 mt-1.5 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" />
@@ -488,7 +484,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Total Paid</p>
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             </div>
-            <p className="text-lg font-extrabold font-mono text-emerald-800 leading-tight">{formatCurrency(totalPayment)}</p>
+            <p className="text-2xl font-extrabold font-mono text-emerald-800 leading-tight">{formatCurrency(totalPayment)}</p>
             <p className="text-[10px] text-emerald-600/70 mt-1.5">All time</p>
           </button>
         </div>
@@ -497,7 +493,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       {/* ═══ 4. QUICK ACTIONS — 4×2 grid ═════════════════════════════════════ */}
       <div>
         <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 px-0.5">Quick Actions</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {quickActions.map(({ key, label, icon: Icon, chip, go }) => (
             <button
               key={key}
