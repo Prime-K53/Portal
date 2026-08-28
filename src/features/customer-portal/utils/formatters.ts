@@ -9,6 +9,23 @@ export const formatCurrency = (amount: number): string => {
   return `K ${formatted}`;
 };
 
+/**
+ * Compact currency formatter for dashboard KPI cards.
+ * Renders whole numbers without trailing decimals (e.g. `K 200,000` instead
+ * of `K 200,000.00`). Use ONLY where the two-decimal precision is not
+ * needed at a glance — full-precision totals still use `formatCurrency`.
+ */
+export const formatCurrencyCompact = (amount: number): string => {
+  if (isNaN(amount) || amount === null || amount === undefined) {
+    return 'K 0';
+  }
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.round(amount));
+  return `K ${formatted}`;
+};
+
 export const formatDate = (dateString: string): string => {
   if (!dateString) return '';
   const date = new Date(dateString);

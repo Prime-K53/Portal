@@ -23,7 +23,7 @@ import {
   StatementEntry,
   TabType,
 } from '../../types';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatCurrencyCompact, formatDate } from '../../utils/formatters';
 
 interface DashboardTabProps {
   profile: AccountProfile;
@@ -465,7 +465,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div className="flex items-center gap-3 sm:gap-5 min-w-0 pr-12 sm:pr-14">
-            {/* Outstanding Balance — left half */}
+            {/* Outstanding Balance — left half, rose (money owed) */}
             <button
               type="button"
               onClick={() => onNavigateInvoices?.('unpaid')}
@@ -474,8 +474,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                 Outstanding Balance
               </p>
-              <p className="text-[clamp(1.125rem,4.5vw,1.5rem)] font-black text-slate-900 leading-tight currency-display truncate">
-                {formatCurrency(outstandingTotal)}
+              <p className="text-[clamp(1.125rem,4.5vw,1.5rem)] font-black text-rose-600 leading-tight currency-display truncate">
+                {formatCurrencyCompact(outstandingTotal)}
               </p>
               {overdueInvoices.length > 0 ? (
                 <p className="text-[10px] font-bold text-rose-600 mt-1.5 flex items-center gap-1 truncate">
@@ -491,7 +491,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </button>
             {/* Vertical divider */}
             <div className="w-px h-12 sm:h-14 bg-slate-200 shrink-0" />
-            {/* Total Paid — right half */}
+            {/* Total Paid — right half, emerald (money paid) */}
             <button
               type="button"
               onClick={() => onNavigateTab('statements')}
@@ -500,8 +500,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                 Total Paid
               </p>
-              <p className="text-[clamp(1.125rem,4.5vw,1.5rem)] font-black text-slate-900 leading-tight currency-display truncate">
-                {formatCurrency(totalPayment)}
+              <p className="text-[clamp(1.125rem,4.5vw,1.5rem)] font-black text-emerald-600 leading-tight currency-display truncate">
+                {formatCurrencyCompact(totalPayment)}
               </p>
               <p className="text-[10px] font-medium text-slate-400 mt-1.5">All time</p>
             </button>
