@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { CheckCircle2, Layers, ShoppingBag, X } from 'lucide-react';
 import { Product } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface VariantSelectModalProps {
   /** Product whose variants must be chosen. Null closes the picker. */
@@ -26,6 +27,10 @@ export const VariantSelectModal: React.FC<VariantSelectModalProps> = ({
   onClose,
   onConfirm,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: product !== null, onEscape: onClose });
+
   // Mandatory: start with NO selection on every open.
   const [selectedVariantId, setSelectedVariantId] = useState('');
 
@@ -56,15 +61,21 @@ export const VariantSelectModal: React.FC<VariantSelectModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up"
+      >
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/50">
           <div className="flex items-center gap-2 min-w-0">
             <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 shrink-0">
-              <Layers className="w-4 h-4" />
+              <Layers className="w-4 h-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <h3 className="text-sm font-black text-slate-900 truncate">{product.name}</h3>
+              <h3 id={titleId} className="text-sm font-black text-slate-900 truncate">{product.name}</h3>
               <p className="text-[11px] font-bold text-slate-500 mt-0.5">
                 Choose an option to continue — required
               </p>
@@ -73,9 +84,9 @@ export const VariantSelectModal: React.FC<VariantSelectModalProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition shrink-0"
-            aria-label="Close"
+            aria-label="Close variant selector"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

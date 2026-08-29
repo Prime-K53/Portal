@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { Calendar, Download, FileText, Landmark, Loader2, Printer, X } from 'lucide-react';
 import { Invoice } from '../../types';
 import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/formatters';
 import { canRequestPayment } from '../../utils/paymentRequest';
 import { useInvoiceDetailData } from '../../hooks/usePortalData';
 import { downloadOfficialDocument } from '../../utils/officialDocument';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface InvoiceDetailModalProps {
   invoice: Invoice | null;
@@ -18,6 +19,9 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   onClose,
   onRequestPayment,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: invoice !== null, onEscape: onClose });
   // Fetch the ERP invoice detail (line items) when the modal is open.
   // Falls back to the list data if the detail endpoint fails.
   const detailQuery = useInvoiceDetailData(invoice?.id ?? null);
@@ -50,16 +54,22 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
+            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200" aria-hidden="true">
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-slate-900">{effectiveInvoice.invoiceNumber}</h3>
+                <h3 id={titleId} className="font-extrabold text-base text-slate-900">{effectiveInvoice.invoiceNumber}</h3>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
                   {statusInfo.label}
                 </span>
@@ -70,8 +80,9 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+            aria-label="Close invoice details"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

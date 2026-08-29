@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useId, useRef } from 'react';
 import { Calendar, FileText, X } from 'lucide-react';
 import type { Quotation, QuoteRequest, QuotationItem, QuoteRequestItem } from '../../types';
 import { formatCurrency, formatDate, getQuoteStatusBadge } from '../../utils/formatters';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface QuotationDetailModalProps {
   quotation: Quotation | QuoteRequest | null;
@@ -20,6 +21,10 @@ export const QuotationDetailModal: React.FC<QuotationDetailModalProps> = ({
   quotation,
   onClose,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: quotation !== null, onEscape: onClose });
+
   if (!quotation) return null;
 
   const statusInfo = getQuoteStatusBadge(quotation.status);
@@ -35,16 +40,22 @@ export const QuotationDetailModal: React.FC<QuotationDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
+            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200" aria-hidden="true">
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-slate-900">{number}</h3>
+                <h3 id={titleId} className="font-extrabold text-base text-slate-900">{number}</h3>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
                   {statusInfo.label}
                 </span>
@@ -55,8 +66,9 @@ export const QuotationDetailModal: React.FC<QuotationDetailModalProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+            aria-label="Close quotation details"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
-import { Calendar, CheckCircle2, ChevronRight, Clock, Download, Eye, FileSpreadsheet, FileText, Filter, Printer, Receipt, ShieldCheck } from 'lucide-react';
+import React from 'react';
+import { Calendar, CheckCircle2, ChevronRight, Clock, FileSpreadsheet, FileText, Filter, Printer, Receipt, ShieldCheck } from 'lucide-react';
 import { AccountProfile, StatementEntry } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { exportToCSV } from '../../utils/exportUtils';
-import {
-  downloadOfficialDocument,
-  resolveStatementPeriod,
-} from '../../utils/officialDocument';
 
 interface StatementsTabProps {
   profile: AccountProfile;
   statements: StatementEntry[];
+  dateFilter: 'all' | '30days' | 'this_month' | 'custom';
+  startDate: string;
+  endDate: string;
+  onDateFilterChange: (filter: 'all' | '30days' | 'this_month' | 'custom') => void;
+  onStartDateChange: (date: string) => void;
+  onEndDateChange: (date: string) => void;
   onOpenStatementPrintModal: () => void;
   onSelectEntryDetail?: (entry: StatementEntry) => void;
 }
@@ -18,15 +20,18 @@ interface StatementsTabProps {
 export const StatementsTab: React.FC<StatementsTabProps> = ({
   profile,
   statements,
+  dateFilter,
+  startDate,
+  endDate,
+  onDateFilterChange,
+  onStartDateChange,
+  onEndDateChange,
   onOpenStatementPrintModal,
   onSelectEntryDetail,
 }) => {
-  const [dateFilter, setDateFilter] = useState<'all' | '30days' | 'this_month' | 'custom'>('all');
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
   const todayISO = today.toISOString().split('T')[0];
-  const [startDate, setStartDate] = useState<string>(firstOfMonth);
-  const [endDate, setEndDate] = useState<string>(todayISO);
 
   const filteredStatements = statements.filter((st) => {
     const stDate = new Date(st.date);
@@ -49,34 +54,8 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
 
   const totalCredits = filteredStatements.reduce((sum, s) => sum + s.credit, 0);
   const sortedFiltered = [...filteredStatements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const outstandingBalance = sortedFiltered.length > 0 ? sortedFiltered[sortedFiltered.length - 1].balance : 0;
+  const outstandingBalance = profile.outstandingBalance ?? (statements.length > 0 ? statements[statements.length - 1].balance : 0);
   const isFullyPaid = outstandingBalance === 0;
-
-  // Official ERP statement PDF for the SELECTED period.
-  const [statementDownloading, setStatementDownloading] = useState(false);
-  const [statementError, setStatementError] = useState<string | null>(null);
-
-  const handleDownloadStatementPdf = async () => {
-    setStatementError(null);
-    const period =
-      dateFilter === 'custom'
-        ? resolveStatementPeriod('custom', { startDate, endDate })
-        : resolveStatementPeriod(dateFilter);
-    if (!period.from || !period.to) {
-      setStatementError('Select a period (or Custom dates) to export an official statement.');
-      return;
-    }
-    setStatementDownloading(true);
-    try {
-      await downloadOfficialDocument({
-        path: `/portal/customers/statement/document?from=${period.from}&to=${period.to}`,
-      });
-    } catch (err) {
-      setStatementError(err instanceof Error ? err.message : 'Download failed.');
-    } finally {
-      setStatementDownloading(false);
-    }
-  };
 
   const handleExportCSV = () => {
     exportToCSV(
@@ -124,34 +103,14 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
           </button>
 
           <button
-            onClick={() => { void handleDownloadStatementPdf(); }}
-            disabled={statementDownloading}
-            title="Download the official ERP statement PDF for the selected period"
-            className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
-          >
-            {statementDownloading ? (
-              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Download className="w-4 h-4" />
-            )}
-            <span>Official PDF</span>
-          </button>
-
-          <button
             onClick={onOpenStatementPrintModal}
-            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
+            className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
           >
             <Printer className="w-4 h-4" />
-            <span>Print Statement</span>
+            <span>Print / Save PDF</span>
           </button>
         </div>
       </div>
-
-      {statementError && (
-        <p className="text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
-          {statementError}
-        </p>
-      )}
 
       {/* Outstanding & Total Payment KPI */}
       <div className="grid grid-cols-2 gap-3">
@@ -227,7 +186,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
 
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
           <button
-            onClick={() => setDateFilter('all')}
+            onClick={() => onDateFilterChange('all')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
               dateFilter === 'all'
                 ? 'bg-slate-900 text-white shadow-xs'
@@ -237,7 +196,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
             All Time
           </button>
           <button
-            onClick={() => setDateFilter('this_month')}
+            onClick={() => onDateFilterChange('this_month')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
               dateFilter === 'this_month'
                 ? 'bg-slate-900 text-white shadow-xs'
@@ -247,7 +206,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
             This Month ({today.toLocaleString('en-US', { month: 'short' })} {today.getFullYear()})
           </button>
           <button
-            onClick={() => setDateFilter('30days')}
+            onClick={() => onDateFilterChange('30days')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
               dateFilter === '30days'
                 ? 'bg-slate-900 text-white shadow-xs'
@@ -257,7 +216,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
             Last 30 Days
           </button>
           <button
-            onClick={() => setDateFilter('custom')}
+            onClick={() => onDateFilterChange('custom')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
               dateFilter === 'custom'
                 ? 'bg-slate-900 text-white shadow-xs'
@@ -276,7 +235,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => onStartDateChange(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 font-medium"
               />
             </div>
@@ -285,7 +244,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(e) => onEndDateChange(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 font-medium"
               />
             </div>
@@ -295,7 +254,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
 
       {/* Ledger List */}
       <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Statement Ledger Entries (Select to View Details)</h3>
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Statement Ledger Entries</h3>
         <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
         {[...filteredStatements]
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -307,9 +266,6 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
           >
             <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-xs text-slate-900 group-hover:text-blue-600 transition-colors">
-                  {st.reference}
-                </span>
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                   st.type === 'Payment'
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
@@ -321,10 +277,6 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
               <p className="text-xs text-slate-600 font-medium">{st.description}</p>
               <div className="flex items-center gap-2 text-[11.5px] text-slate-400">
                 <span>{formatDate(st.date)}</span>
-                <span>•</span>
-                <span className="text-blue-600 font-bold flex items-center gap-0.5 group-hover:underline">
-                  <Eye className="w-3 h-3" /> Tap to view detail & receipt
-                </span>
               </div>
             </div>
 

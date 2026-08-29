@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Clock,
   Download,
   MessageSquare,
-  Navigation,
   Package,
   PhoneCall,
   ShieldCheck,
@@ -15,6 +14,7 @@ import {
 import { DeliveryNotification, DeliveryStatus } from '../../types';
 import { formatDateTime, getDeliveryStatusBadge } from '../../utils/formatters';
 import { downloadOfficialDocument } from '../../utils/officialDocument';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface DeliveryTrackingModalProps {
   delivery: DeliveryNotification | null;
@@ -27,6 +27,10 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: isOpen && delivery !== null, onEscape: onClose });
+
   // Official ERP delivery-note PDF download. The ERP endpoint resolves the id
   // as a delivery-note id OR an order id linked to one — try the order link
   // first (what the portal shipment carries), then the raw record id.
@@ -64,6 +68,7 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
     { key: 'delivered', title: 'Delivered & Signed', desc: 'Handed over and verified at receiving dock' },
   ];
 
+  const isDelayed = delivery.status === 'delayed';
   const getStepIndex = (status: DeliveryStatus) => {
     switch (status) {
       case 'order_placed': return 0;
@@ -71,6 +76,10 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
       case 'dispatched': return 2;
       case 'out_for_delivery': return 3;
       case 'delivered': return 4;
+      // 'delayed' is a STATUS overlay, not a step — keep the last completed
+      // step's index so the timeline does not lie about progress. The
+      // delayed state is surfaced separately as a banner + badge.
+      case 'delayed': return 3;
       default: return 3;
     }
   };
@@ -80,7 +89,13 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up"
+      >
         {/* Modal Header */}
         <div className="p-5 bg-slate-900 text-white flex items-start justify-between gap-3">
           <div>
@@ -90,15 +105,16 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
               </span>
               <span className="text-xs font-mono text-slate-300">Order #{delivery.orderId}</span>
             </div>
-            <h2 className="text-base font-extrabold mt-1 text-white">{delivery.title}</h2>
+            <h2 id={titleId} className="text-base font-extrabold mt-1 text-white">{delivery.title}</h2>
             <p className="text-xs font-mono text-slate-400 mt-0.5">Tracking ID: {delivery.trackingNumber}</p>
           </div>
 
           <button
             onClick={onClose}
             className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+            aria-label="Close delivery tracker"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -114,6 +130,24 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Delayed notice — surfaces when the ERP reports the shipment is
+              delayed. The timeline below still reflects the last completed
+              step; the banner makes the status overlay explicit. */}
+          {isDelayed && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5"
+            >
+              <Clock className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="text-xs text-rose-900 leading-relaxed">
+                <strong className="block font-extrabold mb-0.5">Shipment delayed</strong>
+                The carrier has reported a delay. The progress timeline below shows the last completed
+                step; the package has not yet moved to the next stage.
+              </div>
+            </div>
+          )}
 
           {/* Live Progress Timeline */}
           <div>
@@ -182,20 +216,6 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
               )}
             </div>
           )}
-
-          {/* Live Telemetry Simulation */}
-          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 relative h-32 flex flex-col items-center justify-center p-4 text-center">
-            <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px] opacity-50" />
-            <div className="relative z-10 space-y-1.5">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-blue-200 text-blue-700 text-xs font-bold shadow-2xs">
-                <Navigation className="w-3.5 h-3.5 text-blue-600 animate-spin" />
-                <span>Driver GPS Telemetry Active</span>
-              </div>
-              <p className="text-xs text-slate-700 font-medium">
-                Current Location: <span className="text-slate-900 font-bold font-mono">En Route to Receiving Dock</span>
-              </p>
-            </div>
-          </div>
 
           {/* Proof of Delivery Card */}
           {delivery.proofOfDelivery && (

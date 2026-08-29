@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Product } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -25,6 +26,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onClose,
   onAddToCart,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: isOpen && product !== null, onEscape: onClose });
+
   const [qty, setQty] = useState(product?.minOrderQty || 1);
   const [added, setAdded] = useState(false);
   // Mandatory choice for variant products: start with NOTHING selected so a
@@ -47,7 +52,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     };
     onAddToCart(effectiveProduct, qty);
     setAdded(true);
-    setTimeout(() => {
+    window.setTimeout(() => {
       setAdded(false);
       onClose();
     }, 1200);
@@ -55,7 +60,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up"
+      >
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2">
@@ -69,8 +80,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
+            aria-label="Close product details"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -78,7 +90,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
           <div>
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-lg font-black text-slate-900 leading-snug">{product.name}</h3>
+              <h3 id={titleId} className="text-lg font-black text-slate-900 leading-snug">{product.name}</h3>
             </div>
 
             {/* Ratings */}

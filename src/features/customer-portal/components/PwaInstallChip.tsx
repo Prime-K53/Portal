@@ -18,7 +18,7 @@ export const PwaInstallChip: React.FC<PwaInstallChipProps> = ({ suppressed = fal
   if (suppressed || !shouldOffer) return null;
 
   return (
-    <div className="fixed bottom-24 right-3 sm:right-5 md:bottom-6 z-30 animate-slide-up">
+    <div className="fixed bottom-24 right-3 sm:right-5 md:bottom-6 z-40 animate-slide-up">
       <div className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full bg-slate-950/95 text-white border border-slate-700 shadow-2xl backdrop-blur-md">
         <span className="text-[11px] font-extrabold tracking-tight">Install Prime PORTAL</span>
         <button

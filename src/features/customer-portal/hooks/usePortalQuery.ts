@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCustomerAuth } from '../components/auth/CustomerAuthContext';
 
 export interface PortalQueryResult<T> {
   data: T | null;
@@ -25,14 +26,15 @@ export function invalidatePortalQueries(): void {
   invalidateListeners.forEach((listener) => listener());
 }
 
-function usePortalInvalidations(): void {
-  const [, force] = useReducer((x: number) => x + 1, 0);
+function usePortalInvalidations(): number {
+  const [count, force] = useReducer((x: number) => x + 1, 0);
   useEffect(() => {
     invalidateListeners.add(force);
     return () => {
       invalidateListeners.delete(force);
     };
   }, []);
+  return count;
 }
 
 export function usePortalQuery<T>(
@@ -40,16 +42,24 @@ export function usePortalQuery<T>(
   deps: ReadonlyArray<unknown> = [],
   enabled = true
 ): PortalQueryResult<T> {
+  const { isAuthenticated } = useCustomerAuth();
+  const effectiveEnabled = enabled && isAuthenticated;
+
   const [data, setData] = useState<T | null>(null);
-  const [isLoading, setIsLoading] = useState(enabled);
+  const [isLoading, setIsLoading] = useState(effectiveEnabled);
   const [error, setError] = useState<unknown>(null);
   const [version, setVersion] = useState(0);
-  usePortalInvalidations();
+  const invalidationCount = usePortalInvalidations();
 
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!effectiveEnabled) {
+      setIsLoading(false);
+      setData(null);
+      setError(null);
+      return;
+    }
     let active = true;
     setIsLoading(true);
     setError(null);
@@ -71,7 +81,7 @@ export function usePortalQuery<T>(
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, ...deps, enabled]);
+  }, [version, invalidationCount, ...deps, effectiveEnabled]);
 
   return { data, isLoading, error, refetch };
 }

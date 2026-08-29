@@ -9,15 +9,18 @@ import {
   Home,
   LogOut,
   MessageSquareQuote,
+  Moon,
   Receipt,
   Search,
   ShieldCheck,
   ShoppingBag,
+  Sun,
   Truck,
   User,
 } from 'lucide-react';
 import { AccountProfile, TabType } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { useDarkModeContext } from '../context/DarkModeContext';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -45,6 +48,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCommandPalette,
   onSignOut,
 }) => {
+  const { isDark, toggle } = useDarkModeContext();
+
   const navItems: { id: TabType; label: string; icon: React.FC<{ className?: string }>; badge?: number; badgeColor?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'invoices', label: 'Customer Invoices', icon: FileText, badge: unpaidCount, badgeColor: 'bg-rose-600' },
@@ -112,6 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
+              aria-current={isActive ? 'page' : undefined}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all duration-150 ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-2xs'
@@ -119,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <div className="flex items-center gap-3">
-                <Icon className={`w-4.5 h-4.5 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                <Icon className={`w-4.5 h-4.5 ${isActive ? 'text-white' : 'text-slate-500'}`} aria-hidden="true" />
                 <span>{item.label}</span>
               </div>
 
@@ -171,6 +177,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Sign Out (Prime PORTAL)</span>
           </button>
         )}
+
+        <div className="flex items-center justify-center pt-3 border-t border-slate-200 mt-3">
+          <button
+            onClick={() => toggle()}
+            aria-label="Toggle dark mode"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
+          >
+            {isDark ? <Sun className="w-4 h-4" aria-hidden="true" /> : <Moon className="w-4 h-4" aria-hidden="true" />}
+            <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
+          </button>
+        </div>
       </div>
     </aside>
   );

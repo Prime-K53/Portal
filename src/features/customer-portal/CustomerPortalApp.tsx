@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router/useHashRoute';
 import { RouteGuard } from './router/RouteGuard';
 import {
@@ -18,18 +18,21 @@ import {
   useReferralRewardsData,
   useReferralStatsData,
   useStatementsData,
+  useSupportArticlesData,
+  useSupportTicketsData,
   useUnreadNotificationCount,
   useWalletData,
 } from './hooks/usePortalData';
 import { portalService } from './services';
 import { ROUTES, pathForTab, tabFromPath } from './router/routes';
-import { combineQueryStates, PortalDataBoundary } from './components/state/PortalDataBoundary';
+import { combineQueryStates, DashboardSkeleton, PortalDataBoundary } from './components/state/PortalDataBoundary';
 import { generateIdempotencyKey } from './utils/idempotency';
 import {
   AccountProfile,
   CartItem,
   DeliveryNotification,
   Invoice,
+  NewSupportTicketPayload,
   Order,
   OrderRequest,
   PaymentRequest,
@@ -56,6 +59,8 @@ import { MobileHeader } from './components/MobileHeader';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { Sidebar } from './components/Sidebar';
 import { PwaInstallChip } from './components/PwaInstallChip';
+import { DevModeBanner } from './components/DevModeBanner';
+import { DarkModeProvider } from './context/DarkModeContext';
 
 // Modals
 import { CartDrawer } from './components/modals/CartDrawer';
@@ -79,6 +84,7 @@ import { OrdersTab } from './components/tabs/OrdersTab';
 import { QuotesTab } from './components/tabs/QuotesTab';
 import { ReferralsTab } from './components/tabs/ReferralsTab';
 import { StatementsTab } from './components/tabs/StatementsTab';
+import { SupportTab } from './components/tabs/SupportTab';
 
 export interface CustomerPortalAppProps {
   initialTab?: TabType;
@@ -114,6 +120,8 @@ function CustomerPortalShell({
   const notificationsQuery = useNotificationsData();
   const unreadQuery = useUnreadNotificationCount();
   const adsQuery = useAdsData();
+  const supportTicketsQuery = useSupportTicketsData();
+  const supportArticlesQuery = useSupportArticlesData();
 
   // ── Live ERP events (SSE) ─────────────────────────────────────────────────
   usePortalEvents();
@@ -134,6 +142,8 @@ function CustomerPortalShell({
   const notifications = notificationsQuery.data ?? [];
   const unreadNotificationCount = unreadQuery.data ?? 0;
   const ads = adsQuery.data ?? [];
+  const supportTickets = supportTicketsQuery.data ?? [];
+  const supportArticles = supportArticlesQuery.data ?? [];
 
   // ── UI state (no business data lives here) ────────────────────────────────
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -149,6 +159,12 @@ function CustomerPortalShell({
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isStatementPrintModalOpen, setIsStatementPrintModalOpen] = useState(false);
+  const today = new Date();
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+  const todayISO = today.toISOString().split('T')[0];
+  const [statementDateFilter, setStatementDateFilter] = useState<'all' | '30days' | 'this_month' | 'custom'>('all');
+  const [statementStartDate, setStatementStartDate] = useState(firstOfMonth);
+  const [statementEndDate, setStatementEndDate] = useState(todayISO);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -157,13 +173,32 @@ function CustomerPortalShell({
   const defaultPath = pathForTab(initialTab);
   const activeTab: TabType = tabFromPath(path) ?? tabFromPath(defaultPath) ?? 'dashboard';
 
+  // Tracks a monotonically-increasing nonce used to remount the Invoices tab
+  // on every re-entry. Combined with the preset filter key, this gives us
+  // the right behavior: a KPI drill-in remounts the tab with the preset
+  // applied, and a plain visit always starts from the default filter.
+  const [invoicesTabNonce, setInvoicesTabNonce] = useState(0);
+  const wasOnInvoicesRef = useRef(false);
+
   const handleNavigateTab = (tab: TabType) => navigate(pathForTab(tab));
 
-  // Consume the KPI preset once the user leaves the invoices tab so the next
-  // plain visit starts from the default filter.
   useEffect(() => {
-    if (activeTab !== 'invoices') setInvoicePresetFilter(null);
-  }, [activeTab]);
+    const isOnInvoices = activeTab === 'invoices';
+    // First time the user lands on Invoices, or every time they come back to
+    // Invoices from a different tab, remount it so internal state (filter,
+    // search) is reset to the default.
+    if (isOnInvoices && !wasOnInvoicesRef.current) {
+      setInvoicesTabNonce((n) => n + 1);
+    }
+    wasOnInvoicesRef.current = isOnInvoices;
+
+    // Consume the KPI preset once the user leaves the invoices tab. The next
+    // visit to /invoices then starts from the default filter. We deliberately
+    // clear on leave (not on enter) so the preset survives a quick tab toggle.
+    if (!isOnInvoices && invoicePresetFilter !== null) {
+      setInvoicePresetFilter(null);
+    }
+  }, [activeTab, invoicePresetFilter]);
 
   // ── Computed values ───────────────────────────────────────────────────────
   const unpaidInvoices = invoices.filter(
@@ -338,7 +373,7 @@ function CustomerPortalShell({
   };
 
   const handleAcceptQuotation = (quotationId: string) => {
-    runAction(async () => {
+    return runAction(async () => {
       await portalService.acceptQuotation(quotationId);
       quoteRequestsQuery.refetch();
       quotationsQuery.refetch();
@@ -346,7 +381,7 @@ function CustomerPortalShell({
   };
 
   const handleRejectQuotation = (quotationId: string) => {
-    runAction(async () => {
+    return runAction(async () => {
       await portalService.rejectQuotation(quotationId);
       quoteRequestsQuery.refetch();
       quotationsQuery.refetch();
@@ -354,7 +389,7 @@ function CustomerPortalShell({
   };
 
   const handleRequestQuotationRevision = (quotationId: string) => {
-    runAction(async () => {
+    return runAction(async () => {
       await portalService.requestQuotationRevision(quotationId);
       quoteRequestsQuery.refetch();
       quotationsQuery.refetch();
@@ -382,6 +417,14 @@ function CustomerPortalShell({
 
   const handleLoadReferralTimeline = (referralId: string): Promise<ReferralTimelineEntry[]> => {
     return portalService.getReferralTimeline(referralId);
+  };
+
+  // ── Support / Help Desk ───────────────────────────────────────────────────
+  const handleCreateSupportTicket = (payload: NewSupportTicketPayload): Promise<void> => {
+    return runAction(async () => {
+      await portalService.createSupportTicket(payload);
+      supportTicketsQuery.refetch();
+    }) as Promise<void>;
   };
 
   // ── Notifications (ERP portal_notifications) ──────────────────────────────
@@ -420,7 +463,7 @@ function CustomerPortalShell({
   };
 
   const renderPortal = () => (
-    <div className={`min-h-screen bg-slate-100/70 text-slate-900 font-sans selection:bg-slate-900 selection:text-white flex ${className}`}>
+    <div className={`min-h-screen bg-slate-100/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white flex ${className}`}>
       {/* Sidebar Navigation for Desktop (hidden on mobile) */}
       <Sidebar
         activeTab={activeTab}
@@ -436,7 +479,7 @@ function CustomerPortalShell({
       />
 
       {/* Main Workspace Area */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen-safe bg-slate-50/50">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen-safe bg-slate-50/50 dark:bg-slate-900/50">
         {/* Top Navigation Bar Header - Only visible on Dashboard */}
         {activeTab === 'dashboard' && (
           <MobileHeader
@@ -483,6 +526,7 @@ function CustomerPortalShell({
                 statementsQuery.refetch();
                 adsQuery.refetch();
               }}
+              skeleton={<DashboardSkeleton />}
             >
               <DashboardTab
                 profile={profile ?? ({} as AccountProfile)}
@@ -491,6 +535,7 @@ function CustomerPortalShell({
                 deliveries={deliveries}
                 statements={statements}
                 ads={ads}
+                activeTab={activeTab}
                 onNavigateTab={handleNavigateTab}
                 onOpenPaymentModal={() => handleNavigateTab('invoices')}
                 onNavigateInvoices={(filter) => {
@@ -511,6 +556,7 @@ function CustomerPortalShell({
               onRetry={invoicesQuery.refetch}
             >
               <InvoicesTab
+                key={`${invoicesTabNonce}-${invoicePresetFilter ?? 'default'}`}
                 invoices={invoices}
                 initialFilter={invoicePresetFilter ?? undefined}
                 onSelectInvoiceDetail={(inv) => setSelectedInvoiceDetail(inv)}
@@ -596,6 +642,12 @@ function CustomerPortalShell({
               <StatementsTab
                 profile={profile ?? ({} as AccountProfile)}
                 statements={statements}
+                dateFilter={statementDateFilter}
+                startDate={statementStartDate}
+                endDate={statementEndDate}
+                onDateFilterChange={setStatementDateFilter}
+                onStartDateChange={setStatementStartDate}
+                onEndDateChange={setStatementEndDate}
                 onOpenStatementPrintModal={() => setIsStatementPrintModalOpen(true)}
                 onSelectEntryDetail={(entry) => setSelectedStatementEntryDetail(entry)}
               />
@@ -626,7 +678,31 @@ function CustomerPortalShell({
               error={customerQuery.error}
               onRetry={customerQuery.refetch}
             >
-              <AccountTab profile={profile ?? ({} as AccountProfile)} onSignOut={handleSignOut} />
+              <AccountTab
+                profile={profile ?? ({} as AccountProfile)}
+                onSignOut={handleSignOut}
+                onRefreshProfile={customerQuery.refetch}
+                isRefreshingProfile={customerQuery.isLoading}
+              />
+            </PortalDataBoundary>
+          )}
+
+          {activeTab === 'support' && (
+            <PortalDataBoundary
+              isLoading={supportTicketsQuery.isLoading || supportArticlesQuery.isLoading}
+              error={supportTicketsQuery.error || supportArticlesQuery.error}
+              onRetry={() => {
+                supportTicketsQuery.refetch();
+                supportArticlesQuery.refetch();
+              }}
+            >
+              <SupportTab
+                tickets={supportTickets}
+                articles={supportArticles}
+                isLoadingTickets={supportTicketsQuery.isLoading}
+                isLoadingArticles={supportArticlesQuery.isLoading}
+                onCreateTicket={handleCreateSupportTicket}
+              />
             </PortalDataBoundary>
           )}
         </main>
@@ -676,6 +752,7 @@ function CustomerPortalShell({
         onClose={() => setIsQuoteModalOpen(false)}
         onSubmitQuoteRequest={handleSubmitQuoteRequest}
         products={products}
+        profile={profile}
       />
 
       <StatementPrintModal
@@ -683,6 +760,9 @@ function CustomerPortalShell({
         onClose={() => setIsStatementPrintModalOpen(false)}
         profile={profile ?? ({} as AccountProfile)}
         statements={statements}
+        dateFilter={statementDateFilter}
+        startDate={statementStartDate}
+        endDate={statementEndDate}
       />
 
       <QuotationDetailModal
@@ -759,7 +839,12 @@ function CustomerPortalShell({
 export function CustomerPortalApp(props: CustomerPortalAppProps) {
   return (
     <CustomerAuthProvider>
-      <CustomerPortalShell {...props} />
+      <DarkModeProvider>
+        <div className="relative">
+          <DevModeBanner />
+          <CustomerPortalShell {...props} />
+        </div>
+      </DarkModeProvider>
     </CustomerAuthProvider>
   );
 }

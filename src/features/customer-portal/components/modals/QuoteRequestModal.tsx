@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { FileUp, MessageSquareQuote, Plus, Trash2, X } from 'lucide-react';
-import { Product, QuoteRequestItem } from '../../types';
+import { AccountProfile, Product, QuoteRequestItem } from '../../types';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface QuoteRequestModalProps {
   isOpen: boolean;
@@ -13,6 +14,8 @@ interface QuoteRequestModalProps {
     notes: string
   ) => void;
   products: Product[];
+  /** Authenticated customer profile — used to pre-fill the delivery location. */
+  profile?: AccountProfile | null;
 }
 
 interface ItemState extends QuoteRequestItem {
@@ -50,18 +53,31 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
   onClose,
   onSubmitQuoteRequest,
   products,
+  profile,
 }) => {
   const [items, setItems] = useState<ItemState[]>([
-    { id: '1', name: 'Annual Corporate Catalog (5,000 copies, 48 pages)', quantity: 5000, targetPrice: 2.50, notes: 'Full-color silk stock, spot UV cover finish, perfect bound', query: '', showSuggestions: false, activeIndex: 0 },
+    { id: '1', name: '', quantity: 1, targetPrice: undefined, notes: '', query: '', showSuggestions: false, activeIndex: 0 },
   ]);
-  const [requiredByDate, setRequiredByDate] = useState('2026-08-25');
-  const [deliveryLocation, setDeliveryLocation] = useState('742 Enterprise Parkway, Loading Dock B');
-  const [priority, setPriority] = useState<'standard' | 'urgent' | 'express'>('urgent');
+  const [requiredByDate, setRequiredByDate] = useState('');
+  const [deliveryLocation, setDeliveryLocation] = useState('');
+  const [priority, setPriority] = useState<'standard' | 'urgent' | 'express'>('standard');
   const [generalNotes, setGeneralNotes] = useState('');
-  const [attachmentName, setAttachmentName] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const suggestionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: isOpen, onEscape: onClose });
+
+  // Pre-fill delivery location from the authenticated profile the first time
+  // the modal opens, without clobbering whatever the customer already typed.
+  useEffect(() => {
+    if (isOpen && !deliveryLocation && profile?.address) {
+      setDeliveryLocation(profile.address);
+    }
+    // We only want this to run when the modal opens; do not depend on
+    // deliveryLocation to avoid overwriting live edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -179,23 +195,30 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
-              <MessageSquareQuote className="w-5 h-5" />
+              <MessageSquareQuote className="w-5 h-5" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900">Request Custom Quotation</h3>
+              <h3 id={titleId} className="font-extrabold text-base text-slate-900">Request Custom Quotation</h3>
               <p className="text-xs text-slate-500">Get volume pricing and custom engineering quotes</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+            aria-label="Close quotation request"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -265,6 +288,7 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
                       <input
                         type="text"
                         placeholder="Search products, stationery or services..."
+                        aria-label="Search products"
                         value={item.name}
                         onChange={(e) => handleQueryChange(item.id, e.target.value)}
                         onKeyDown={(e) => handleKeyDown(e, item.id)}
@@ -315,8 +339,9 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
                         />
                       </div>
                       <div>
-                        <label className="text-[11.5px] text-slate-500 font-bold">Target Budget ($/unit)</label>
+                        <label htmlFor={`target-budget-${item.id}`} className="text-[11.5px] text-slate-500 font-bold">Target Budget ($/unit)</label>
                         <input
+                          id={`target-budget-${item.id}`}
                           type="number"
                           placeholder="Optional"
                           value={item.targetPrice || ''}
@@ -329,6 +354,7 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
                     <input
                       type="text"
                       placeholder="Additional item specifications or CAD drawings note..."
+                      aria-label="Additional item specifications"
                       value={item.notes || ''}
                       onChange={(e) => handleItemChange(item.id, 'notes', e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl p-1.5 text-slate-700 text-[12.5px] font-medium"
@@ -350,21 +376,29 @@ export const QuoteRequestModal: React.FC<QuoteRequestModalProps> = ({
             />
           </div>
 
-          {/* Spec Attachment Simulator */}
+          {/* Spec Attachments — disabled until the ERP exposes an attachments
+              endpoint. Keeps the visual affordance so users know the feature
+              is on the roadmap, without pretending the file is uploaded. */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1">Upload Engineering Specs / RFQ PDF</label>
-            <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-center space-y-1">
-              <FileUp className="w-5 h-5 mx-auto text-slate-600" />
-              <p className="text-xs text-slate-700 font-bold">
-                {attachmentName ? `Attached: ${attachmentName}` : 'Click to simulate uploading CAD or PDF specs'}
+            <label className="block text-xs font-bold text-slate-500 mb-1">
+              Upload Engineering Specs / RFQ PDF
+            </label>
+            <div
+              className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center space-y-1 opacity-60"
+              aria-disabled="true"
+            >
+              <FileUp className="w-5 h-5 mx-auto text-slate-400" />
+              <p className="text-xs text-slate-700 font-bold">File attachments coming soon</p>
+              <p className="text-[11.5px] text-slate-500 font-medium leading-relaxed">
+                For now, email CAD / spec sheets to{' '}
+                <a
+                  href="mailto:rfq@primeerp.example"
+                  className="underline font-bold hover:text-slate-700"
+                >
+                  rfq@primeerp.example
+                </a>{' '}
+                and reference this request number once it is submitted.
               </p>
-              <button
-                type="button"
-                onClick={() => setAttachmentName('Technical_Specs_RFQ_2026.pdf')}
-                className="text-[12.5px] text-slate-900 hover:text-slate-700 font-extrabold underline"
-              >
-                {attachmentName ? 'Change File' : 'Attach File'}
-              </button>
             </div>
           </div>
 

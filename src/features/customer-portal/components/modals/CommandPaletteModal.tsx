@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import {
   Search,
   X,
@@ -14,6 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Invoice, Order, Product, DeliveryNotification, TabType } from '../../types';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 import { VariantSelectModal } from './VariantSelectModal';
 
 interface CommandPaletteModalProps {
@@ -43,12 +44,15 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: isOpen, onEscape: onClose });
   // Mandatory variant chooser for "+ Cart" on variant products.
   const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
+      window.setTimeout(() => inputRef.current?.focus(), 50);
     } else {
       setQuery('');
     }
@@ -133,24 +137,32 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[80vh] animate-in fade-in zoom-in-95 duration-150">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[80vh] animate-in fade-in zoom-in-95 duration-150"
+      >
         {/* Search Header Input */}
         <div className="relative flex items-center px-4 py-3.5 border-b border-slate-100 bg-slate-50/80">
-          <Search className="w-5 h-5 text-slate-400 shrink-0 mr-3" />
+          <Search className="w-5 h-5 text-slate-400 shrink-0 mr-3" aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search invoices, products, tracking #, orders, or commands... (e.g. INV-2026, Paper, TRK)"
-            className="w-full bg-transparent text-slate-900 font-normal placeholder-slate-400 focus:outline-none text-sm"
+            aria-label="Search invoices, products, tracking #, orders, or commands"
+            className="w-full bg-transparent text-slate-900 font-normal placeholder:text-slate-400 focus:outline-none text-sm"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
               className="p-1 hover:bg-slate-200/60 text-slate-400 rounded-md transition mr-1"
+              aria-label="Clear search"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
           <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[11.5px] font-mono font-bold text-slate-500 bg-white border border-slate-200 rounded-md shadow-2xs">

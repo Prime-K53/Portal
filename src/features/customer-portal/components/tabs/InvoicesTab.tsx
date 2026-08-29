@@ -13,6 +13,7 @@ import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/f
 import { downloadOfficialDocument } from '../../utils/officialDocument';
 import { exportToCSV } from '../../utils/exportUtils';
 import { canRequestPayment } from '../../utils/paymentRequest';
+import { getCachedInvoiceItems } from '../../hooks/usePortalData';
 
 export type InvoiceFilter = 'all' | 'unpaid' | 'overdue' | 'paid';
 
@@ -34,10 +35,15 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredInvoices = invoices.filter((inv) => {
+    const term = searchTerm.toLowerCase();
+    const cachedItems = getCachedInvoiceItems(inv.id);
+    // Merge list-time items (usually empty) with anything the detail modal
+    // has populated so search hits the line-item text the customer remembers.
+    const allItems = inv.items.length > 0 ? inv.items : cachedItems;
     const matchesSearch =
-      inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (inv.poNumber && inv.poNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      inv.items.some((item) => item.description.toLowerCase().includes(searchTerm.toLowerCase()));
+      inv.invoiceNumber.toLowerCase().includes(term) ||
+      (inv.poNumber && inv.poNumber.toLowerCase().includes(term)) ||
+      allItems.some((item) => item.description.toLowerCase().includes(term));
 
     if (!matchesSearch) return false;
 
@@ -180,6 +186,12 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
           filteredInvoices.map((inv) => {
             const statusInfo = getInvoiceStatusBadge(inv.status);
             const isPayable = inv.status === 'unpaid' || inv.status === 'overdue' || inv.status === 'partially_paid';
+            const isNew = (() => {
+              const issued = new Date(inv.issueDate);
+              const now = new Date();
+              const diffDays = (now.getTime() - issued.getTime()) / (1000 * 60 * 60 * 24);
+              return diffDays <= 7;
+            })();
 
             return (
               <div
@@ -191,6 +203,11 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-sm text-slate-900">{inv.invoiceNumber}</span>
+                      {isNew && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200">
+                          NEW
+                        </span>
+                      )}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
                         {statusInfo.label}
                       </span>

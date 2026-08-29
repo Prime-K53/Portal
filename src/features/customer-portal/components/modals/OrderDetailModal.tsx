@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useId, useRef } from 'react';
 import { Calendar, Package, X } from 'lucide-react';
 import { Order } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { canReorderOrder } from '../../utils/orderRequest';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface OrderDetailModalProps {
   order: Order | null;
@@ -15,6 +16,10 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onClose,
   onReorder,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: order !== null, onEscape: onClose });
+
   if (!order) return null;
 
   const statusLabel = order.status.charAt(0).toUpperCase() + order.status.slice(1);
@@ -22,16 +27,22 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
+            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200" aria-hidden="true">
               <Package className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-slate-900">{order.orderNumber}</h3>
+                <h3 id={titleId} className="font-extrabold text-base text-slate-900">{order.orderNumber}</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-100 text-blue-800 border-blue-200">
                   {statusLabel}
                 </span>
@@ -42,8 +53,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+            aria-label="Close order details"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

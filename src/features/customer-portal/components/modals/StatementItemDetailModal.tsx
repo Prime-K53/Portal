@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Download,
@@ -8,6 +8,7 @@ import {
   X,
 } from 'lucide-react';
 import { AccountProfile, Invoice, Payment, StatementEntry } from '../../types';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadOfficialDocument, findPaymentForStatementEntry } from '../../utils/officialDocument';
 
@@ -30,6 +31,10 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
   isOpen,
   onClose,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: isOpen && entry !== null, onEscape: onClose });
+
   // Official-document download state (ERP-authoritative PDF).
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -89,15 +94,21 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up"
+      >
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-xl ${isPayment ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-800'}`}>
+            <div className={`p-2 rounded-xl ${isPayment ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-800'}`} aria-hidden="true">
               {isPayment ? <Receipt className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900">{entry.type} Statement Record</h3>
+              <h3 id={titleId} className="font-extrabold text-base text-slate-900">{entry.type} Statement Record</h3>
               <p className="text-[12.5px] font-mono text-slate-500">{entry.reference}</p>
             </div>
           </div>
@@ -105,8 +116,9 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
           <button
             onClick={onClose}
             className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
+            aria-label="Close statement record"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

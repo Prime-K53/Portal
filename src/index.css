@@ -43,11 +43,21 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  html.dark {
+    color: #e2e8f0;
+    background-color: #0f172a;
+  }
+
   body {
     font-family: var(--font-sans);
     font-size: 0.8125rem;
     line-height: 1.5;
     color: #23282A;
+  }
+
+  body.dark {
+    color: #e2e8f0;
+    background-color: #0f172a;
   }
 
   table {
@@ -69,11 +79,19 @@
     line-height: 1.4;
   }
 
+  html.dark .table-header {
+    color: #a7f3d0;
+  }
+
   .table-body-cell {
     font-size: 13px;
     font-weight: 400;
     color: #23282A;
     line-height: 1.5;
+  }
+
+  html.dark .table-body-cell {
+    color: #cbd5e1;
   }
 }
 

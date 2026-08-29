@@ -19,6 +19,7 @@ import type {
   Invoice,
   NewOrderPayload,
   NewQuoteRequestPayload,
+  NewSupportTicketPayload,
   Order,
   OrderRequest,
   Payment,
@@ -35,6 +36,9 @@ import type {
   ReferralStats,
   ReferralTimelineEntry,
   StatementEntry,
+  SupportArticle,
+  SupportMessage,
+  SupportTicket,
   Wallet,
 } from '../types';
 import type {
@@ -500,6 +504,69 @@ export class MockPortalService implements PortalService {
     return [];
   }
 
+  // ── Support / Help Desk ─────────────────────────────────────────────────
+  async getSupportTickets(): Promise<SupportTicket[]> {
+    return clone(MOCK_SUPPORT_TICKETS);
+  }
+
+  async getSupportTicket(ticketId: string): Promise<SupportTicket> {
+    const ticket = MOCK_SUPPORT_TICKETS.find((t) => t.id === ticketId);
+    if (!ticket) throw new ApiError(`Support ticket ${ticketId} not found.`, { code: 'NOT_FOUND' });
+    return clone(ticket);
+  }
+
+  async createSupportTicket(payload: NewSupportTicketPayload): Promise<SupportTicket> {
+    const newTicket: SupportTicket = {
+      id: `TKT-${Date.now()}`,
+      ticketNumber: `TKT-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
+      subject: payload.subject,
+      description: payload.description,
+      status: 'open',
+      priority: payload.priority ?? 'medium',
+      category: payload.category,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: [
+        {
+          id: `MSG-${Date.now()}`,
+          ticketId: `TKT-${Date.now()}`,
+          authorName: 'You',
+          authorRole: 'customer',
+          content: payload.description,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+    MOCK_SUPPORT_TICKETS.unshift(newTicket);
+    return clone(newTicket);
+  }
+
+  async addSupportMessage(ticketId: string, content: string): Promise<SupportMessage> {
+    const ticket = MOCK_SUPPORT_TICKETS.find((t) => t.id === ticketId);
+    if (!ticket) throw new ApiError(`Support ticket ${ticketId} not found.`, { code: 'NOT_FOUND' });
+    const msg: SupportMessage = {
+      id: `MSG-${Date.now()}`,
+      ticketId,
+      authorName: 'You',
+      authorRole: 'customer',
+      content,
+      createdAt: new Date().toISOString(),
+    };
+    ticket.messages.push(msg);
+    ticket.updatedAt = new Date().toISOString();
+    return clone(msg);
+  }
+
+  async getSupportArticles(): Promise<SupportArticle[]> {
+    return clone(MOCK_SUPPORT_ARTICLES);
+  }
+
+  async getSupportArticle(slug: string): Promise<SupportArticle> {
+    const article = MOCK_SUPPORT_ARTICLES.find((a) => a.slug === slug);
+    if (!article) throw new ApiError(`Support article "${slug}" not found.`, { code: 'NOT_FOUND' });
+    return clone(article);
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
   private paymentMethodLabel(method: string): string {
     const labels: Record<string, string> = {
@@ -511,3 +578,159 @@ export class MockPortalService implements PortalService {
     return labels[method] || method;
   }
 }
+
+// ── Mock support data ─────────────────────────────────────────────────────────────
+
+const MOCK_SUPPORT_TICKETS: SupportTicket[] = [
+  {
+    id: 'TKT-001',
+    ticketNumber: 'TKT-A1B2C3',
+    subject: 'Invoice INV-2024-001 has wrong line items',
+    description: 'The invoice shows 10 units but we only received 8. Please advise.',
+    status: 'open',
+    priority: 'high',
+    category: 'billing',
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000).toISOString(),
+    messages: [
+      {
+        id: 'MSG-001',
+        ticketId: 'TKT-001',
+        authorName: 'You',
+        authorRole: 'customer',
+        content: 'The invoice shows 10 units but we only received 8. Please advise.',
+        createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+      },
+      {
+        id: 'MSG-002',
+        ticketId: 'TKT-001',
+        authorName: 'PrimeERP Support',
+        authorRole: 'agent',
+        content: 'Thank you for reaching out. We have escalated this to our billing team and will investigate the discrepancy. You should receive an updated invoice within 24 hours.',
+        createdAt: new Date(Date.now() - 3600000).toISOString(),
+      },
+    ],
+  },
+  {
+    id: 'TKT-002',
+    ticketNumber: 'TKT-D4E5F6',
+    subject: 'How do I update our delivery address?',
+    description: 'We are relocating next month and need to update the delivery address on file.',
+    status: 'resolved',
+    priority: 'low',
+    category: 'account',
+    createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
+    updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    resolvedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    messages: [
+      {
+        id: 'MSG-003',
+        ticketId: 'TKT-002',
+        authorName: 'You',
+        authorRole: 'customer',
+        content: 'We are relocating next month and need to update the delivery address on file.',
+        createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
+      },
+      {
+        id: 'MSG-004',
+        ticketId: 'TKT-002',
+        authorName: 'PrimeERP Support',
+        authorRole: 'agent',
+        content: 'You can update your delivery address from the Account Settings tab. Go to Account → Company Profile and update the address fields. Changes take effect on your next order.',
+        createdAt: new Date(Date.now() - 86400000 * 9).toISOString(),
+      },
+    ],
+  },
+  {
+    id: 'TKT-003',
+    ticketNumber: 'TKT-G7H8I9',
+    subject: 'Product CAT-LOG-01 showing incorrect stock',
+    description: 'Your catalog shows 500 units available but when I tried to place an order for 100 I was told there were only 50.',
+    status: 'in_progress',
+    priority: 'medium',
+    category: 'product',
+    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+    updatedAt: new Date(Date.now() - 86400000).toISOString(),
+    messages: [
+      {
+        id: 'MSG-005',
+        ticketId: 'TKT-003',
+        authorName: 'You',
+        authorRole: 'customer',
+        content: 'Your catalog shows 500 units available but when I tried to place an order for 100 I was told there were only 50.',
+        createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+      },
+      {
+        id: 'MSG-006',
+        ticketId: 'TKT-003',
+        authorName: 'PrimeERP Support',
+        authorRole: 'agent',
+        content: 'We are checking the current stock levels with our warehouse. We will update the catalog shortly.',
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+      },
+    ],
+  },
+];
+
+const MOCK_SUPPORT_ARTICLES: SupportArticle[] = [
+  {
+    id: 'ART-001',
+    slug: 'how-to-place-an-order',
+    title: 'How to Place an Order',
+    summary: 'Step-by-step guide to submitting an order request through the Prime PORTAL.',
+    body: '## Placing an Order\n\n1. Navigate to the Orders & Catalog tab.\n2. Browse or search for the products you need.\n3. Add items to your cart.\n4. Review your cart and click Place Order.\n5. Your order request will be reviewed by our sales team and converted to an official Sales Order.',
+    category: 'Orders',
+    tags: ['orders', 'catalog', 'cart'],
+    helpful: 42,
+    notHelpful: 3,
+    lastUpdated: new Date(Date.now() - 86400000 * 30).toISOString(),
+  },
+  {
+    id: 'ART-002',
+    slug: 'understanding-your-invoice',
+    title: 'Understanding Your Invoice',
+    summary: 'Explains each section of your Prime ERP invoice, including line items, taxes, and payment terms.',
+    body: '## Invoice Sections\n\n**Header**: Your company details, invoice number, and issue date.\n\n**Line Items**: Each product or service with quantity, unit price, and total.\n\n**Subtotal / Tax / Total**: The final amount payable.\n\n**Payment Terms**: Net 30 days unless otherwise agreed.',
+    category: 'Billing',
+    tags: ['invoices', 'billing', 'payments'],
+    helpful: 38,
+    notHelpful: 5,
+    lastUpdated: new Date(Date.now() - 86400000 * 15).toISOString(),
+  },
+  {
+    id: 'ART-003',
+    slug: 'tracking-your-delivery',
+    title: 'Tracking Your Delivery',
+    summary: 'How to use the Deliveries tab and tracking numbers to monitor your shipment status.',
+    body: '## Delivery Tracking\n\nGo to the Deliveries tab to see all your shipments. Each shipment shows:\n\n- Current status (Processing, Dispatched, In Transit, Delivered)\n- Tracking number\n- Expected delivery date\n\nClick any delivery for the full timeline.',
+    category: 'Deliveries',
+    tags: ['deliveries', 'tracking', 'shipments'],
+    helpful: 29,
+    notHelpful: 2,
+    lastUpdated: new Date(Date.now() - 86400000 * 7).toISOString(),
+  },
+  {
+    id: 'ART-004',
+    slug: 'requesting-a-quotation',
+    title: 'Requesting a Quotation',
+    summary: 'How to submit a formal quotation request for volume pricing or custom engineering.',
+    body: '## Quotation Requests\n\nUse the "Request Custom Quote" button in the Quotations tab.\n\n1. Add the products and quantities you need.\n2. Set your required delivery date.\n3. Add any notes or specifications.\n4. Submit — our team will respond within 1 business day.',
+    category: 'Quotations',
+    tags: ['quotations', 'rfq', 'pricing'],
+    helpful: 21,
+    notHelpful: 1,
+    lastUpdated: new Date(Date.now() - 86400000 * 20).toISOString(),
+  },
+  {
+    id: 'ART-005',
+    slug: 'updating-your-account',
+    title: 'Updating Your Account Details',
+    summary: 'How to change your company profile, contact details, and notification preferences.',
+    body: '## Account Settings\n\nNavigate to Account Settings to update:\n\n- Company name and address\n- Contact phone and email\n- Account manager\n\nNote: Some changes require approval from our team.',
+    category: 'Account',
+    tags: ['account', 'profile', 'settings'],
+    helpful: 17,
+    notHelpful: 2,
+    lastUpdated: new Date(Date.now() - 86400000 * 45).toISOString(),
+  },
+];

@@ -20,6 +20,7 @@ import {
   AuthError,
   PORTAL_SESSION_EXPIRED_EVENT,
 } from '../../services/authService';
+import { invalidatePortalQueries } from '../../hooks/usePortalQuery';
 import type { PortalUser } from '../../types';
 
 /** Result of a login attempt — `requiresTwoFactor` swaps the login form for the 2FA form. */
@@ -79,6 +80,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
 
   const syncFromStore = useCallback(() => {
     setUser(authService.getSession()?.user ?? null);
+    invalidatePortalQueries();
   }, []);
 
   const loginWithApi = useCallback(
@@ -101,6 +103,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       // client's built-in 401-retry single-flight refresh handles any
       // edge-case token validation after navigation.
       setUser(outcome.session.user);
+      invalidatePortalQueries();
       return { requiresTwoFactor: false };
     },
     [syncFromStore]

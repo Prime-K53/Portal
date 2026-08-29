@@ -480,12 +480,12 @@ export class MockAuthService implements AuthService {
     );
   }
 
-  private buildSession(email: string): AuthSession {
+  private buildSession(email: string, options: { customerId?: string; fullName?: string; userId?: string } = {}): AuthSession {
     const user: PortalUser = {
-      id: 'mock_portal_user_001',
+      id: options.userId ?? 'mock_portal_user_001',
       email,
-      fullName: 'Mock Portal Customer',
-      customerId: 'cust_mock_001',
+      fullName: options.fullName ?? email,
+      customerId: options.customerId ?? 'cust_mock_001',
       roles: ['portal_customer'],
     };
     const session: AuthSession = {
@@ -548,7 +548,10 @@ export class MockAuthService implements AuthService {
     if (!input.companyName || !input.email || !input.password) {
       throw new AuthError('Please fill in all required fields.', 'INVALID_CREDENTIALS');
     }
-    return { type: 'session', session: this.buildSession(input.email) }.session;
+    const email = input.email.trim().toLowerCase();
+    return this.buildSession(email, {
+      fullName: input.contactName?.trim() || input.companyName.trim(),
+    });
   }
 
   async requestPasswordReset(email: string): Promise<void> {
@@ -571,10 +574,21 @@ export class MockAuthService implements AuthService {
     if (currentPassword === newPassword) {
       throw new AuthError('New password must be different from the current one.', 'INVALID_CREDENTIALS');
     }
+    // Mock mode is in-memory only — the persisted envelope cannot be
+    // re-issued without a new login, and we do not want to silently
+    // succeed. Surface the limitation honestly.
+    throw new AuthError(
+      'Password changes are not persisted in mock auth mode. Sign out and back in to re-issue a session.',
+      'UNAVAILABLE'
+    );
   }
 
-  async activate(): Promise<AuthSession> {
-    return this.buildSession('mock@example.com');
+  async activate(customerId: string, _code: string, _password: string): Promise<AuthSession> {
+    const trimmedId = customerId.trim();
+    return this.buildSession(`${trimmedId || 'mock'}@example.com`, {
+      customerId: trimmedId || 'cust_mock_001',
+      fullName: `Mock Customer ${trimmedId || ''}`.trim(),
+    });
   }
 }
 

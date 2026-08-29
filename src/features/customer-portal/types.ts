@@ -18,7 +18,8 @@ export type TabType =
   | 'quotes'
   | 'statements'
   | 'referrals'
-  | 'account';
+  | 'account'
+  | 'support';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Identity & Authentication
@@ -1325,4 +1326,120 @@ export interface ErpWallet {
     type: 'credit' | 'debit';
     reference: string;
   }>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Support / Help Desk
+
+export type SupportTicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+export type SupportTicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface SupportTicket {
+  id: string;
+  ticketNumber: string;
+  subject: string;
+  description: string;
+  status: SupportTicketStatus;
+  priority: SupportTicketPriority;
+  category: SupportTicketCategory;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  messages: SupportMessage[];
+  attachments?: SupportAttachment[];
+}
+
+export type SupportTicketCategory =
+  | 'billing'
+  | 'technical'
+  | 'account'
+  | 'order'
+  | 'product'
+  | 'other';
+
+export interface SupportMessage {
+  id: string;
+  ticketId: string;
+  authorName: string;
+  authorRole: 'customer' | 'agent';
+  content: string;
+  createdAt: string;
+  attachments?: SupportAttachment[];
+}
+
+export interface SupportAttachment {
+  id: string;
+  filename: string;
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+export interface SupportArticle {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  body: string;
+  category: string;
+  tags: string[];
+  helpful: number;
+  notHelpful: number;
+  lastUpdated: string;
+}
+
+export interface NewSupportTicketPayload {
+  subject: string;
+  description: string;
+  category: SupportTicketCategory;
+  priority?: SupportTicketPriority;
+  attachments?: File[];
+}
+
+// ── ERP support types ───────────────────────────────────────────────────────────
+
+export interface ErpSupportTicket {
+  id: string;
+  ticket_number: string;
+  subject: string;
+  description: string;
+  status: string;
+  priority: string;
+  category: string;
+  created_at: string;
+  updated_at: string;
+  resolved_at?: string;
+  messages: ErpSupportMessage[];
+  attachments?: ErpSupportAttachment[];
+}
+
+export interface ErpSupportMessage {
+  id: string;
+  ticket_id: string;
+  author_name: string;
+  author_role: string;
+  content: string;
+  created_at: string;
+  attachments?: ErpSupportAttachment[];
+}
+
+export interface ErpSupportAttachment {
+  id: string;
+  filename: string;
+  url: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
+export interface ErpSupportArticle {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  body: string;
+  category: string;
+  tags: string[];
+  helpful: number;
+  not_helpful: number;
+  last_updated: string;
 }

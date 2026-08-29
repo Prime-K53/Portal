@@ -1,7 +1,8 @@
-import React from 'react';
-import { Bell, CheckCheck, Clock, ExternalLink, FileText, Info, Send, Truck, X } from 'lucide-react';
+import React, { useId, useMemo, useRef, useState } from 'react';
+import { Bell, CheckCheck, Clock, ExternalLink, FileText, Info, Loader2, Send, Truck, X } from 'lucide-react';
 import { PortalNotification, TabType } from '../types';
 import { formatDateTime } from '../utils/formatters';
+import { useFocusTrap } from '../utils/useFocusTrap';
 
 interface NotificationDrawerProps {
   isOpen: boolean;
@@ -15,13 +16,13 @@ interface NotificationDrawerProps {
 function notificationTypeBadge(type: PortalNotification['type']): { label: string; bg: string; icon: React.ReactNode } {
   switch (type) {
     case 'delivery':
-      return { label: 'DELIVERY', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: <Truck className="w-3 h-3" /> };
+      return { label: 'DELIVERY', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: <Truck className="w-3 h-3" aria-hidden="true" /> };
     case 'invoice':
-      return { label: 'INVOICE', bg: 'bg-rose-100 text-rose-800 border-rose-200', icon: <FileText className="w-3 h-3" /> };
+      return { label: 'INVOICE', bg: 'bg-rose-100 text-rose-800 border-rose-200', icon: <FileText className="w-3 h-3" aria-hidden="true" /> };
     case 'payment':
-      return { label: 'PAYMENT', bg: 'bg-blue-100 text-blue-800 border-blue-200', icon: <Send className="w-3 h-3" /> };
+      return { label: 'PAYMENT', bg: 'bg-blue-100 text-blue-800 border-blue-200', icon: <Send className="w-3 h-3" aria-hidden="true" /> };
     default:
-      return { label: 'SYSTEM', bg: 'bg-slate-100 text-slate-700 border-slate-200', icon: <Info className="w-3 h-3" /> };
+      return { label: 'SYSTEM', bg: 'bg-slate-100 text-slate-700 border-slate-200', icon: <Info className="w-3 h-3" aria-hidden="true" /> };
   }
 }
 
@@ -33,41 +34,87 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   onMarkAsRead,
   onNavigateTab,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: isOpen, onEscape: onClose });
+  const [markingAllRead, setMarkingAllRead] = useState(false);
+
   if (!isOpen) return null;
+
+  const unreadNotifications = notifications.filter((n) => !n.isRead);
+  const footerCta = useMemo(() => {
+    if (unreadNotifications.length === 0) return null;
+    const types = new Set(unreadNotifications.map((n) => n.type));
+    if (types.size === 1) {
+      const type = [...types][0];
+      switch (type) {
+        case 'delivery':
+          return { tab: 'deliveries' as TabType, label: 'View Delivery Logistics', Icon: Truck };
+        case 'invoice':
+          return { tab: 'invoices' as TabType, label: 'View Invoices', Icon: FileText };
+        case 'payment':
+          return { tab: 'payments' as TabType, label: 'View Payments', Icon: Send };
+        default:
+          return { tab: 'invoices' as TabType, label: 'View Invoices', Icon: FileText };
+      }
+    }
+    return { tab: 'invoices' as TabType, label: 'View Invoices', Icon: FileText };
+  }, [unreadNotifications]);
+
+  const handleMarkAllRead = async () => {
+    setMarkingAllRead(true);
+    try {
+      await onMarkAllAsRead();
+    } finally {
+      setMarkingAllRead(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end">
-      <div className="w-full max-w-md bg-white border-l border-slate-200 text-slate-900 flex flex-col h-full shadow-2xl animate-slide-left">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-md bg-white border-l border-slate-200 text-slate-900 flex flex-col h-full shadow-2xl animate-slide-left"
+      >
         {/* Drawer Header */}
         <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
-              <Bell className="w-5 h-5" />
+              <Bell className="w-5 h-5" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900">Notifications</h3>
+              <h3 id={titleId} className="font-extrabold text-base text-slate-900">Notifications</h3>
               <p className="text-xs text-slate-500">Updates from the ERP Portal</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+            aria-label="Close notifications"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         {/* Action Bar */}
         <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
           <span className="text-slate-500 font-bold">
-            {notifications.filter((n) => !n.isRead).length} unread notification(s)
+            {unreadNotifications.length} unread notification(s)
           </span>
           <button
-            onClick={onMarkAllAsRead}
-            className="text-slate-900 hover:text-slate-700 font-extrabold flex items-center gap-1 transition"
+            onClick={handleMarkAllRead}
+            disabled={markingAllRead || unreadNotifications.length === 0}
+            className="text-slate-900 hover:text-slate-700 font-extrabold flex items-center gap-1 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <CheckCheck className="w-3.5 h-3.5" />
-            Mark all read
+            {markingAllRead ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <CheckCheck className="w-3.5 h-3.5" />
+            )}
+            {markingAllRead ? 'Marking...' : 'Mark all read'}
           </button>
         </div>
 
@@ -82,10 +129,13 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
           ) : (
             notifications.map((item) => {
               const badge = notificationTypeBadge(item.type);
+              const handleItemClick = () => {
+                onMarkAsRead(item.id);
+              };
               return (
                 <div
                   key={item.id}
-                  onClick={() => onMarkAsRead(item.id)}
+                  onClick={handleItemClick}
                   className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer ${
                     !item.isRead
                       ? 'bg-slate-50 border-slate-300 shadow-2xs'
@@ -99,11 +149,11 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                         {badge.label}
                       </span>
                       {!item.isRead && (
-                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" aria-hidden="true" />
                       )}
                     </div>
                     <span className="text-[11.5px] text-slate-400 flex items-center gap-1 font-medium">
-                      <Clock className="w-3 h-3" />
+                      <Clock className="w-3 h-3" aria-hidden="true" />
                       {formatDateTime(item.timestamp)}
                     </span>
                   </div>
@@ -118,11 +168,14 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                         href={item.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMarkAsRead(item.id);
+                        }}
                         className="text-slate-900 font-extrabold hover:text-slate-700 flex items-center gap-1"
                       >
                         <span>Open Details</span>
-                        <ExternalLink className="w-3 h-3" />
+                        <ExternalLink className="w-3 h-3" aria-hidden="true" />
                       </a>
                     </div>
                   )}
@@ -133,18 +186,20 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
         </div>
 
         {/* Drawer Footer */}
-        <div className="p-4 border-t border-slate-200 bg-white">
-          <button
-            onClick={() => {
-              onClose();
-              onNavigateTab('deliveries');
-            }}
-            className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition shadow-xs"
-          >
-            <Truck className="w-4 h-4" />
-            <span>View Delivery Logistics</span>
-          </button>
-        </div>
+        {footerCta && (
+          <div className="p-4 border-t border-slate-200 bg-white">
+            <button
+              onClick={() => {
+                onClose();
+                onNavigateTab(footerCta.tab);
+              }}
+              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition shadow-xs"
+            >
+              <footerCta.Icon className="w-4 h-4" />
+              <span>{footerCta.label}</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

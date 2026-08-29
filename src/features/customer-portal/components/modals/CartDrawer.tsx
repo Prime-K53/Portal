@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useId, useRef } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
 import { CartItem, OrderRequest } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { getRequestStatusLabel } from '../../utils/orderRequest';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -32,6 +33,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onClearCart,
   onPlaceOrder,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: isOpen, onEscape: onClose });
+
   const [requestedDeliveryDate, setRequestedDeliveryDate] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [orderError, setOrderError] = React.useState('');
@@ -98,23 +103,30 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end">
-      <div className="w-full max-w-md bg-white border-l border-slate-200 text-slate-900 flex flex-col h-full shadow-2xl animate-slide-left">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-md bg-white border-l border-slate-200 text-slate-900 flex flex-col h-full shadow-2xl animate-slide-left"
+      >
         {/* Drawer Header */}
         <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
-              <ShoppingBag className="w-5 h-5" />
+              <ShoppingBag className="w-5 h-5" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900">Your Shopping Cart</h3>
+              <h3 id={titleId} className="font-extrabold text-base text-slate-900">Your Shopping Cart</h3>
               <p className="text-xs text-slate-500">{cartItems.length} item(s) selected</p>
             </div>
           </div>
           <button
             onClick={handleCloseAndReset}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+            aria-label="Close cart"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

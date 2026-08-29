@@ -1,13 +1,18 @@
-import React from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { Download, Printer, Receipt, ShieldCheck, X } from 'lucide-react';
 import { AccountProfile, StatementEntry } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { useFocusTrap } from '../../utils/useFocusTrap';
+import { downloadOfficialDocument, resolveStatementPeriod } from '../../utils/officialDocument';
 
 interface StatementPrintModalProps {
   isOpen: boolean;
   onClose: () => void;
   profile: AccountProfile;
   statements: StatementEntry[];
+  dateFilter: 'all' | '30days' | 'this_month' | 'custom';
+  startDate: string;
+  endDate: string;
 }
 
 export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
@@ -15,7 +20,16 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
   onClose,
   profile,
   statements,
+  dateFilter,
+  startDate,
+  endDate,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: isOpen, onEscape: onClose });
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const totalDebits = statements.reduce((sum, s) => sum + s.debit, 0);
@@ -26,36 +40,79 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
     window.print();
   };
 
+  const handleDownload = async () => {
+    setDownloadError(null);
+    const period =
+      dateFilter === 'custom'
+        ? resolveStatementPeriod('custom', { startDate, endDate })
+        : resolveStatementPeriod(dateFilter);
+    setIsDownloading(true);
+    try {
+      await downloadOfficialDocument({
+        path: `/portal/customers/statement/document?from=${period.from ?? ''}&to=${period.to ?? ''}`,
+      });
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'Download failed.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-2xl bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-2xl bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
-              <Receipt className="w-5 h-5" />
+              <Receipt className="w-5 h-5" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900">Official Account Statement</h3>
+              <h3 id={titleId} className="font-extrabold text-base text-slate-900">Official Account Statement</h3>
               <p className="text-xs text-slate-500">Statement of Account Ledger</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className="p-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 text-white font-extrabold text-xs flex items-center gap-1.5 transition shadow-xs"
+            >
+              {isDownloading ? (
+                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" aria-hidden="true" />
+              )}
+              <span>Download</span>
+            </button>
+            <button
               onClick={handlePrint}
               className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center gap-1.5 transition shadow-xs"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print / Save PDF</span>
+              <Printer className="w-4 h-4" aria-hidden="true" />
+              <span>Print</span>
             </button>
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+              aria-label="Close statement preview"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
         </div>
+
+        {downloadError && (
+          <div className="px-4 py-2 bg-rose-50 border-b border-rose-200">
+            <p className="text-[11.5px] font-bold text-rose-700">{downloadError}</p>
+          </div>
+        )}
 
         {/* Statement Document View */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50 space-y-6 text-slate-800" id="printable-statement">

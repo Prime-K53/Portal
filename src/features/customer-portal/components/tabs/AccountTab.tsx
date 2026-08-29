@@ -23,6 +23,10 @@ import { authService, AuthError } from '../../services/authService';
 interface AccountTabProps {
   profile: AccountProfile;
   onSignOut?: () => void;
+  /** Re-fetches the customer profile from the ERP (used by the freshness button). */
+  onRefreshProfile?: () => void;
+  /** True while a profile refetch is in flight (disables the refresh button). */
+  isRefreshingProfile?: boolean;
 }
 
 /** Human-friendly relative time for the data-freshness indicator. */
@@ -82,16 +86,27 @@ const PasswordField: React.FC<PasswordFieldProps> = ({ id, label, value, placeho
   );
 };
 
-export const AccountTab: React.FC<AccountTabProps> = ({ profile, onSignOut }) => {
+export const AccountTab: React.FC<AccountTabProps> = ({
+  profile,
+  onSignOut,
+  onRefreshProfile,
+  isRefreshingProfile = false,
+}) => {
   const hasAccountManager = Boolean(profile.accountManager?.name);
 
-  // Data freshness indicator (moved from the dashboard header).
+  // Data freshness indicator — re-anchors to "now" after every successful refetch.
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   useEffect(() => {
     // Keep the relative label ticking without waiting for user interaction.
     const timer = window.setInterval(() => setLastRefreshed((d) => new Date(d)), 15000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const handleRefreshClick = () => {
+    if (!onRefreshProfile || isRefreshingProfile) return;
+    onRefreshProfile();
+    setLastRefreshed(new Date());
+  };
 
   // Change password state.
   const [currentPassword, setCurrentPassword] = useState('');
@@ -172,11 +187,15 @@ export const AccountTab: React.FC<AccountTabProps> = ({ profile, onSignOut }) =>
         </span>
         <button
           type="button"
-          onClick={() => setLastRefreshed(new Date())}
-          className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+          onClick={handleRefreshClick}
+          disabled={!onRefreshProfile || isRefreshingProfile}
+          className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label="Refresh profile data"
+          title={onRefreshProfile ? 'Reload profile from ERP' : 'Profile refresh unavailable'}
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw
+            className={`w-3.5 h-3.5 ${isRefreshingProfile ? 'animate-spin' : ''}`}
+          />
         </button>
       </div>
 
@@ -246,10 +265,10 @@ export const AccountTab: React.FC<AccountTabProps> = ({ profile, onSignOut }) =>
           </div>
         </div>
 
-        <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
-          <p><strong>Default Terms:</strong> Net 30 Commercial Credit Terms</p>
-          <p><strong>Discount Terms:</strong> 1.5% 10, Net 30 (1.5% discount if paid within 10 days)</p>
-        </div>
+        <p className="text-[11.5px] text-slate-500 font-medium leading-relaxed">
+          Standard commercial terms apply. For current discount terms and any custom arrangements,
+          contact your account manager.
+        </p>
       </div>
 
       {/* Security — Change Password */}

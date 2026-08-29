@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ArrowUpDown,
   Bookmark,
@@ -99,6 +99,18 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
   const [quickQtyInput, setQuickQtyInput] = useState(10);
   const [quickSkuFeedback, setQuickSkuFeedback] = useState<string | null>(null);
 
+  const addedProductTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const skuFeedbackTimeoutRef = useRef<number | null>(null);
+  const reorderNoticeTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      addedProductTimeoutsRef.current.forEach((id) => window.clearTimeout(id));
+      if (skuFeedbackTimeoutRef.current !== null) window.clearTimeout(skuFeedbackTimeoutRef.current);
+      if (reorderNoticeTimeoutRef.current !== null) window.clearTimeout(reorderNoticeTimeoutRef.current);
+    };
+  }, []);
+
   const categories = useMemo(() => {
     return ['All', '★ Favorites', ...Array.from(new Set(products.map((p) => p.category)))];
   }, [products]);
@@ -153,17 +165,21 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
     }
     onAddToCart(product, quantity);
     setAddedProductIds((prev) => ({ ...prev, [product.id]: true }));
-    setTimeout(() => {
+    const timeoutId = window.setTimeout(() => {
       setAddedProductIds((prev) => ({ ...prev, [product.id]: false }));
+      addedProductTimeoutsRef.current.delete(product.id);
     }, 1500);
+    addedProductTimeoutsRef.current.set(product.id, timeoutId);
   };
 
   const handleVariantPickerConfirm = (effectiveProduct: Product, quantity: number) => {
     onAddToCart(effectiveProduct, quantity);
     setAddedProductIds((prev) => ({ ...prev, [effectiveProduct.id]: true }));
-    setTimeout(() => {
+    const timeoutId = window.setTimeout(() => {
       setAddedProductIds((prev) => ({ ...prev, [effectiveProduct.id]: false }));
+      addedProductTimeoutsRef.current.delete(effectiveProduct.id);
     }, 1500);
+    addedProductTimeoutsRef.current.set(effectiveProduct.id, timeoutId);
     setVariantPickerQueue((prev) => prev.slice(1));
   };
 
@@ -198,10 +214,12 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
       } else {
         setQuickSkuFeedback(`Choose an option for ${foundProduct.name} to finish adding.`);
       }
-      setTimeout(() => setQuickSkuFeedback(null), 3500);
+      if (skuFeedbackTimeoutRef.current !== null) window.clearTimeout(skuFeedbackTimeoutRef.current);
+      skuFeedbackTimeoutRef.current = window.setTimeout(() => setQuickSkuFeedback(null), 3500);
     } else {
       setQuickSkuFeedback(`Error: SKU "${cleanSku}" not found in catalog.`);
-      setTimeout(() => setQuickSkuFeedback(null), 3500);
+      if (skuFeedbackTimeoutRef.current !== null) window.clearTimeout(skuFeedbackTimeoutRef.current);
+      skuFeedbackTimeoutRef.current = window.setTimeout(() => setQuickSkuFeedback(null), 3500);
     }
   };
 
@@ -278,9 +296,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
   const [reorderNotice, setReorderNotice] = useState<string | null>(null);
 
   const resetReorderNotice = () => {
-    if (reorderNotice) {
-      window.setTimeout(() => setReorderNotice(null), 6000);
-    }
+    if (reorderNoticeTimeoutRef.current !== null) window.clearTimeout(reorderNoticeTimeoutRef.current);
+    reorderNoticeTimeoutRef.current = window.setTimeout(() => setReorderNotice(null), 6000);
   };
 
   const handleCancelRequestClick = (request: OrderRequest) => {

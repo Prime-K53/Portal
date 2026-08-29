@@ -9,7 +9,6 @@
  */
 
 export { CustomerPortalApp } from './CustomerPortalApp';
-export { AuthPage } from './components/AuthPage';
 export {
   CustomerAuthProvider,
   useCustomerAuth,
@@ -24,7 +23,6 @@ export { BottomNavigation } from './components/BottomNavigation';
 export { NotificationDrawer } from './components/NotificationDrawer';
 
 // Modals
-export { PaymentModal } from './components/modals/PaymentModal';
 export { PaymentRequestModal } from './components/modals/PaymentRequestModal';
 export { InvoiceDetailModal } from './components/modals/InvoiceDetailModal';
 export { DeliveryTrackingModal } from './components/modals/DeliveryTrackingModal';

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Building,
@@ -24,6 +24,7 @@ import {
   validateRequestedAmount,
 } from '../../utils/paymentRequest';
 import { usePaymentRequestsData } from '../../hooks/usePortalData';
+import { useFocusTrap } from '../../utils/useFocusTrap';
 
 interface PaymentRequestModalProps {
   invoice: Invoice | null;
@@ -59,6 +60,10 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [createdRequest, setCreatedRequest] = useState<PaymentRequest | null>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(containerRef, { active: invoice !== null, onEscape: onClose });
 
   const invoiceId = invoice?.id ?? null;
 
@@ -132,26 +137,32 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
-              <Landmark className="w-5 h-5 text-slate-700" />
+              <Landmark className="w-5 h-5 text-slate-700" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900">Payment Request</h3>
+              <h3 id={titleId} className="font-extrabold text-base text-slate-900">Payment Request</h3>
               <p className="text-xs text-slate-500 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-slate-400" /> Request to pay — not a payment
+                <ShieldCheck className="w-3 h-3 text-slate-400" aria-hidden="true" /> Request to pay — not a payment
               </p>
             </div>
           </div>
           <button
             onClick={handleClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
-            aria-label="Close"
+            aria-label="Close payment request"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

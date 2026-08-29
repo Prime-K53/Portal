@@ -6,6 +6,7 @@ import {
   CreditCard,
   FileText,
   Gift,
+  Headphones,
   MessageSquareQuote,
   MoreHorizontal,
   Receipt,
@@ -32,6 +33,7 @@ interface DashboardTabProps {
   deliveries: DeliveryNotification[];
   statements: StatementEntry[];
   ads: PortalAd[];
+  activeTab: TabType;
   onNavigateTab: (tab: TabType) => void;
   onOpenPaymentModal: () => void;
   onNavigateInvoices?: (filter: 'unpaid' | 'overdue') => void;
@@ -75,13 +77,6 @@ const BANNER_ASPECT_RATIO = 4;
 
 const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
   const [imageFailed, setImageFailed] = useState(false);
-  const [isAtLeastWide, setIsAtLeastWide] = useState(() => {
-    const meta = slide.imageMeta;
-    if (meta && Number.isFinite(meta.width) && Number(meta.width) > 0 && Number(meta.height) > 0) {
-      return Number(meta.width) / Number(meta.height) >= BANNER_ASPECT_RATIO;
-    }
-    return true;
-  });
 
   const gradientLayer = slide.gradientCss ? (
     <div className="absolute inset-0 z-0" style={{ background: slide.gradientCss }} />
@@ -101,15 +96,7 @@ const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
           src={slide.imageUrl}
           alt={slide.title}
           onError={() => setImageFailed(true)}
-          onLoad={(e) => {
-            const { naturalWidth, naturalHeight } = e.currentTarget;
-            setIsAtLeastWide(
-              naturalHeight > 0 && naturalWidth / naturalHeight >= BANNER_ASPECT_RATIO
-            );
-          }}
-          className={`absolute inset-0 z-0 w-full h-full ${
-            isAtLeastWide ? 'object-cover' : 'object-contain'
-          }`}
+          className="absolute inset-0 z-[1] w-full h-full object-contain"
         />
       )}
     </>
@@ -169,6 +156,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   deliveries,
   statements,
   ads,
+  activeTab,
   onNavigateTab,
   onOpenPaymentModal,
   onNavigateInvoices,
@@ -292,8 +280,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     { key: 'profile', label: 'Profile', icon: Star, chip: 'bg-rose-50 text-rose-600', go: () => onNavigateTab('account') },
     { key: 'stmts', label: 'Statements', icon: Receipt, chip: 'bg-indigo-50 text-indigo-600', go: () => onNavigateTab('statements') },
     { key: 'refer', label: 'Refer', icon: Gift, chip: 'bg-amber-50 text-amber-600', go: () => onNavigateTab('referrals') },
-    { key: 'more', label: 'More', icon: MoreHorizontal, chip: 'bg-slate-100 text-slate-600', go: () => onNavigateTab('account') },
+    { key: 'more', label: 'More', icon: MoreHorizontal, chip: 'bg-slate-100 text-slate-600', go: () => setIsMoreOpen(true) },
   ];
+
+  const secondaryNavItems = [
+    { id: 'statements', label: 'Statements', icon: Receipt },
+    { id: 'referrals', label: 'Referrals', icon: Gift },
+    { id: 'account', label: 'Account', icon: Star },
+    { id: 'support', label: 'Support', icon: Headphones },
+  ] as const;
+
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   const isFullyPaid = outstandingTotal === 0;
 
@@ -353,8 +350,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         aria-live="polite"
         aria-label="Announcements and account updates"
         tabIndex={bannerSlides.length > 1 ? 0 : -1}
-        className="relative overflow-hidden rounded-2xl aspect-[2.6/1] bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
-      >
+         className="relative overflow-hidden rounded-2xl aspect-[2.6/1] bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
+       >
         <div
           key={activeSlide.id}
           className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
@@ -365,25 +362,27 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
               <div className="w-full px-5 sm:px-7 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
-                  <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
-                    {activeSlide.emoji ? (
-                      <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
-                    ) : (
-                      <Star className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white/80" />
-                    )}
-                  </div>
+                  {!activeSlide.imageUrl && (
+                    <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
+                      {activeSlide.emoji ? (
+                        <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
+                      ) : (
+                        <Star className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white/80" />
+                      )}
+                    </div>
+                  )}
                   <div className="space-y-1 min-w-0">
-                    {activeSlide.badge && (
+                    {activeSlide.badge && !activeSlide.imageUrl && (
                       <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] text-white/70">
                         {activeSlide.badge}
                       </p>
                     )}
-                    {activeSlide.title && (
+                    {activeSlide.title && !activeSlide.imageUrl && (
                       <h2 className="text-base sm:text-xl font-black text-white tracking-tight leading-snug drop-shadow-md truncate">
                         {activeSlide.title}
                       </h2>
                     )}
-                    {activeSlide.subtitle && (
+                    {activeSlide.subtitle && !activeSlide.imageUrl && (
                       <p className="text-xs sm:text-sm text-white/80 font-medium drop-shadow-sm line-clamp-2">
                         {activeSlide.subtitle}
                       </p>
@@ -395,7 +394,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     )}
                   </div>
                 </div>
-                {activeSlide.onCta && activeSlide.ctaLabel && (
+                {activeSlide.onCta && activeSlide.ctaLabel && !activeSlide.imageUrl && (
                   <button
                     onClick={activeSlide.onCta}
                     className="shrink-0 flex items-center gap-1 text-xs font-black text-white hover:text-white/80 transition-colors"
@@ -758,12 +757,57 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
             )}
             <div className="flex items-center justify-between py-2.5 gap-3 min-w-0">
-              <span className="text-xs text-slate-500 font-medium shrink-0">Member Since</span>
+              <span className="text-xs font-bold text-slate-900">Member Since</span>
               <span className="text-xs font-bold text-slate-900">—</span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* More bottom sheet */}
+      {isMoreOpen && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs"
+            onClick={() => setIsMoreOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="relative w-full max-w-md bg-white rounded-t-3xl shadow-2xl border-t border-slate-200 p-4 pb-6 animate-slide-up">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-extrabold text-base text-slate-900">More</h3>
+              <button
+                onClick={() => setIsMoreOpen(false)}
+                className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
+                aria-label="Close more menu"
+              >
+                <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="space-y-1">
+              {secondaryNavItems.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      onNavigateTab(tab.id);
+                      setIsMoreOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-colors ${
+                      isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" aria-hidden="true" />
+                    <span>{tab.label}</span>
+                    {isActive && <span className="ml-auto text-[10px] font-black uppercase tracking-wider text-blue-600">Current</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

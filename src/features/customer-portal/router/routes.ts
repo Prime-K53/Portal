@@ -25,6 +25,7 @@ export const ROUTES = {
   statements: '/statements',
   referrals: '/referrals',
   account: '/account',
+  support: '/support',
 } as const;
 
 export type PortalRoute = (typeof ROUTES)[keyof typeof ROUTES];
@@ -38,6 +39,7 @@ const TAB_ROUTES: Record<TabType, PortalRoute> = {
   statements: ROUTES.statements,
   referrals: ROUTES.referrals,
   account: ROUTES.account,
+  support: ROUTES.support,
 };
 
 const ROUTE_TABS: Record<string, TabType> = {
@@ -50,6 +52,7 @@ const ROUTE_TABS: Record<string, TabType> = {
   [ROUTES.statements]: 'statements',
   [ROUTES.referrals]: 'referrals',
   [ROUTES.account]: 'account',
+  [ROUTES.support]: 'support',
 };
 
 export function pathForTab(tab: TabType): PortalRoute {

@@ -143,12 +143,44 @@ export interface PortalDataBoundaryProps {
   emptyTitle?: string;
   emptyDescription?: string;
   onRetry?: () => void;
+  /** Optional skeleton component to render during initial load (full-screen layout skeleton
+   *  instead of the generic spinner). */
+  skeleton?: ReactNode;
   children: ReactNode;
 }
 
 /**
+ * Skeleton block that mimics the dashboard layout during initial data load.
+ * Uses rounded pulse bars instead of spinners for a less jarring transition.
+ */
+export function DashboardSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse" aria-busy="true" aria-label="Loading dashboard">
+      {/* Header bar */}
+      <div className="h-8 w-48 rounded-xl bg-slate-200" />
+      {/* KPI cards row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-24 rounded-2xl bg-slate-100 border border-slate-200 p-4 flex flex-col gap-2">
+            <div className="h-3 w-16 rounded-full bg-slate-200" />
+            <div className="h-5 w-20 rounded-full bg-slate-200" />
+          </div>
+        ))}
+      </div>
+      {/* Chart area */}
+      <div className="h-56 rounded-2xl bg-slate-100 border border-slate-200" />
+      {/* Bottom 2-col grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="h-48 rounded-2xl bg-slate-100 border border-slate-200" />
+        <div className="h-48 rounded-2xl bg-slate-100 border border-slate-200" />
+      </div>
+    </div>
+  );
+}
+
+/**
  * Wraps a production data screen and renders the appropriate state:
- * loading → error → empty → content.
+ * loading (skeleton or spinner) → error → empty → content.
  */
 export function PortalDataBoundary({
   isLoading,
@@ -157,9 +189,10 @@ export function PortalDataBoundary({
   emptyTitle = 'No data available',
   emptyDescription,
   onRetry,
+  skeleton,
   children,
 }: PortalDataBoundaryProps) {
-  if (isLoading) return <LoadingState />;
+  if (isLoading) return skeleton ? <>{skeleton}</> : <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={onRetry} />;
   if (isEmpty) return <EmptyState title={emptyTitle} description={emptyDescription} />;
   return <>{children}</>;

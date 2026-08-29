@@ -77,6 +77,18 @@ import type {
   ErpRequestLine,
   ErpShipment,
   ErpStatement,
+  ErpSupportTicket,
+  ErpSupportMessage,
+  ErpSupportAttachment,
+  ErpSupportArticle,
+  NewSupportTicketPayload,
+  SupportArticle,
+  SupportAttachment,
+  SupportMessage,
+  SupportTicket,
+  SupportTicketCategory,
+  SupportTicketPriority,
+  SupportTicketStatus,
 } from '../types';
 import { ApiError, type ApiClient } from './apiClient';
 import { authService } from './authService';
@@ -155,6 +167,14 @@ export interface PortalService {
 
   // ── Advertisements (ERP portal banner ads — dashboard carousel) ───────────
   getAds(): Promise<PortalAd[]>;
+
+  // ── Support / Help Desk ────────────────────────────────────────────────────
+  getSupportTickets(): Promise<SupportTicket[]>;
+  getSupportTicket(ticketId: string): Promise<SupportTicket>;
+  createSupportTicket(payload: NewSupportTicketPayload): Promise<SupportTicket>;
+  addSupportMessage(ticketId: string, content: string): Promise<SupportMessage>;
+  getSupportArticles(): Promise<SupportArticle[]>;
+  getSupportArticle(slug: string): Promise<SupportArticle>;
 }
 
 // ── ERP → Sasa adapters (exact shapes from the Phase 3 contract §7) ─────────
@@ -391,6 +411,60 @@ function mapAd(ad: ErpPortalAd): PortalAd {
     imageMeta: ad.imageMeta ?? null,
     gradient: ad.gradient ?? null,
     emoji: ad.emoji ?? null,
+  };
+}
+
+function mapSupportMessage(m: ErpSupportMessage): SupportMessage {
+  return {
+    id: m.id,
+    ticketId: m.ticket_id,
+    authorName: m.author_name,
+    authorRole: m.author_role as 'customer' | 'agent',
+    content: m.content,
+    createdAt: m.created_at,
+    attachments: m.attachments?.map(mapSupportAttachment),
+  };
+}
+
+function mapSupportAttachment(a: ErpSupportAttachment): SupportAttachment {
+  return {
+    id: a.id,
+    filename: a.filename,
+    url: a.url,
+    mimeType: a.mime_type,
+    sizeBytes: a.size_bytes,
+  };
+}
+
+function mapSupportTicket(t: ErpSupportTicket): SupportTicket {
+  return {
+    id: t.id,
+    ticketNumber: t.ticket_number,
+    subject: t.subject,
+    description: t.description,
+    status: t.status as SupportTicketStatus,
+    priority: t.priority as SupportTicketPriority,
+    category: t.category as SupportTicketCategory,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+    resolvedAt: t.resolved_at,
+    messages: t.messages?.map(mapSupportMessage) ?? [],
+    attachments: t.attachments?.map(mapSupportAttachment),
+  };
+}
+
+function mapSupportArticle(a: ErpSupportArticle): SupportArticle {
+  return {
+    id: a.id,
+    slug: a.slug,
+    title: a.title,
+    summary: a.summary,
+    body: a.body,
+    category: a.category,
+    tags: a.tags ?? [],
+    helpful: a.helpful ?? 0,
+    notHelpful: a.not_helpful ?? 0,
+    lastUpdated: a.last_updated,
   };
 }
 
@@ -1130,6 +1204,53 @@ export class ErpPortalService implements PortalService {
     const data = await this.client.get<ErpPortalAd[] | { ads: ErpPortalAd[] }>('/portal/ads');
     const list = Array.isArray(data) ? data : data.ads;
     return list.map(mapAd);
+  }
+
+  // ── Support / Help Desk ────────────────────────────────────────────────────
+
+  async getSupportTickets(): Promise<SupportTicket[]> {
+    const data = await this.client.get<ErpSupportTicket[]>('/portal/support/tickets');
+    return data.map(mapSupportTicket);
+  }
+
+  async getSupportTicket(ticketId: string): Promise<SupportTicket> {
+    const data = await this.client.get<ErpSupportTicket>(`/portal/support/tickets/${ticketId}`);
+    return mapSupportTicket(data);
+  }
+
+  async createSupportTicket(payload: NewSupportTicketPayload): Promise<SupportTicket> {
+    const formData = new FormData();
+    formData.append('subject', payload.subject);
+    formData.append('description', payload.description);
+    formData.append('category', payload.category);
+    if (payload.priority) formData.append('priority', payload.priority);
+    if (payload.attachments) {
+      for (const file of payload.attachments) {
+        formData.append('attachments', file);
+      }
+    }
+    const data = await this.client.post<ErpSupportTicket>('/portal/support/tickets', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return mapSupportTicket(data);
+  }
+
+  async addSupportMessage(ticketId: string, content: string): Promise<SupportMessage> {
+    const data = await this.client.post<ErpSupportMessage>(
+      `/portal/support/tickets/${ticketId}/messages`,
+      { content }
+    );
+    return mapSupportMessage(data);
+  }
+
+  async getSupportArticles(): Promise<SupportArticle[]> {
+    const data = await this.client.get<ErpSupportArticle[]>('/portal/support/articles');
+    return data.map(mapSupportArticle);
+  }
+
+  async getSupportArticle(slug: string): Promise<SupportArticle> {
+    const data = await this.client.get<ErpSupportArticle>(`/portal/support/articles/${slug}`);
+    return mapSupportArticle(data);
   }
 }
 
