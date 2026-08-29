@@ -138,7 +138,7 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 text-xs shadow-2xs">
             <div>
               <span className="text-slate-400 block font-bold uppercase text-[11.5px] tracking-wider mb-1">Account Holder</span>
-              <strong className="text-sm font-extrabold text-slate-900 block">{profile?.companyName || 'Customer'}</strong>
+              <strong className="text-sm font-extrabold text-slate-900 block">{profile?.companyName || profile?.customerName || 'Customer'}</strong>
               {profile?.customerName && <span className="text-slate-700 block font-bold">{profile.customerName}</span>}
               {profile?.address && <span className="text-slate-500 block font-medium">{profile.address}</span>}
             </div>

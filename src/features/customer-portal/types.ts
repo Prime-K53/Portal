@@ -96,18 +96,18 @@ export interface AccountProfile {
   id: string;
   customerName: string;
   accountNumber: string;
-  companyName: string;
+  companyName?: string;
   email: string;
   phone: string;
   address: string;
   creditLimit: number;
   currentBalance: number;
-  tier: 'Gold Partner' | 'Silver Member' | 'Platinum Preferred';
-  accountManager: {
-    name: string;
-    email: string;
-    phone: string;
-    avatar: string;
+  tier?: string;
+  accountManager?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    avatar?: string;
   };
 }
 

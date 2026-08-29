@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  FileText,
   Layers,
   List,
   Loader2,
@@ -57,10 +58,11 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
   onSelectProductDetail,
   onSelectOrderDetail,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'history'>('catalog');
+  const [activeSubTab, setActiveSubTab] = useState<'start' | 'catalog' | 'history'>('start');
+  const [historyTab, setHistoryTab] = useState<'requests' | 'orders'>('requests');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating' | 'name'>('featured');
   const [inStockOnly, setInStockOnly] = useState(false);
 
@@ -350,34 +352,49 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
         </div>
       </div>
 
-      {/* Subtab Toggle Header */}
-      <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
-        <button
-          onClick={() => setActiveSubTab('catalog')}
-          className={`flex-1 py-2.5 text-xs font-black rounded-xl transition flex items-center justify-center gap-2 ${
-            activeSubTab === 'catalog'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <ShoppingBag className="w-4 h-4" />
-          <span>Product Catalog ({products.length})</span>
-        </button>
-        <button
-          onClick={() => setActiveSubTab('history')}
-          className={`flex-1 py-2.5 text-xs font-black rounded-xl transition flex items-center justify-center gap-2 ${
-            activeSubTab === 'history'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Package className="w-4 h-4" />
-          <span>Order History ({orderRequests.length + orders.length})</span>
-        </button>
-      </div>
-
-      {activeSubTab === 'catalog' ? (
+      {/* Order View Selector */}
+      {activeSubTab === 'start' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={() => setActiveSubTab('catalog')}
+            className="flex items-center gap-4 p-5 bg-white border border-slate-200 rounded-2xl hover:border-indigo-300 hover:shadow-md transition group"
+          >
+            <div className="p-3 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition">
+              <ShoppingBag className="w-6 h-6 text-indigo-600" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-black text-slate-900">New Order</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Browse catalog & place order</p>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveSubTab('history')}
+            className="flex items-center gap-4 p-5 bg-white border border-slate-200 rounded-2xl hover:border-indigo-300 hover:shadow-md transition group"
+          >
+            <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition">
+              <Package className="w-6 h-6 text-slate-600" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-black text-slate-900">Order History</h3>
+              <p className="text-xs text-slate-500 mt-0.5">View order requests & sales orders</p>
+            </div>
+          </button>
+        </div>
+      ) : activeSubTab === 'catalog' ? (
         <>
+          {/* Back button for catalog */}
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={() => setActiveSubTab('start')}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition"
+            >
+              <ChevronUp className="w-4 h-4 rotate-90" />
+              Back
+            </button>
+            <span className="text-xs text-slate-400">|</span>
+            <span className="text-xs font-black text-slate-900">New Order — Product Catalog</span>
+          </div>
+
           {/* Quick Express SKU Bar */}
           <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 text-white rounded-2xl p-3.5 shadow-xs border border-slate-800">
             <div
@@ -904,203 +921,238 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
             </div>
           )}
         </>
-      ) : (
-        /* Order History Subtab — Order REQUESTS (ODR) + Official Sales Orders (SO) */
-        <div className="space-y-3">
-          {reorderNotice && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-bold leading-relaxed flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{reorderNotice}</span>
-            </div>
-          )}
-
-          {/* Section: Order Requests (ODR-...) — the ERP request pipeline */}
-          <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/70">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
-                  <Package className="w-4 h-4 text-indigo-600" />
-                  Order Requests
-                </h3>
-                <p className="text-[11.5px] text-slate-500 font-medium">
-                  Submitted requests awaiting ERP confirmation — the official Sales Order is created by the ERP.
-                </p>
-              </div>
-              <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
-                {orderRequests.length} request(s)
-              </span>
-            </div>
+      ) : activeSubTab === 'history' ? (
+        <div className="space-y-4">
+          {/* Back button and tabs for history */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setActiveSubTab('start')}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition"
+            >
+              <ChevronUp className="w-4 h-4 rotate-90" />
+              Back
+            </button>
+            <span className="text-xs text-slate-400">|</span>
+            <span className="text-xs font-black text-slate-900">Order History</span>
+          </div>
+          <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+            <button
+              onClick={() => setHistoryTab('requests')}
+              className={`flex-1 py-2.5 text-xs font-black rounded-xl transition flex items-center justify-center gap-2 ${
+                historyTab === 'requests'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Order Requests ({orderRequests.length})</span>
+            </button>
+            <button
+              onClick={() => setHistoryTab('orders')}
+              className={`flex-1 py-2.5 text-xs font-black rounded-xl transition flex items-center justify-center gap-2 ${
+                historyTab === 'orders'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Official Sales Orders ({orders.length})</span>
+            </button>
           </div>
 
-          {orderRequests.length === 0 ? (
-            <div className="text-center py-8 bg-white rounded-2xl border border-slate-200/90 space-y-2">
-              <Package className="w-8 h-8 mx-auto text-slate-300" />
-              <p className="text-xs font-bold text-slate-600">No order requests yet</p>
-              <p className="text-[11.5px] text-slate-400">Submit items from the catalog — each submission creates an ODR request reviewed by the ERP sales team.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {orderRequests.map((request) => {
-                const badge = getRequestStatusBadge(request.status);
-                const cancelable = canCancelOrderRequest(request.status);
-                const isPendingConfirm = pendingCancelId === request.id;
-                const isBusy = cancelBusyId === request.id;
-                return (
-                  <div key={request.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-sm text-slate-900">{request.requestNumber || 'Request'}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.bg}`}>
-                            {badge.label}
-                          </span>
+          {historyTab === 'requests' && (
+            <>
+              <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/70">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                      <Package className="w-4 h-4 text-indigo-600" />
+                      Order Requests
+                    </h3>
+                    <p className="text-[11.5px] text-slate-500 font-medium">
+                      Submitted requests awaiting ERP confirmation — the official Sales Order is created by the ERP.
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+                    {orderRequests.length} request(s)
+                  </span>
+                </div>
+              </div>
+
+              {orderRequests.length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-2xl border border-slate-200/90 space-y-2">
+                  <Package className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs font-bold text-slate-600">No order requests yet</p>
+                  <p className="text-[11.5px] text-slate-400">Submit items from the catalog — each submission creates an ODR request reviewed by the ERP sales team.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orderRequests.map((request) => {
+                    const badge = getRequestStatusBadge(request.status);
+                    const cancelable = canCancelOrderRequest(request.status);
+                    const isPendingConfirm = pendingCancelId === request.id;
+                    const isBusy = cancelBusyId === request.id;
+                    return (
+                      <div key={request.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition">
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-sm text-slate-900">{request.requestNumber || 'Request'}</span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.bg}`}>
+                                {badge.label}
+                              </span>
+                            </div>
+                            <p className="text-[12.5px] text-slate-500 mt-0.5">Submitted on {formatDate(request.date)}</p>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-sm font-medium text-slate-900 block finance-nums">{formatCurrency(request.total)}</span>
+                            <span className="text-[11.5px] text-slate-400">
+                              {request.officialOrderNumber ? `Converted to ${request.officialOrderNumber}` : 'Awaiting ERP review'}
+                            </span>
+                          </div>
                         </div>
-                        <p className="text-[12.5px] text-slate-500 mt-0.5">Submitted on {formatDate(request.date)}</p>
-                      </div>
 
-                      <div className="text-right">
-                        <span className="text-sm font-medium text-slate-900 block finance-nums">{formatCurrency(request.total)}</span>
-                        <span className="text-[11.5px] text-slate-400">
-                          {request.officialOrderNumber ? `Converted to ${request.officialOrderNumber}` : 'Awaiting ERP review'}
-                        </span>
-                      </div>
-                    </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11.5px] text-slate-400 font-medium">
+                            {request.items.length} line item{request.items.length !== 1 ? 's' : ''}
+                          </span>
+                          <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
+                        </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11.5px] text-slate-400 font-medium">
-                        {request.items.length} line item{request.items.length !== 1 ? 's' : ''}
-                      </span>
-                      <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
-                      <span className="text-[12.5px] text-slate-500 font-medium">
-                        {request.requestedDeliveryDate ? `Requested delivery: ${formatDate(request.requestedDeliveryDate)}` : 'No delivery date specified'}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {cancelable && (
-                          <button
-                            onClick={() => handleCancelRequestClick(request)}
-                            disabled={isBusy}
-                            className={`px-3.5 py-2 rounded-xl font-extrabold transition shadow-xs ${
-                              isPendingConfirm
-                                ? 'bg-rose-600 text-white hover:bg-rose-700'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-                            }`}
-                          >
-                            {isBusy ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : isPendingConfirm ? (
-                              'Confirm Cancel?'
-                            ) : (
-                              'Cancel Request'
+                        <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                          <span className="text-[12.5px] text-slate-500 font-medium">
+                            {request.requestedDeliveryDate ? `Requested delivery: ${formatDate(request.requestedDeliveryDate)}` : 'No delivery date specified'}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {cancelable && (
+                              <button
+                                onClick={() => handleCancelRequestClick(request)}
+                                disabled={isBusy}
+                                className={`px-3.5 py-2 rounded-xl font-extrabold transition shadow-xs ${
+                                  isPendingConfirm
+                                    ? 'bg-rose-600 text-white hover:bg-rose-700'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                                }`}
+                              >
+                                {isBusy ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : isPendingConfirm ? (
+                                  'Confirm Cancel?'
+                                ) : (
+                                  'Cancel Request'
+                                )}
+                              </button>
                             )}
-                          </button>
-                        )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
-          {/* Section: Official Sales Orders (SO-...) */}
-          <div className="p-3.5 rounded-2xl bg-slate-100 border border-slate-200/70">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
-                  <Truck className="w-4 h-4 text-slate-600" />
-                  Official Sales Orders
-                </h3>
-                <p className="text-[11.5px] text-slate-500 font-medium">
-                  Orders confirmed by the ERP and routed to logistics dispatch.
-                </p>
-              </div>
-              <span className="text-[10px] font-extrabold bg-slate-200 text-slate-700 border border-slate-300 px-2 py-0.5 rounded-full">
-                {orders.length} order(s)
-              </span>
-            </div>
-          </div>
-
-          {orders.length === 0 ? (
-            <div className="text-center py-8 bg-white rounded-2xl border border-slate-200/90 space-y-2">
-              <Truck className="w-8 h-8 mx-auto text-slate-300" />
-              <p className="text-xs font-bold text-slate-600">No official sales orders yet</p>
-              <p className="text-[11.5px] text-slate-400">Once the ERP confirms an order request, the official Sales Order appears here.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {orders.map((order) => {
-                const badge = {
-                  label: order.status.charAt(0).toUpperCase() + order.status.slice(1),
-                  bg: 'bg-blue-100 text-blue-800 border-blue-200',
-                };
-                const reorderable = canReorderOrder(order);
-                const isBusy = reorderBusyId === order.id;
-                return (
-                  <div
-                    key={order.id}
-                    onClick={() => onSelectOrderDetail?.(order)}
-                    className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition"
-                  >
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-sm text-slate-900">{order.orderNumber}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.bg}`}>
-                            {badge.label}
-                          </span>
-                        </div>
-                        <p className="text-[12.5px] text-slate-500 mt-0.5">Placed on {formatDate(order.date)}</p>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="text-sm font-medium text-slate-900 block finance-nums">{formatCurrency(order.totalAmount)}</span>
-                        <span className="text-[11.5px] text-slate-400">
-                          Est. delivery {formatDate(order.estimatedDelivery)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11.5px] text-slate-400 font-medium">
-                        {order.items.length} line item{order.items.length !== 1 ? 's' : ''}
-                      </span>
-                      <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
-                      <span className="text-[12.5px] text-slate-500 font-medium">
-                        {order.deliveryAddress || 'No delivery address'}
-                      </span>
-                      {reorderable ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleReorderClick(order);
-                          }}
-                          disabled={isBusy}
-                          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition disabled:opacity-50"
-                        >
-                          {isBusy ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                          )}
-                          <span>{isBusy ? 'Submitting...' : 'Reorder 1-Click'}</span>
-                        </button>
-                      ) : (
-                        <span className="text-slate-400 text-[12.5px] font-medium">Not reorderable</span>
-                      )}
-                    </div>
+          {historyTab === 'orders' && (
+            <>
+              <div className="p-3.5 rounded-2xl bg-slate-100 border border-slate-200/70">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                      <Truck className="w-4 h-4 text-slate-600" />
+                      Official Sales Orders
+                    </h3>
+                    <p className="text-[11.5px] text-slate-500 font-medium">
+                      Orders confirmed by the ERP and routed to logistics dispatch.
+                    </p>
                   </div>
-                );
-              })}
-            </div>
+                  <span className="text-[10px] font-extrabold bg-slate-200 text-slate-700 border border-slate-300 px-2 py-0.5 rounded-full">
+                    {orders.length} order(s)
+                  </span>
+                </div>
+              </div>
+
+              {orders.length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-2xl border border-slate-200/90 space-y-2">
+                  <Truck className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs font-bold text-slate-600">No official sales orders yet</p>
+                  <p className="text-[11.5px] text-slate-400">Once the ERP confirms an order request, the official Sales Order appears here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orders.map((order) => {
+                    const badge = {
+                      label: order.status.charAt(0).toUpperCase() + order.status.slice(1),
+                      bg: 'bg-blue-100 text-blue-800 border-blue-200',
+                    };
+                    const reorderable = canReorderOrder(order);
+                    const isBusy = reorderBusyId === order.id;
+                    return (
+                      <div
+                        key={order.id}
+                        onClick={() => onSelectOrderDetail?.(order)}
+                        className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-sm text-slate-900">{order.orderNumber}</span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.bg}`}>
+                                {badge.label}
+                              </span>
+                            </div>
+                            <p className="text-[12.5px] text-slate-500 mt-0.5">Placed on {formatDate(order.date)}</p>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-sm font-medium text-slate-900 block finance-nums">{formatCurrency(order.totalAmount)}</span>
+                            <span className="text-[11.5px] text-slate-400">
+                              Est. delivery {formatDate(order.estimatedDelivery)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11.5px] text-slate-400 font-medium">
+                            {order.items.length} line item{order.items.length !== 1 ? 's' : ''}
+                          </span>
+                          <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                          <span className="text-[12.5px] text-slate-500 font-medium">
+                            {order.deliveryAddress || 'No delivery address'}
+                          </span>
+                          {reorderable ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReorderClick(order);
+                              }}
+                              disabled={isBusy}
+                              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition disabled:opacity-50"
+                            >
+                              {isBusy ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                              )}
+                              <span>{isBusy ? 'Submitting...' : 'Reorder 1-Click'}</span>
+                            </button>
+                          ) : (
+                            <span className="text-slate-400 text-[12.5px] font-medium">Not reorderable</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* Floating Bottom Cart Bar */}
       {totalCartCount > 0 && (

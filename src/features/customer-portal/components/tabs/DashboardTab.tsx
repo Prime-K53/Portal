@@ -96,7 +96,7 @@ const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
           src={slide.imageUrl}
           alt={slide.title}
           onError={() => setImageFailed(true)}
-          className="absolute inset-0 z-[1] w-full h-full object-contain"
+          className="absolute inset-0 z-[1] w-full h-full object-cover"
         />
       )}
     </>
@@ -193,13 +193,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     .slice(0, 4);
 
   // ── Banner slides ──────────────────────────────────────────────────────
+  const customerDisplayName = profile?.customerName || profile?.companyName || 'Customer';
+  const customerIdDisplay = profile?.accountNumber || '—';
+  const tierDisplay = profile?.tier ? ` • ${profile.tier} Tier` : '';
+
   const bannerSlides: BannerSlide[] = [
     {
       id: 'slide_welcome',
       badge: 'WELCOME BACK',
       badgeBg: 'bg-white/20 text-white backdrop-blur-md',
-      title: `Welcome back, ${profile.customerName}`,
-      subtitle: `Account ID: ${profile.accountNumber} • ${profile.tier || 'Standard'} Tier`,
+      title: `Welcome back, ${customerDisplayName}`,
+      subtitle: `Account ID: ${customerIdDisplay}${tierDisplay}`,
       gradientClass: 'from-slate-900 via-indigo-950 to-slate-900',
     },
   ];
@@ -302,12 +306,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
             <span className="text-sm font-black tracking-tight">
-              {profile.companyName?.substring(0, 2).toUpperCase() || 'PE'}
+              {(profile?.companyName || profile?.customerName || 'PE').substring(0, 2).toUpperCase()}
             </span>
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight truncate">
-              {profile.companyName || profile.customerName || 'Account'}
+              {profile?.companyName || profile?.customerName || 'Customer'}
             </h1>
             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 min-w-0">
               {profile.accountNumber && (
@@ -350,7 +354,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         aria-live="polite"
         aria-label="Announcements and account updates"
         tabIndex={bannerSlides.length > 1 ? 0 : -1}
-         className="relative overflow-hidden rounded-2xl aspect-[2.6/1] bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
+        className="relative overflow-hidden rounded-2xl aspect-[3/1] bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
        >
         <div
           key={activeSlide.id}

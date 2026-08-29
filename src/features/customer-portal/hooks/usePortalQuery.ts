@@ -5,7 +5,7 @@
  * production states: loading, data, error and a refetch trigger.
  */
 
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useCustomerAuth } from '../components/auth/CustomerAuthContext';
 
 export interface PortalQueryResult<T> {
@@ -40,7 +40,8 @@ function usePortalInvalidations(): number {
 export function usePortalQuery<T>(
   fetcher: () => Promise<T>,
   deps: ReadonlyArray<unknown> = [],
-  enabled = true
+  enabled = true,
+  staleTimeMs = 0
 ): PortalQueryResult<T> {
   const { isAuthenticated } = useCustomerAuth();
   const effectiveEnabled = enabled && isAuthenticated;
@@ -50,6 +51,8 @@ export function usePortalQuery<T>(
   const [error, setError] = useState<unknown>(null);
   const [version, setVersion] = useState(0);
   const invalidationCount = usePortalInvalidations();
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
+  const prevInvalidationCountRef = useRef(invalidationCount);
 
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -58,18 +61,31 @@ export function usePortalQuery<T>(
       setIsLoading(false);
       setData(null);
       setError(null);
+      setLastFetchedAt(null);
       return;
     }
+
+    const isInitialFetch = lastFetchedAt === null;
+    const isInvalidated = prevInvalidationCountRef.current !== invalidationCount;
+    prevInvalidationCountRef.current = invalidationCount;
+
+    const isStale = lastFetchedAt !== null && staleTimeMs > 0 && Date.now() - lastFetchedAt > staleTimeMs;
+    const isExplicitRefetch = version > 0;
+
+    if (!isInitialFetch && !isInvalidated && !isExplicitRefetch && !isStale) {
+      return;
+    }
+
     let active = true;
     setIsLoading(true);
     setError(null);
-    // Route through Promise.resolve so a fetcher that throws SYNCHRONOUSLY
-    // (e.g. a feature blocked with an explicit ApiError) becomes the query's
-    // error state instead of an uncaught exception that unmounts the app.
     Promise.resolve()
       .then(fetcher)
       .then((result) => {
-        if (active) setData(result);
+        if (active) {
+          setData(result);
+          setLastFetchedAt(Date.now());
+        }
       })
       .catch((err: unknown) => {
         if (active) setError(err);
@@ -81,7 +97,7 @@ export function usePortalQuery<T>(
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, invalidationCount, ...deps, effectiveEnabled]);
+  }, [version, invalidationCount, effectiveEnabled, staleTimeMs, ...deps]);
 
   return { data, isLoading, error, refetch };
 }

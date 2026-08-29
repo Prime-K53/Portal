@@ -41,7 +41,7 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
 
   if (!isOpen || !entry) return null;
 
-  const companyName = profile?.companyName || 'Customer';
+  const companyName = profile?.companyName || profile?.customerName || 'Customer';
   const accountNumber = profile?.accountNumber;
   const email = profile?.email;
 

@@ -213,9 +213,15 @@ export const AccountTab: React.FC<AccountTabProps> = ({
             {profile?.accountNumber && (
               <p className="text-xs text-slate-500 font-mono font-bold">Account #: {profile.accountNumber}</p>
             )}
-            <span className="inline-block mt-1 text-[10px] bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-full font-bold">
-              {profile?.tier || 'Standard'}
-            </span>
+            {profile?.tier ? (
+              <span className="inline-block mt-1 text-[10px] bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-full font-bold">
+                {profile.tier}
+              </span>
+            ) : (
+              <span className="inline-block mt-1 text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full font-bold">
+                Tier not assigned
+              </span>
+            )}
           </div>
         </div>
 

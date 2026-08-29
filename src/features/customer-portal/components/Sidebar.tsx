@@ -75,15 +75,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               PORTAL
             </span>
           </div>
-          <h2 className="font-bold text-xs text-slate-700 tracking-tight truncate max-w-[150px]" title={profile?.companyName}>
-            {profile?.companyName || 'Customer'}
+          <h2 className="font-bold text-xs text-slate-700 tracking-tight truncate max-w-[150px]" title={profile?.companyName || profile?.customerName}>
+            {profile?.companyName || profile?.customerName || 'Customer'}
           </h2>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="text-[11.5px] font-mono font-bold text-slate-500">{profile?.accountNumber || '—'}</span>
-            <span className="w-1 h-1 rounded-full bg-slate-300" />
-            <span className="text-[10px] font-black uppercase text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full border border-amber-200">
-              {profile?.tier || '—'}
-            </span>
+            {profile?.tier && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                <span className="text-[10px] font-black uppercase text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full border border-amber-200">
+                  {profile.tier}
+                </span>
+              </>
+            )}
           </div>
         </div>
       </div>

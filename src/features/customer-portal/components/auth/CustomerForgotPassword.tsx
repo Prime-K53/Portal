@@ -28,10 +28,10 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
 
   return (
     <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-4 animate-fade-in">
-      <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-xl">
-        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-        <p className="text-xs font-semibold text-emerald-800">{message}</p>
-      </div>
+        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-xl">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <p className="text-xs font-semibold text-emerald-800">{message}</p>
+        </div>
     </div>
   );
 }
@@ -72,7 +72,7 @@ export function CustomerForgotPassword() {
       {/* Brand header */}
       <div className="flex items-center gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#146b60] to-[#0f544c] shadow-lg shadow-teal-900/30">
-          <Lock className="h-5 w-5 text-white" />
+          <Mail className="h-5 w-5 text-white" />
         </div>
         <div>
           <h1 className="text-lg font-black tracking-tight text-slate-900">

@@ -65,7 +65,7 @@ export function CustomerActivate() {
       {/* Brand header */}
       <div className="flex items-center gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#146b60] to-[#0f544c] shadow-lg shadow-teal-900/30">
-          <Lock className="h-5 w-5 text-white" />
+          <BadgeCheck className="h-5 w-5 text-white" />
         </div>
         <div>
           <h1 className="text-lg font-black tracking-tight text-slate-900">

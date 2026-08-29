@@ -186,7 +186,7 @@ export function useLoyaltyData(): PortalQueryResult<ErpLoyalty> {
 }
 
 export function useAdsData(): PortalQueryResult<PortalAd[]> {
-  return usePortalQuery(() => portalService.getAds(), []);
+  return usePortalQuery(() => portalService.getAds(), [], true, 60_000);
 }
 
 export function useSupportTicketsData(): PortalQueryResult<SupportTicket[]> {

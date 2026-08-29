@@ -718,26 +718,33 @@ export class ErpPortalService implements PortalService {
 
   async getCurrentCustomer(): Promise<AccountProfile> {
     const profile = await this.client.get<ErpProfile>('/portal/profile');
-    let tier = 'Standard';
+    let tier: string | undefined = undefined;
     try {
       const loyalty = await this.client.get<ErpLoyalty>('/portal/loyalty');
-      tier = loyalty.tier || 'Standard';
+      if (loyalty && loyalty.tier && loyalty.tier.trim().length > 0) {
+        tier = loyalty.tier;
+      }
     } catch {
       // Tier is display-only — profile data still loads when loyalty is down.
     }
     const addressParts = [profile.address, profile.city, profile.state, profile.zip, profile.country].filter(Boolean);
+    const rawProfile = profile as unknown as Record<string, unknown>;
+    const customerName = profile.full_name || String(rawProfile.name || rawProfile.customer_name || '');
+    const accountNumber = profile.id || String(rawProfile.customer_id || '');
+    const companyName = profile.full_name || String(rawProfile.company_name || rawProfile.name || '');
+
     return {
-      id: profile.id,
-      customerName: profile.full_name,
-      accountNumber: profile.id, // the real ERP customer id
-      companyName: profile.full_name, // ERP profile exposes no separate company field
-      email: profile.email,
-      phone: profile.phone,
+      id: profile.id || accountNumber,
+      customerName,
+      accountNumber,
+      companyName,
+      email: profile.email || '',
+      phone: profile.phone || '',
       address: addressParts.join(', '),
-      creditLimit: profile.creditLimit,
-      currentBalance: profile.balance,
-      tier: tier as AccountProfile['tier'],
-      accountManager: { name: '', email: '', phone: '', avatar: '' }, // ERP DATA MISSING (§16)
+      creditLimit: profile.creditLimit ?? 0,
+      currentBalance: profile.balance ?? 0,
+      tier,
+      accountManager: undefined,
     };
   }
 
