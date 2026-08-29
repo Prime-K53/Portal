@@ -45,8 +45,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           </div>
           <div className="min-w-0">
             <h1 className="font-black text-sm sm:text-base text-slate-900 tracking-tight leading-none">
-              Prime<span className="text-blue-600"> PORTAL</span>
+              Prime <span className="text-blue-600">PORTAL</span>
             </h1>
+            <p className="text-[10px] sm:text-[11px] font-medium text-slate-500 leading-tight">Smart. Simple. School Supplies.</p>
           </div>
         </div>
 

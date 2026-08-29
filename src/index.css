@@ -196,6 +196,21 @@
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+@keyframes letterIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-letter-in {
+  animation: letterIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
 }

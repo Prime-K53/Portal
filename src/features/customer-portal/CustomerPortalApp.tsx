@@ -52,6 +52,8 @@ import { CustomerActivate } from './components/auth/CustomerActivate';
 import { CustomerAuthProvider, useCustomerAuth } from './components/auth/CustomerAuthContext';
 import { CustomerForgotPassword } from './components/auth/CustomerForgotPassword';
 import { CustomerLogin } from './components/auth/CustomerLogin';
+import { BrandSplash } from './components/auth/BrandSplash';
+import { onSplashChange, setSplashVisible } from './components/auth/splashState';
 
 // Layout & Navigation
 import { BottomNavigation } from './components/BottomNavigation';
@@ -159,6 +161,23 @@ function CustomerPortalShell({
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isStatementPrintModalOpen, setIsStatementPrintModalOpen] = useState(false);
+  const [showBrandSplash, setShowBrandSplash] = useState(true);
+  const [loginSplashActive, setLoginSplashActive] = useState(false);
+
+  useEffect(() => {
+    const unsub = onSplashChange((visible) => {
+      setLoginSplashActive(visible);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (!showBrandSplash) return;
+    const timer = window.setTimeout(() => setShowBrandSplash(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [showBrandSplash]);
+
+  const isSplashVisible = showBrandSplash || loginSplashActive;
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
   const todayISO = today.toISOString().split('T')[0];
@@ -817,16 +836,21 @@ function CustomerPortalShell({
   );
 
   return (
-    <RouteGuard
-      path={path}
-      navigate={navigate}
-      isAuthenticated={auth.isAuthenticated}
-      isRestoring={auth.isRestoring}
-      defaultPath={defaultPath}
-      onUnauthenticated={renderUnauthenticated}
-    >
-      {renderPortal()}
-    </RouteGuard>
+    <>
+      {isSplashVisible && (
+        <BrandSplash onReady={() => setShowBrandSplash(false)} duration={4000} />
+      )}
+      <RouteGuard
+        path={path}
+        navigate={navigate}
+        isAuthenticated={auth.isAuthenticated}
+        isRestoring={auth.isRestoring}
+        defaultPath={defaultPath}
+        onUnauthenticated={renderUnauthenticated}
+      >
+        {renderPortal()}
+      </RouteGuard>
+    </>
   );
 }
 

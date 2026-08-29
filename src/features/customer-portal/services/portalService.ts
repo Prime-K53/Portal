@@ -222,23 +222,29 @@ function normalizeOrderStatus(status: string | undefined): OrderStatus {
 function normalizeDeliveryStatus(status: string | undefined): DeliveryNotification['status'] {
   const normalized = (status ?? '').toLowerCase();
   switch (normalized) {
+    // ERP "Inbound" tab → Dispatched (preparing at warehouse)
     case 'inbound':
-      return 'processing';
+      return 'dispatched';
+    // ERP "Active" tab → Out for Delivery (on the road)
     case 'active':
     case 'in transit':
     case 'in_transit':
-      return 'dispatched';
-    case 'delivered':
-      return 'delivered';
-    case 'delayed':
-      return 'delayed';
     case 'out_for_delivery':
     case 'out for delivery':
       return 'out_for_delivery';
+    // ERP "History" tab (completed + signed) → Delivered & Signed
+    case 'delivered':
+    case 'completed':
+    case 'signed':
+      return 'delivered';
+    case 'delayed':
+      return 'delayed';
+    case 'order_placed':
+      return 'order_placed';
+    case 'processing':
+      return 'processing';
     default:
-      return normalized === 'processing' || normalized === 'dispatched' || normalized === 'order_placed'
-        ? (normalized as DeliveryNotification['status'])
-        : 'processing';
+      return 'processing';
   }
 }
 
@@ -767,34 +773,40 @@ export class ErpPortalService implements PortalService {
 
   async getInvoiceDetail(invoiceId: string): Promise<Invoice> {
     const raw = await this.client.get<Record<string, unknown>>(`/portal/invoices/${invoiceId}`);
-    const itemsRaw = Array.isArray(raw.items)
-      ? (raw.items as Array<Record<string, unknown>>)
-      : Array.isArray(raw.line_items)
-        ? (raw.line_items as Array<Record<string, unknown>>)
-        : [];
+    let itemsRaw: Array<Record<string, unknown>> = [];
+    if (Array.isArray(raw.items)) {
+      itemsRaw = raw.items as Array<Record<string, unknown>>;
+    } else if (typeof raw.items === 'string') {
+      try { itemsRaw = JSON.parse(raw.items); } catch (_) { itemsRaw = []; }
+    } else if (Array.isArray(raw.line_items)) {
+      itemsRaw = raw.line_items as Array<Record<string, unknown>>;
+    } else if (typeof raw.line_items === 'string') {
+      try { itemsRaw = JSON.parse(raw.line_items); } catch (_) { itemsRaw = []; }
+    }
+
     const items: InvoiceItem[] = itemsRaw.map((item, idx) => {
-      // Authoritative item name resolution — covers every field name the ERP
-      // may return (supabase mapper → item_name; examination/exam/stationery
-      // adapters → name/description; sales-order POST → line_items with
-      // productName/desc; etc.). Empty strings fall through to the next
-      // candidate so a legacy "" never wins over a real name.
+      // Authoritative line item description resolution — checks historical
+      // line description first, then item/product master names, ignoring
+      // empty/whitespace strings.
       const candidate = [
-        item.item_name,
         item.description,
+        item.desc,
+        item.item_description,
+        item.itemDescription,
+        item.item_name,
+        item.itemName,
         item.name,
         item.productName,
         item.product_name,
-        item.itemName,
-        item.desc,
         item.title,
         item.label,
       ].find((v) => typeof v === 'string' && v.trim().length > 0);
       return {
         id: `ii_${idx}`,
         description: String(candidate ?? ''),
-        quantity: Number(item.quantity ?? 0),
-        unitPrice: Number(item.unitPrice ?? item.unit_price ?? 0),
-        total: Number(item.total ?? item.lineTotal ?? item.line_total ?? 0),
+        quantity: Number(item.quantity ?? item.qty ?? 0),
+        unitPrice: Number(item.unitPrice ?? item.unit_price ?? item.price ?? 0),
+        total: Number(item.total ?? item.lineTotal ?? item.line_total ?? item.subtotal ?? 0),
       };
     });
     const totalAmount = Number(raw.total_amount ?? raw.totalAmount ?? 0);

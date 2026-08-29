@@ -62,25 +62,24 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
 
   const steps: { key: DeliveryStatus; title: string; desc: string }[] = [
     { key: 'order_placed', title: 'Order Placed', desc: 'Order confirmed and generated in ERP system' },
-    { key: 'processing', title: 'Processing & Packing', desc: 'Items picked and packed at Central Warehouse' },
-    { key: 'dispatched', title: 'Dispatched', desc: 'Package departed logistics hub via Express Freight' },
-    { key: 'out_for_delivery', title: 'Out for Delivery', desc: 'In transit with local delivery courier' },
-    { key: 'delivered', title: 'Delivered & Signed', desc: 'Handed over and verified at receiving dock' },
+    { key: 'dispatched', title: 'Dispatched', desc: 'Items picked, packed and departed logistics hub via Express Freight' },
+    { key: 'out_for_delivery', title: 'Out for Delivery', desc: 'In transit with local delivery courier to your address' },
+    { key: 'delivered', title: 'Delivered & Signed', desc: 'Handed over and verified at receiving dock by customer' },
   ];
 
   const isDelayed = delivery.status === 'delayed';
   const getStepIndex = (status: DeliveryStatus) => {
     switch (status) {
       case 'order_placed': return 0;
-      case 'processing': return 1;
-      case 'dispatched': return 2;
-      case 'out_for_delivery': return 3;
-      case 'delivered': return 4;
+      case 'dispatched': return 1;
+      case 'out_for_delivery': return 2;
+      case 'delivered': return 3;
       // 'delayed' is a STATUS overlay, not a step — keep the last completed
       // step's index so the timeline does not lie about progress. The
       // delayed state is surfaced separately as a banner + badge.
-      case 'delayed': return 3;
-      default: return 3;
+      case 'delayed': return 2;
+      case 'processing': return 1;
+      default: return 2;
     }
   };
 
@@ -244,9 +243,9 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
           <div className="flex justify-between gap-2">
             <button
               onClick={() => { void handleDownloadDeliveryNote(); }}
-              disabled={noteDownloading}
-              title={noteDownloading ? 'Downloading official ERP delivery note…' : 'Download official ERP delivery note (PDF)'}
-              className="px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-60 text-slate-800 font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition"
+              disabled={noteDownloading || delivery.status !== 'delivered'}
+              title={delivery.status !== 'delivered' ? 'Delivery Note will be available once your order is delivered and signed' : noteDownloading ? 'Downloading official ERP delivery note…' : 'Download official ERP delivery note (PDF)'}
+              className="px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed text-slate-800 font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition"
             >
               {noteDownloading ? (
                 <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin" />
@@ -259,7 +258,7 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
               onClick={onClose}
               className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl transition"
             >
-              Close Progress Tracker
+              Close
             </button>
           </div>
         </div>

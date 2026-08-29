@@ -101,35 +101,40 @@ export const getInvoiceStatusBadge = (status: string) => {
 
 export const getDeliveryStatusBadge = (status: string) => {
   switch (status) {
+    case 'order_placed':
+      return {
+        label: 'Order Placed',
+        bg: 'bg-blue-50 text-blue-700 border border-blue-200',
+      };
     case 'delivered':
       return {
-        label: 'Delivered',
-        bg: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+        label: 'Delivered & Signed',
+        bg: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
       };
     case 'out_for_delivery':
       return {
         label: 'Out for Delivery',
-        bg: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+        bg: 'bg-blue-50 text-blue-700 border border-blue-200',
       };
     case 'dispatched':
       return {
         label: 'Dispatched',
-        bg: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
+        bg: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
       };
     case 'processing':
       return {
         label: 'Processing',
-        bg: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+        bg: 'bg-amber-50 text-amber-700 border border-amber-200',
       };
     case 'delayed':
       return {
         label: 'Delayed',
-        bg: 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+        bg: 'bg-rose-50 text-rose-700 border border-rose-200',
       };
     default:
       return {
         label: 'Order Placed',
-        bg: 'bg-slate-100 text-slate-700 border-slate-200',
+        bg: 'bg-blue-50 text-blue-700 border border-blue-200',
       };
   }
 };

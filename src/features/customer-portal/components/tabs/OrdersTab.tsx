@@ -22,7 +22,6 @@ import {
   Star,
   Table as TableIcon,
   Truck,
-  Zap,
 } from 'lucide-react';
 import { CartItem, Order, OrderRequest, Product } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
@@ -95,20 +94,12 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
   // Multi-select for Batch Order
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
 
-  // Quick SKU order state
-  const [isQuickSkuOpen, setIsQuickSkuOpen] = useState(false);
-  const [quickSkuInput, setQuickSkuInput] = useState('');
-  const [quickQtyInput, setQuickQtyInput] = useState(10);
-  const [quickSkuFeedback, setQuickSkuFeedback] = useState<string | null>(null);
-
   const addedProductTimeoutsRef = useRef<Map<string, number>>(new Map());
-  const skuFeedbackTimeoutRef = useRef<number | null>(null);
   const reorderNoticeTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       addedProductTimeoutsRef.current.forEach((id) => window.clearTimeout(id));
-      if (skuFeedbackTimeoutRef.current !== null) window.clearTimeout(skuFeedbackTimeoutRef.current);
       if (reorderNoticeTimeoutRef.current !== null) window.clearTimeout(reorderNoticeTimeoutRef.current);
     };
   }, []);
@@ -197,31 +188,6 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
       setSelectedProductIds([]);
     } else {
       setSelectedProductIds(filtered.map((p) => p.id));
-    }
-  };
-
-  const handleQuickSkuSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanSku = quickSkuInput.trim().toUpperCase();
-    const foundProduct = products.find((p) => p.sku.toUpperCase() === cleanSku);
-
-    if (foundProduct) {
-      const qty = Math.max(foundProduct.minOrderQty || 1, quickQtyInput);
-      // Variant products open the mandatory chooser instead of adding directly.
-      requestAddToCart(foundProduct, qty);
-      if (!(foundProduct.variants && foundProduct.variants.length > 0)) {
-        setQuickSkuFeedback(`Added ${qty}x ${foundProduct.name} to cart!`);
-        setQuickSkuInput('');
-        setQuickQtyInput(10);
-      } else {
-        setQuickSkuFeedback(`Choose an option for ${foundProduct.name} to finish adding.`);
-      }
-      if (skuFeedbackTimeoutRef.current !== null) window.clearTimeout(skuFeedbackTimeoutRef.current);
-      skuFeedbackTimeoutRef.current = window.setTimeout(() => setQuickSkuFeedback(null), 3500);
-    } else {
-      setQuickSkuFeedback(`Error: SKU "${cleanSku}" not found in catalog.`);
-      if (skuFeedbackTimeoutRef.current !== null) window.clearTimeout(skuFeedbackTimeoutRef.current);
-      skuFeedbackTimeoutRef.current = window.setTimeout(() => setQuickSkuFeedback(null), 3500);
     }
   };
 
@@ -395,75 +361,6 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
             <span className="text-xs font-black text-slate-900">New Order — Product Catalog</span>
           </div>
 
-          {/* Quick Express SKU Bar */}
-          <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 text-white rounded-2xl p-3.5 shadow-xs border border-slate-800">
-            <div
-              className="flex items-center justify-between cursor-pointer select-none"
-              onClick={() => setIsQuickSkuOpen(!isQuickSkuOpen)}
-            >
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-amber-400/20 text-amber-400 border border-amber-400/30">
-                  <Zap className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-black block">Express Wholesale SKU Quick Order</span>
-                  <span className="text-[11.5px] text-indigo-200 font-medium">Type product SKU code to add directly in bulk</span>
-                </div>
-              </div>
-              <button className="text-slate-300 hover:text-white p-1">
-                {isQuickSkuOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-            </div>
-
-            {isQuickSkuOpen && (
-              <form onSubmit={handleQuickSkuSubmit} className="mt-3 pt-3 border-t border-slate-800 space-y-2.5">
-                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                  <div className="relative flex-1 min-w-[160px]">
-                    <input
-                      type="text"
-                      placeholder="Enter SKU (e.g. PAP-A4-01, ST-BC-1000)"
-                      value={quickSkuInput}
-                      onChange={(e) => setQuickSkuInput(e.target.value)}
-                      className="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono uppercase focus:outline-none focus:border-amber-400"
-                      required
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-[11.5px] text-slate-400 font-bold uppercase">Qty:</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="5000"
-                      value={quickQtyInput}
-                      onChange={(e) => setQuickQtyInput(parseInt(e.target.value) || 1)}
-                      className="w-20 bg-slate-900/90 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white font-bold text-center focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-xs transition shrink-0 flex items-center gap-1.5"
-                  >
-                    <Plus className="w-4 h-4" /> Add SKU
-                  </button>
-                </div>
-
-                {quickSkuFeedback && (
-                  <p
-                    className={`text-[12.5px] font-extrabold px-3 py-1.5 rounded-xl ${
-                      quickSkuFeedback.startsWith('Error')
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    }`}
-                  >
-                    {quickSkuFeedback}
-                  </p>
-                )}
-              </form>
-            )}
-          </div>
-
           {/* Search, Categories, Sort, and View Mode Toolbar */}
           <div className="space-y-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
             {/* Search Input & Control Bar */}
@@ -620,136 +517,103 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
             )}
           </div>
 
-          {/* LIST VIEW MODE */}
+          {/* SMALL CARD GRID VIEW */}
           {viewMode === 'grid' && (
-            <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
               {filteredProducts.map((product) => {
                 const isAdded = addedProductIds[product.id];
                 const isBookmarked = bookmarkedSkus.includes(product.sku);
                 const isSelected = selectedProductIds.includes(product.id);
-                const qty = product.minOrderQty || 1;
 
                 return (
                   <div
                     key={product.id}
-                    className={`rounded-xl border bg-white ${
+                    onClick={() => onSelectProductDetail && onSelectProductDetail(getEffectiveProduct(product))}
+                    className={`relative rounded-2xl border cursor-pointer transition-all duration-200 overflow-hidden ${
                       isSelected
-                        ? 'border-indigo-600 bg-indigo-50/40'
-                        : 'border-slate-200 hover:border-slate-300'
+                        ? 'border-indigo-500 ring-2 ring-indigo-300 bg-gradient-to-br from-indigo-50/50 to-white shadow-lg shadow-indigo-200/50'
+                        : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-100/50'
                     }`}
                   >
-                    <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-3">
-                      {/* Product Info */}
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleSelectProduct(product.id);
-                            }}
-                            className={`shrink-0 rounded-md border flex items-center justify-center ${
-                              isSelected
-                                ? 'bg-indigo-600 border-indigo-600 text-white'
-                                : 'bg-white border-slate-200 text-slate-600'
-                            }`}
-                            style={{ width: 18, height: 18 }}
-                            aria-label="Select product"
-                          >
-                            {isSelected && <Check className="w-3 h-3" />}
-                          </button>
-
-                          <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                            {product.sku}
-                          </span>
-                          <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                            {product.category}
-                          </span>
-                          {product.isTopSeller && (
-                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wide">
-                              Top Seller
-                            </span>
-                          )}
-                          <button
-                            onClick={(e) => toggleBookmark(product.sku, e)}
-                            title={isBookmarked ? 'Remove Favorite' : 'Add to Favorites'}
-                            className={`shrink-0 p-1 rounded-md transition-colors ${
-                              isBookmarked
-                                ? 'bg-amber-400 text-slate-950 border border-amber-400'
-                                : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                            }`}
-                          >
-                            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-slate-950' : ''}`} />
-                          </button>
-                        </div>
-
-                          <h4
-                            className="font-semibold text-sm text-slate-900 truncate cursor-pointer"
-                            onClick={() => onSelectProductDetail && onSelectProductDetail(getEffectiveProduct(product))}
-                          >
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="p-2.5 space-y-1.5">
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            {product.isTopSeller && (
+                              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 uppercase tracking-wider shadow-sm">
+                                Top
+                              </span>
+                            )}
+                            {product.rating && (
+                              <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-600">
+                                <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                                {product.rating}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-bold text-[11px] text-slate-900 truncate mt-1 leading-tight">
                             {product.name}
                           </h4>
-                         {product.description && (
-                           <p className="text-xs text-slate-500 line-clamp-1">
-                             {product.description}
-                           </p>
-                         )}
-                         {product.variants && product.variants.length > 0 && (
-                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-0.5">
-                             <Layers className="w-3 h-3" />
-                             {product.variants.length} options
-                           </span>
-                         )}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {product.rating && (
-                            <span className="flex items-center gap-1 text-[11px] font-extrabold text-amber-700">
-                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                              <span>{product.rating}</span>
-                              {product.ratingCount && (
-                                <span className="text-slate-400 font-normal">({product.ratingCount})</span>
-                              )}
-                            </span>
-                          )}
-                          <span className="text-[11px] text-slate-400">•</span>
-                          <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            {product.inStock ? 'In Stock' : 'Backorder'}
-                          </span>
-                          <span className="text-[11px] text-slate-400">•</span>
-                          <span className="text-[11px] text-slate-500">
-                            Min Order: {product.minOrderQty || 1} {product.unit}
-                          </span>
                         </div>
-                      </div>
-
-                      {/* Price & Actions */}
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="text-right">
-                          <span className="text-base font-black text-slate-900 tabular-nums">
-                            {formatCurrency(getEffectiveProduct(product).price)} / {product.unit}
-                          </span>
-                        </div>
-
                         <button
-                          onClick={(e) => handleAddSingleProduct(product, e)}
-                          className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors ${
-                            isAdded
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-950 hover:bg-slate-800 text-white'
+                          onClick={(e) => toggleBookmark(product.sku, e)}
+                          className={`p-1 rounded-lg transition-all duration-200 shrink-0 ${
+                            isBookmarked
+                              ? 'bg-amber-400 text-amber-950 shadow-md shadow-amber-200'
+                              : 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'
                           }`}
                         >
-                          {isAdded ? (
-                            <>
-                              <CheckCircle2 className="w-4 h-4" />
-                              <span>Added!</span>
-                            </>
-                          ) : (
-                            <>
-                              <ShoppingCart className="w-4 h-4 text-amber-400" />
-                              <span>Add to Cart</span>
-                            </>
-                          )}
+                          <Bookmark className={`w-3 h-3 ${isBookmarked ? 'fill-amber-950' : ''}`} />
                         </button>
                       </div>
+
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[9px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                          {product.sku}
+                        </span>
+                        <span className="text-[9px] font-medium text-slate-400 truncate">
+                          {product.category}
+                        </span>
+                        {product.variants && product.variants.length > 0 && (
+                          <span className="ml-auto text-[8px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-200">
+                            {product.variants.length} opts
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                        <div className="flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${product.inStock ? 'bg-emerald-500 shadow-sm shadow-emerald-200' : 'bg-amber-400 shadow-sm shadow-amber-200'}`} />
+                          <span className={`text-[9px] font-medium ${product.inStock ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {product.inStock ? 'In Stock' : 'Backorder'}
+                          </span>
+                        </div>
+                        <span className="text-[12px] font-black text-slate-900 tabular-nums">
+                          {formatCurrency(getEffectiveProduct(product).price)}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={(e) => handleAddSingleProduct(product, e)}
+                        className={`w-full py-1.5 rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-all duration-200 ${
+                          isAdded
+                            ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-200'
+                            : 'bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 text-white shadow-sm hover:shadow-md hover:shadow-slate-200'
+                        }`}
+                      >
+                        {isAdded ? (
+                          <>
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Added</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="w-3 h-3 text-amber-400" />
+                            <span>Add to Cart</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 );

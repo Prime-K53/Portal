@@ -14,10 +14,10 @@ import { useCustomerAuth } from './CustomerAuthContext';
 import { AuthShell } from './AuthShell';
 
 const inputClass =
-  'w-full h-11 pl-10 pr-4 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500/60 transition';
+  'w-full h-11 pl-10 pr-4 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/60 transition';
 
 const buttonClass =
-  'w-full h-11 rounded-xl bg-gradient-to-r from-[#146b60] to-[#0f544c] text-white text-sm font-bold shadow-lg shadow-teal-900/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 transition-all';
+  'w-full h-11 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] text-white text-sm font-bold shadow-lg shadow-blue-900/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 transition-all';
 
 const ACTIVATION_FAILED_MESSAGE =
   'Invalid customer ID or invite code. Codes expire after 30 minutes.';
@@ -64,14 +64,14 @@ export function CustomerActivate() {
     <AuthShell>
       {/* Brand header */}
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#146b60] to-[#0f544c] shadow-lg shadow-teal-900/30">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] shadow-lg shadow-blue-900/30">
           <BadgeCheck className="h-5 w-5 text-white" />
         </div>
         <div>
           <h1 className="text-lg font-black tracking-tight text-slate-900">
-            Prime<span className="text-amber-500">PORTAL</span>
+            Prime <span className="text-[#2563eb]">PORTAL</span>
           </h1>
-          <p className="text-xs font-medium text-slate-500">Customer Portal</p>
+          <p className="text-xs font-medium text-slate-500">Smart. Simple. School Supplies.</p>
         </div>
       </div>
 
@@ -188,7 +188,7 @@ export function CustomerActivate() {
         <button
           type="button"
           onClick={() => navigate(ROUTES.login)}
-          className="text-xs font-semibold text-slate-500 hover:text-teal-800 transition"
+          className="text-xs font-semibold text-slate-500 hover:text-blue-700 transition"
         >
           Already activated? Sign In
         </button>
