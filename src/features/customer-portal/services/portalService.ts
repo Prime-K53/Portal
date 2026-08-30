@@ -89,6 +89,7 @@ import type {
   SupportTicketCategory,
   SupportTicketPriority,
   SupportTicketStatus,
+  CompanyContactInfo,
 } from '../types';
 import { ApiError, type ApiClient } from './apiClient';
 import { authService } from './authService';
@@ -112,6 +113,8 @@ export interface PortalService {
 
   // ── Orders (created through the ERP request pipeline) ─────────────────────
   getOrders(): Promise<Order[]>;
+  /** Fetches one official Sales Order by id. Used by reorder as a fallback when POST /orders/:id/reorder is unavailable. */
+  getOrderById(orderId: string): Promise<Order>;
   /** ERP order REQUESTS (ODR-...) — the customer's submitted requests, NOT official SOs. */
   getOrderRequests(): Promise<OrderRequest[]>;
   /** GET /portal/requests/:id — the ERP enforces customer ownership server-side. */
@@ -175,6 +178,7 @@ export interface PortalService {
   addSupportMessage(ticketId: string, content: string): Promise<SupportMessage>;
   getSupportArticles(): Promise<SupportArticle[]>;
   getSupportArticle(slug: string): Promise<SupportArticle>;
+  getCompanyContactInfo(): Promise<CompanyContactInfo>;
 }
 
 // ── ERP → Sasa adapters (exact shapes from the Phase 3 contract §7) ─────────
@@ -882,6 +886,12 @@ export class ErpPortalService implements PortalService {
     return list.map(mapOrder);
   }
 
+  /** Fetches one official Sales Order by id. Used by reorder as a fallback when POST /orders/:id/reorder is unavailable. */
+  async getOrderById(orderId: string): Promise<Order> {
+    const data = await this.client.get<ErpOrder>(`/portal/orders/${orderId}`);
+    return mapOrder(data);
+  }
+
   /**
    * ERP order REQUESTS (ODR-...): GET /api/portal/requests filtered to
    * requestType 'order'. Official Sales Orders (SO-...) come from getOrders().
@@ -983,7 +993,29 @@ export class ErpPortalService implements PortalService {
    * minimal reorder response is returned only when that read fails.
    */
   async reorderOrder(orderId: string): Promise<OrderRequest> {
-    const result = await this.client.post<ErpReorderResult>(`/portal/orders/${orderId}/reorder`);
+    let result: ErpReorderResult;
+    try {
+      result = await this.client.post<ErpReorderResult>(`/portal/orders/${orderId}/reorder`);
+    } catch (reorderError) {
+      const order = await this.getOrderById(orderId);
+      const idempotencyKey = `reorder-fallback-${orderId}-${Date.now()}`;
+      return this.createOrder(
+        {
+          items: order.items.map((item) => ({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.total,
+            variantId: item.variantId,
+          })),
+          deliveryAddress: order.deliveryAddress,
+          paymentTerms: order.paymentMethod,
+          totalAmount: order.totalAmount,
+        },
+        idempotencyKey
+      );
+    }
     try {
       return await this.getOrderRequestById(result.id);
     } catch {
@@ -1223,8 +1255,8 @@ export class ErpPortalService implements PortalService {
   // fabricated promotional content.
 
   async getAds(): Promise<PortalAd[]> {
-    const data = await this.client.get<ErpPortalAd[] | { ads: ErpPortalAd[] }>('/portal/ads');
-    const list = Array.isArray(data) ? data : data.ads;
+    const data = await this.client.get<ErpPortalAd[] | { ads?: ErpPortalAd[] }>('/portal/ads');
+    const list = Array.isArray(data) ? data : (data.ads ?? []);
     return list.map(mapAd);
   }
 
@@ -1273,6 +1305,10 @@ export class ErpPortalService implements PortalService {
   async getSupportArticle(slug: string): Promise<SupportArticle> {
     const data = await this.client.get<ErpSupportArticle>(`/portal/support/articles/${slug}`);
     return mapSupportArticle(data);
+  }
+
+  async getCompanyContactInfo(): Promise<CompanyContactInfo> {
+    return this.client.get<CompanyContactInfo>('/portal/support/company-info');
   }
 }
 

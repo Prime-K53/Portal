@@ -6,17 +6,19 @@ import {
   Headphones,
   Loader2,
   Mail,
+  MessageCircle,
   MessageSquare,
   Phone,
   Plus,
   Ticket,
 } from 'lucide-react';
-import { NewSupportTicketPayload, SupportArticle, SupportTicket, SupportTicketCategory } from '../../types';
+import { CompanyContactInfo, NewSupportTicketPayload, SupportArticle, SupportTicket, SupportTicketCategory } from '../../types';
 import { formatDate, formatRelativeTime } from '../../utils/formatters';
 
 interface SupportTabProps {
   tickets: SupportTicket[];
   articles: SupportArticle[];
+  companyContact?: CompanyContactInfo | null;
   isLoadingTickets?: boolean;
   isLoadingArticles?: boolean;
   onCreateTicket?: (payload: NewSupportTicketPayload) => Promise<void>;
@@ -38,6 +40,24 @@ const STATUS_COLORS: Record<string, string> = {
   resolved: 'bg-emerald-50 text-emerald-700',
   closed: 'bg-slate-100 text-slate-500',
 };
+
+function normalizeWhatsAppNumber(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  if (cleaned.startsWith('0')) {
+    return '265' + cleaned.slice(1);
+  }
+  if (cleaned.startsWith('+')) {
+    return cleaned.slice(1);
+  }
+  return cleaned;
+}
+
+function getWhatsAppUrl(phone: string | null | undefined): string | null {
+  const normalized = normalizeWhatsAppNumber(phone);
+  if (!normalized) return null;
+  return `https://wa.me/${normalized}`;
+}
 
 function FAQItem({ article }: { article: SupportArticle; key?: React.Key }) {
   const [open, setOpen] = useState(false);
@@ -184,6 +204,7 @@ function NewTicketForm({
 export const SupportTab: React.FC<SupportTabProps> = ({
   tickets,
   articles,
+  companyContact,
   isLoadingTickets,
   isLoadingArticles,
   onCreateTicket,
@@ -224,23 +245,39 @@ export const SupportTab: React.FC<SupportTabProps> = ({
       <div className="px-4 py-4 space-y-5 max-w-xl mx-auto">
 
         {/* Quick contact cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <a
-            href="mailto:support@primeerp.com"
-            className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-200 text-center hover:border-blue-300 hover:bg-blue-50/30 transition group"
-          >
-            <Mail className="w-6 h-6 text-blue-600" aria-hidden="true" />
-            <span className="text-xs font-bold text-slate-700 group-hover:text-blue-700">Email Support</span>
-            <span className="text-[11px] text-slate-400">support@primeerp.com</span>
-          </a>
-          <a
-            href="tel:+26512345678"
-            className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-200 text-center hover:border-blue-300 hover:bg-blue-50/30 transition group"
-          >
-            <Phone className="w-6 h-6 text-blue-600" aria-hidden="true" />
-            <span className="text-xs font-bold text-slate-700 group-hover:text-blue-700">Call Us</span>
-            <span className="text-[11px] text-slate-400">+265 1 234 5678</span>
-          </a>
+        <div className="grid grid-cols-3 gap-3">
+          {companyContact?.email && (
+            <a
+              href={`mailto:${companyContact.email}`}
+              className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-200 text-center hover:border-blue-300 hover:bg-blue-50/30 transition group"
+            >
+              <Mail className="w-6 h-6 text-blue-600" aria-hidden="true" />
+              <span className="text-xs font-bold text-slate-700 group-hover:text-blue-700">Email</span>
+              <span className="text-[11px] text-slate-400 truncate w-full text-center">{companyContact.email}</span>
+            </a>
+          )}
+          {(companyContact?.phone || companyContact?.phones?.[0]) && (
+            <a
+              href={`tel:${companyContact.phone || companyContact.phones[0]}`}
+              className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-200 text-center hover:border-blue-300 hover:bg-blue-50/30 transition group"
+            >
+              <Phone className="w-6 h-6 text-blue-600" aria-hidden="true" />
+              <span className="text-xs font-bold text-slate-700 group-hover:text-blue-700">Call Us</span>
+              <span className="text-[11px] text-slate-400">{companyContact.phone || companyContact.phones[0]}</span>
+            </a>
+          )}
+          {getWhatsAppUrl(companyContact?.whatsapp) && (
+            <a
+              href={getWhatsAppUrl(companyContact.whatsapp)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-200 text-center hover:border-green-300 hover:bg-green-50/30 transition group"
+            >
+              <MessageCircle className="w-6 h-6 text-green-600" aria-hidden="true" />
+              <span className="text-xs font-bold text-slate-700 group-hover:text-green-700">WhatsApp</span>
+              <span className="text-[11px] text-slate-400">Chat with us</span>
+            </a>
+          )}
         </div>
 
         {/* Section toggle: FAQ / My Tickets */}

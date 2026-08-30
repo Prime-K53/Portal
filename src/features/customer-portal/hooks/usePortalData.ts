@@ -15,6 +15,7 @@ import { portalService, sseService } from '../services';
 import { useCustomerAuth } from '../components/auth/CustomerAuthContext';
 import type {
   AccountProfile,
+  CompanyContactInfo,
   DeliveryNotification,
   Invoice,
   InvoiceItem,
@@ -195,4 +196,8 @@ export function useSupportTicketsData(): PortalQueryResult<SupportTicket[]> {
 
 export function useSupportArticlesData(): PortalQueryResult<SupportArticle[]> {
   return usePortalQuery(() => portalService.getSupportArticles(), []);
+}
+
+export function useCompanyContactData(): PortalQueryResult<CompanyContactInfo | null> {
+  return usePortalQuery(() => portalService.getCompanyContactInfo(), []);
 }

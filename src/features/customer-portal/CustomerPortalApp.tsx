@@ -4,6 +4,7 @@ import { RouteGuard } from './router/RouteGuard';
 import {
   useAdsData,
   useCatalogData,
+  useCompanyContactData,
   useCustomerData,
   useDeliveriesData,
   useInvoicesData,
@@ -125,6 +126,7 @@ function CustomerPortalShell({
   const adsQuery = useAdsData();
   const supportTicketsQuery = useSupportTicketsData();
   const supportArticlesQuery = useSupportArticlesData();
+  const companyContactQuery = useCompanyContactData();
 
   // ── Live ERP events (SSE) ─────────────────────────────────────────────────
   usePortalEvents();
@@ -147,6 +149,7 @@ function CustomerPortalShell({
   const ads = adsQuery.data ?? [];
   const supportTickets = supportTicketsQuery.data ?? [];
   const supportArticles = supportArticlesQuery.data ?? [];
+  const companyContact = companyContactQuery.data ?? null;
 
   // ── UI state (no business data lives here) ────────────────────────────────
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -711,16 +714,18 @@ function CustomerPortalShell({
 
           {activeTab === 'support' && (
             <PortalDataBoundary
-              isLoading={supportTicketsQuery.isLoading || supportArticlesQuery.isLoading}
-              error={supportTicketsQuery.error || supportArticlesQuery.error}
+              isLoading={supportTicketsQuery.isLoading || supportArticlesQuery.isLoading || companyContactQuery.isLoading}
+              error={supportTicketsQuery.error || supportArticlesQuery.error || companyContactQuery.error}
               onRetry={() => {
                 supportTicketsQuery.refetch();
                 supportArticlesQuery.refetch();
+                companyContactQuery.refetch();
               }}
             >
               <SupportTab
                 tickets={supportTickets}
                 articles={supportArticles}
+                companyContact={companyContact}
                 isLoadingTickets={supportTicketsQuery.isLoading}
                 isLoadingArticles={supportArticlesQuery.isLoading}
                 onCreateTicket={handleCreateSupportTicket}

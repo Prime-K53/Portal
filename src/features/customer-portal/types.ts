@@ -1399,6 +1399,14 @@ export interface SupportArticle {
   lastUpdated: string;
 }
 
+export interface CompanyContactInfo {
+  companyName: string;
+  email: string | null;
+  phone: string | null;
+  phones: string[];
+  whatsapp: string | null;
+}
+
 export interface NewSupportTicketPayload {
   subject: string;
   description: string;
