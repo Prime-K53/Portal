@@ -27,6 +27,7 @@ import {
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { getReferralStatusBadge, getRewardStatusBadge } from '../../utils/referral';
+import { ReferralCodeCard } from './ReferralCodeCard';
 
 interface ReferralsTabProps {
   profile: AccountProfile;
@@ -56,6 +57,7 @@ const getEventTypeLabel = (type: string): string => {
 };
 
 export const ReferralsTab: React.FC<ReferralsTabProps> = ({
+  profile,
   referrals,
   stats,
   rewards,
