@@ -109,6 +109,8 @@ export interface AccountProfile {
     phone?: string;
     avatar?: string;
   };
+  referralCode?: string | null;
+  referralShareMessage?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -699,6 +701,7 @@ export interface ErpProfile {
   outstandingBalance: number;
   status: string;
   created_at: string | null;
+  referralCode?: string | null;
 }
 
 /** GET /api/portal/loyalty — used for the real tier display. */

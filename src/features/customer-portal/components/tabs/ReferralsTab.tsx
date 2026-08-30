@@ -5,10 +5,13 @@ import {
   ChevronDown,
   ChevronRight,
   Clock3,
+  Copy,
   Gift,
+  Link2,
   Loader2,
+  MessageCircle,
   Plus,
-  Search,
+  Share2,
   UserPlus,
   Wallet as WalletIcon,
 } from 'lucide-react';
@@ -143,10 +146,17 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
   };
 
   const statCards = [
-    { label: 'Referred', value: stats ? String(stats.total) : '—' },
-    { label: 'Active', value: stats ? String(stats.signedUp) : '—' },
-    { label: 'Rewards Approved', value: stats ? String(stats.rewardApproved) : '—' },
+    { label: 'People Referred', value: stats ? String(stats.total) : '—' },
+    { label: 'Registered', value: stats ? String(stats.registered ?? stats.signedUp) : '—' },
+    { label: 'Qualified', value: stats ? String(stats.qualified) : '—' },
+    { label: 'Rewards Earned', value: stats ? String(stats.rewardApproved) : '—' },
+  ];
+
+  const statCards2 = [
+    { label: 'Pending Rewards', value: stats ? formatCurrency(stats.pendingRewardAmount) : '—' },
     { label: 'Total Earned', value: stats ? formatCurrency(stats.totalEarned) : '—' },
+    { label: 'Conversion Rate', value: stats ? `${stats.conversionRate}%` : '—' },
+    { label: 'Paid Out', value: stats ? String(stats.paid) : '—' },
   ];
 
   return (
@@ -171,6 +181,19 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Stats row 2 */}
+      <div className="grid grid-cols-2 gap-3">
+        {statCards2.map((card) => (
+          <div key={card.label} className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{card.label}</p>
+            <p className="mt-1 text-xl font-black text-slate-900">{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Referral Code & Share */}
+      <ReferralCodeCard profile={profile} />
 
       {/* Refer a Customer */}
       <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">

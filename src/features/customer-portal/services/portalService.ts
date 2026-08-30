@@ -751,6 +751,7 @@ export class ErpPortalService implements PortalService {
       currentBalance: profile.balance ?? 0,
       tier,
       accountManager: undefined,
+      referralCode: (profile as unknown as Record<string, unknown>).referralCode as string | null ?? null,
     };
   }
 

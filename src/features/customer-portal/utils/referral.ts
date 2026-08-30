@@ -2,8 +2,8 @@
  * Prime PORTAL — Referral Helpers
  *
  * Referrals refer EXISTING ERP customers (search → select → create) and the
- * ERP tracks the lifecycle (active | converted | expired | cancelled) and
- * manages rewards (pending | approved | paid | cancelled) + wallet crediting.
+ * ERP tracks the lifecycle (pending | registered | active | qualified | rewarded | reversed)
+ * and manages rewards (pending | approved | paid | cancelled) + wallet crediting.
  * These helpers mirror the ERP contract exactly — Sasa never invents referral
  * codes, links, rewards or statuses.
  *
@@ -19,8 +19,18 @@ export type RewardStatus = ReferralReward['status'];
 /** Human-friendly label for an ERP referral status. */
 export function getReferralStatusLabel(status: string): string {
   switch (status) {
+    case 'pending':
+      return 'Pending';
+    case 'registered':
+      return 'Registered';
     case 'active':
       return 'Active';
+    case 'qualified':
+      return 'Qualified';
+    case 'rewarded':
+      return 'Rewarded';
+    case 'reversed':
+      return 'Reversed';
     case 'converted':
       return 'Converted';
     case 'expired':
@@ -36,8 +46,18 @@ export function getReferralStatusLabel(status: string): string {
 export function getReferralStatusBadge(status: string): { label: string; bg: string } {
   const label = getReferralStatusLabel(status);
   switch (status) {
+    case 'pending':
+      return { label, bg: 'bg-slate-100 text-slate-600 border-slate-200' };
+    case 'registered':
+      return { label, bg: 'bg-blue-50 text-blue-700 border-blue-200' };
     case 'active':
       return { label, bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    case 'qualified':
+      return { label, bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+    case 'rewarded':
+      return { label, bg: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+    case 'reversed':
+      return { label, bg: 'bg-rose-50 text-rose-700 border-rose-200' };
     case 'converted':
       return { label, bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
     case 'expired':
