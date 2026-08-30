@@ -17,7 +17,7 @@ export function ReferralCodeCard({ profile }: ReferralCodeCardProps) {
   const [whatsAppCopied, setWhatsAppCopied] = useState(false);
 
   const referralCode = profile.referralCode ?? null;
-  const shareMessage = profile.referralShareMessage ?? "I use Prime Printing for school stationery and printing services. Register through my referral link and receive a discount on your first order!";
+  const shareMessage = profile.referralShareMessage ?? "I use Prime Printing for school stationery and printing. Register using my referral link to get a discount on your first order!";
 
   const referralUrl = referralCode ? buildReferralUrl(referralCode) : null;
 

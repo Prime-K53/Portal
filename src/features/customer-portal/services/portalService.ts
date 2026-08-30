@@ -710,6 +710,8 @@ function mapRequestToOrderRequest(request: ErpRequest): OrderRequest {
     officialOrderId: request.sales_order_id ?? undefined,
     officialOrderNumber: request.sales_order_number ?? undefined,
     reorderOfNumber: request.reorderOfNumber ?? request.reorder_of_number ?? undefined,
+    referralFirstOrderDiscount: (request as unknown as Record<string, unknown>).referralFirstOrderDiscount as number | undefined,
+    referralFirstOrderDiscountPercent: (request as unknown as Record<string, unknown>).referralFirstOrderDiscountPercent as number | undefined,
   };
 }
 

@@ -52,6 +52,7 @@ import { CustomerActivate } from './components/auth/CustomerActivate';
 import { CustomerAuthProvider, useCustomerAuth } from './components/auth/CustomerAuthContext';
 import { CustomerForgotPassword } from './components/auth/CustomerForgotPassword';
 import { CustomerLogin } from './components/auth/CustomerLogin';
+import { CustomerRegister } from './components/auth/CustomerRegister';
 import { BrandSplash } from './components/auth/BrandSplash';
 import { onSplashChange, setSplashVisible } from './components/auth/splashState';
 
@@ -476,6 +477,8 @@ function CustomerPortalShell({
         return <CustomerActivate />;
       case ROUTES.forgotPassword:
         return <CustomerForgotPassword />;
+      case ROUTES.register:
+        return <CustomerRegister />;
       default:
         return <CustomerLogin />;
     }

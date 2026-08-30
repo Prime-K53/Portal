@@ -2,12 +2,13 @@
  * Prime PORTAL — Customer Auth Context
  *
  * React context over the verified ERP auth service. Exposes the page-level
- * API used by CustomerLogin / CustomerActivate / CustomerForgotPassword:
+ * API used by CustomerLogin / CustomerActivate / CustomerForgotPassword / CustomerRegister:
  *
  *   loginWithApi(email, password, twoFactorCode?) → LoginResult
  *   activateAccount(customerId, code, password)   → PortalUser
  *   requestPasswordReset(email)                   → void
  *   logout()                                      → void
+ *   registerWithApi(input)                        → void
  *
  * Session management (sessionStorage envelope `portal_session`, 25-minute
  * proactive token refresh, portal-session-expired event handling) is owned by
@@ -21,7 +22,7 @@ import {
   PORTAL_SESSION_EXPIRED_EVENT,
 } from '../../services/authService';
 import { invalidatePortalQueries } from '../../hooks/usePortalQuery';
-import type { PortalUser } from '../../types';
+import type { AuthRegisterInput, PortalUser } from '../../types';
 
 /** Result of a login attempt — `requiresTwoFactor` swaps the login form for the 2FA form. */
 export interface LoginResult {
@@ -39,6 +40,8 @@ export interface CustomerAuthContextValue {
   activateAccount: (customerId: string, code: string, password: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Self-service registration with optional referral code. */
+  registerWithApi: (input: AuthRegisterInput) => Promise<void>;
 }
 
 const CustomerAuthContext = createContext<CustomerAuthContextValue | null>(null);
@@ -121,6 +124,15 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     await authService.requestPasswordReset(email);
   }, []);
 
+  const registerWithApi = useCallback(
+    async (input: AuthRegisterInput): Promise<void> => {
+      const session = await authService.register(input);
+      setUser(session.user);
+      invalidatePortalQueries();
+    },
+    []
+  );
+
   const logout = useCallback(async (): Promise<void> => {
     await authService.logout();
     setUser(null);
@@ -135,8 +147,9 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       activateAccount,
       requestPasswordReset,
       logout,
+      registerWithApi,
     }),
-    [user, isRestoring, loginWithApi, activateAccount, requestPasswordReset, logout]
+    [user, isRestoring, loginWithApi, activateAccount, requestPasswordReset, logout, registerWithApi]
   );
 
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>;

@@ -254,6 +254,14 @@ export function CustomerLogin() {
       <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
         <button
           type="button"
+          onClick={() => navigate(ROUTES.register)}
+          className="flex w-full items-center gap-2.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">New here?</span>
+          <span>Create an account</span>
+        </button>
+        <button
+          type="button"
           onClick={() => navigate(ROUTES.activate)}
           className="flex w-full items-center gap-2.5 text-xs font-semibold text-slate-600 hover:text-blue-700 transition"
         >

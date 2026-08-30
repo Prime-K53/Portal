@@ -180,6 +180,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <span>-{formatCurrency(submittedRequest.discountTotal)}</span>
                     </div>
                   ) : null}
+                  {submittedRequest.referralFirstOrderDiscount ? (
+                    <div className="flex justify-between text-blue-700 font-extrabold">
+                      <span>Referral Discount ({submittedRequest.referralFirstOrderDiscountPercent}%)</span>
+                      <span>-{formatCurrency(submittedRequest.referralFirstOrderDiscount)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between pt-2 border-t border-slate-200 font-black text-slate-900">
                     <span>Total</span>
                     <span>{formatCurrency(submittedRequest.total)}</span>

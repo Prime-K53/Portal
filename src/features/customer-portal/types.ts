@@ -71,6 +71,8 @@ export interface AuthRegisterInput {
   password: string;
   phone?: string;
   tier?: 'Gold Partner' | 'Silver Member' | 'Platinum Preferred';
+  /** Referral code used during self-service registration, if any. */
+  referredByCode?: string;
 }
 
 /**
@@ -337,6 +339,9 @@ export interface OrderRequest {
   officialOrderId?: string;
   officialOrderNumber?: string;
   reorderOfNumber?: string;
+  /** First-order referral discount applied by the ERP (already deducted from total). */
+  referralFirstOrderDiscount?: number;
+  referralFirstOrderDiscountPercent?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -822,6 +827,9 @@ export interface ErpRequest {
   sales_order_id?: string | null;
   sales_order_number?: string | null;
   created_at?: string;
+  /** First-order referral discount applied by the ERP. */
+  referralFirstOrderDiscount?: number;
+  referralFirstOrderDiscountPercent?: number;
 }
 
 /** POST /api/portal/orders/:id/reorder response (creates a new request row). */

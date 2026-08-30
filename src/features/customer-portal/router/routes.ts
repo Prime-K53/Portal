@@ -16,6 +16,7 @@ export const ROUTES = {
   login: '/login',
   activate: '/activate',
   forgotPassword: '/forgot-password',
+  register: '/register',
   dashboard: '/dashboard',
   invoices: '/invoices',
   orders: '/orders',
@@ -65,7 +66,7 @@ export function tabFromPath(path: string): TabType | null {
 }
 
 /** Routes renderable without a session (auth screens). */
-const PUBLIC_ROUTES: readonly string[] = [ROUTES.login, ROUTES.activate, ROUTES.forgotPassword];
+const PUBLIC_ROUTES: readonly string[] = [ROUTES.login, ROUTES.activate, ROUTES.forgotPassword, ROUTES.register];
 
 export function isPublicRoute(path: string): boolean {
   const normalized = path.split('?')[0].replace(/\/+$/, '') || '/';
