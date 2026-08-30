@@ -10,7 +10,7 @@ import {
   parseContentDispositionFilename,
   resolveStatementPeriod,
   statementDocumentPath,
-} from '../src/features/customer-portal/utils/officialDocument';
+} from '../src/features/customer-portal/utils/officialDocument.ts';
 
 let failures = 0;
 function check(label: string, actual: unknown, expected: unknown) {

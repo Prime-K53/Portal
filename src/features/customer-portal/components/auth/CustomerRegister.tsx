@@ -109,6 +109,9 @@ export function CustomerRegister() {
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!form.companyName.trim()) errs.companyName = 'Business name is required';
+    if (!form.contactName.trim() || form.contactName.trim().length < 2) {
+      errs.contactName = 'Contact name must be at least 2 characters';
+    }
     if (!form.email.trim()) {
       errs.email = 'Email address is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
@@ -116,8 +119,8 @@ export function CustomerRegister() {
     }
     if (!form.password) {
       errs.password = 'Password is required';
-    } else if (form.password.length < 8) {
-      errs.password = 'Password must be at least 8 characters';
+    } else if (form.password.length < 6) {
+      errs.password = 'Password must be at least 6 characters';
     }
     if (form.password !== form.confirmPassword) {
       errs.confirmPassword = 'Passwords do not match';
@@ -310,7 +313,7 @@ export function CustomerRegister() {
             id="reg-password"
             type="password"
             autoComplete="new-password"
-            placeholder="Minimum 8 characters"
+            placeholder="Minimum 6 characters"
             className={inputClass}
             value={form.password}
             onChange={setField('password')}

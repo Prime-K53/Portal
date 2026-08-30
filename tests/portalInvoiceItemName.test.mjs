@@ -15,13 +15,15 @@ import assert from 'node:assert/strict';
 //   - officialDocumentService.cjs normalizeRecordForRenderer()
 //   - supabaseStore.cjs mapInvoiceLineItems()
 const CANONICAL_FIELD_ORDER = [
-  'item_name',
   'description',
+  'desc',
+  'item_description',
+  'itemDescription',
+  'item_name',
+  'itemName',
   'name',
   'productName',
   'product_name',
-  'itemName',
-  'desc',
   'title',
   'label',
 ];
@@ -62,7 +64,7 @@ function test(name, fn) {
 console.log('Portal invoice item name resolution — regression tests\n');
 
 test('canonical field order is deterministic and complete', () => {
-  assert.equal(CANONICAL_FIELD_ORDER[0], 'item_name');
+  assert.equal(CANONICAL_FIELD_ORDER[0], 'description');
   assert.equal(new Set(CANONICAL_FIELD_ORDER).size, CANONICAL_FIELD_ORDER.length);
 });
 

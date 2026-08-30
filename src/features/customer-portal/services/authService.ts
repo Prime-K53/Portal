@@ -441,11 +441,21 @@ export class ErpAuthService implements AuthService {
     );
   }
 
-  register(): Promise<AuthSession> {
-    throw new AuthError(
-      'Portal self-registration is not available: the ERP creates customer accounts by invitation. Contact PrimeERP support to activate your account.',
-      'UNAVAILABLE'
+  async register(input: AuthRegisterInput): Promise<AuthSession> {
+    const response = await this.client.post<ErpLoginPayload>(
+      '/portal/auth/register',
+      {
+        companyName: input.companyName,
+        contactName: input.contactName ?? '',
+        email: input.email,
+        password: input.password,
+        phone: input.phone ?? '',
+        tier: input.tier ?? '',
+        referredByCode: input.referredByCode ?? '',
+      },
+      { skipAuth: true }
     );
+    return this.establishSession(response);
   }
 }
 
