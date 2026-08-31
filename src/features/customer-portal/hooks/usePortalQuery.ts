@@ -52,7 +52,11 @@ export function usePortalQuery<T>(
   const [version, setVersion] = useState(0);
   const invalidationCount = usePortalInvalidations();
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
+
   const prevInvalidationCountRef = useRef(invalidationCount);
+  const prevEffectiveEnabledRef = useRef(effectiveEnabled);
+  const prevVersionRef = useRef(version);
+  const inFlightRef = useRef(false);
 
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -62,23 +66,36 @@ export function usePortalQuery<T>(
       setData(null);
       setError(null);
       setLastFetchedAt(null);
+      inFlightRef.current = false;
+      prevEffectiveEnabledRef.current = false;
       return;
     }
 
+    const isAuthTransition = !prevEffectiveEnabledRef.current && effectiveEnabled;
     const isInitialFetch = lastFetchedAt === null;
     const isInvalidated = prevInvalidationCountRef.current !== invalidationCount;
-    prevInvalidationCountRef.current = invalidationCount;
-
+    const isExplicitRefetch = prevVersionRef.current !== version;
     const isStale = lastFetchedAt !== null && staleTimeMs > 0 && Date.now() - lastFetchedAt > staleTimeMs;
-    const isExplicitRefetch = version > 0;
 
-    if (!isInitialFetch && !isInvalidated && !isExplicitRefetch && !isStale) {
+    prevEffectiveEnabledRef.current = effectiveEnabled;
+    prevInvalidationCountRef.current = invalidationCount;
+    prevVersionRef.current = version;
+
+    const shouldFetch = isAuthTransition || isInitialFetch || isInvalidated || isExplicitRefetch || isStale;
+
+    if (!shouldFetch) {
+      return;
+    }
+
+    if (inFlightRef.current && !isInvalidated && !isExplicitRefetch) {
       return;
     }
 
     let active = true;
+    inFlightRef.current = true;
     setIsLoading(true);
     setError(null);
+
     Promise.resolve()
       .then(fetcher)
       .then((result) => {
@@ -91,13 +108,17 @@ export function usePortalQuery<T>(
         if (active) setError(err);
       })
       .finally(() => {
+        inFlightRef.current = false;
         if (active) setIsLoading(false);
       });
+
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version, invalidationCount, effectiveEnabled, staleTimeMs, ...deps]);
 
-  return { data, isLoading, error, refetch };
+  const effectiveLoading = isLoading || (effectiveEnabled && lastFetchedAt === null && data === null && error === null);
+
+  return { data, isLoading: effectiveLoading, error, refetch };
 }
