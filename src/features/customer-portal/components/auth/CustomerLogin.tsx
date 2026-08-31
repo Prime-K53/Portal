@@ -12,7 +12,6 @@ import { useHashRoute } from '../../router/useHashRoute';
 import { ROUTES } from '../../router/routes';
 import { authErrorMessage, useCustomerAuth } from './CustomerAuthContext';
 import { AuthShell } from './AuthShell';
-import { setSplashVisible } from './splashState';
 
 /** Shared input styling — consistent padding, focus ring, transition. */
 const inputClass =
@@ -42,19 +41,15 @@ export function CustomerLogin() {
     }
     setError(null);
     setSubmitting(true);
-    setSplashVisible(true);
     try {
       const result = await loginWithApi(email.trim(), password);
       if (result.requiresTwoFactor) {
         setPendingToken(result.pendingToken ?? 'pending');
         setTwoFactorCode('');
-        setSplashVisible(false);
       } else {
-        setSplashVisible(false);
         navigate(ROUTES.dashboard);
       }
     } catch (err) {
-      setSplashVisible(false);
       setError(authErrorMessage(err));
     } finally {
       setSubmitting(false);
@@ -70,14 +65,11 @@ export function CustomerLogin() {
     }
     setError(null);
     setSubmitting(true);
-    setSplashVisible(true);
     try {
       await loginWithApi(email.trim(), password, twoFactorCode);
       setPendingToken(null);
-      setSplashVisible(false);
       navigate(ROUTES.dashboard);
     } catch (err) {
-      setSplashVisible(false);
       setError(authErrorMessage(err));
       setTwoFactorCode('');
     } finally {
