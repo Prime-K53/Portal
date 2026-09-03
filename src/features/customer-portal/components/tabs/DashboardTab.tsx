@@ -73,8 +73,6 @@ const DELIVERY_STATUS_STYLES: Record<string, { label: string; dot: string; bg: s
   delayed: { label: 'Delayed', dot: 'bg-rose-500', bg: 'bg-rose-50 text-rose-700' },
 };
 
-const BANNER_ASPECT_RATIO = 4;
-
 const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -338,115 +336,125 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       </div>
 
       {/* ═══ 2. AD BANNER CAROUSEL ════════════════════════════════════════════ */}
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onMouseEnter={() => setIsCarouselPaused(true)}
-        onMouseLeave={() => setIsCarouselPaused(false)}
-        onFocus={() => setIsCarouselPaused(true)}
-        onBlur={() => setIsCarouselPaused(false)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
-          if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
-        }}
-        role="region"
-        aria-roledescription="carousel"
-        aria-live="polite"
-        aria-label="Announcements and account updates"
-        tabIndex={bannerSlides.length > 1 ? 0 : -1}
-        className="relative overflow-hidden rounded-2xl aspect-[3/1] bg-slate-900 text-white shadow-lg border-0 transition-all duration-500 flex flex-col justify-between group"
-       >
+      <div className="w-full">
         <div
-          key={activeSlide.id}
-          className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
-        >
-          <BannerBackground slide={activeSlide} />
-          <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px] z-0" />
-          {(activeSlide.title || activeSlide.subtitle || activeSlide.emoji || activeSlide.onCta) && (
-            <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
-              <div className="w-full px-5 sm:px-7 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
-                  {!activeSlide.imageUrl && (
-                    <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
-                      {activeSlide.emoji ? (
-                        <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
-                      ) : (
-                        <Star className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white/80" />
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onMouseEnter={() => setIsCarouselPaused(true)}
+          onMouseLeave={() => setIsCarouselPaused(false)}
+          onFocus={() => setIsCarouselPaused(true)}
+          onBlur={() => setIsCarouselPaused(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
+          }}
+          role="region"
+          aria-roledescription="carousel"
+          aria-live="polite"
+          aria-label="Announcements and account updates"
+          tabIndex={bannerSlides.length > 1 ? 0 : -1}
+          className="relative aspect-[3/1] rounded-2xl bg-white p-[3px] shadow-sm transition-all duration-500 group w-full"
+         >
+          <div className="relative overflow-hidden rounded-[calc(1rem-3px)] w-full h-full bg-slate-900">
+          <div
+            key={activeSlide.id}
+            className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
+          >
+            <BannerBackground slide={activeSlide} />
+            {!activeSlide.imageUrl && (
+              <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px] z-0" />
+            )}
+            {(activeSlide.title || activeSlide.subtitle || activeSlide.emoji || activeSlide.onCta) && (
+              <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
+                <div className="w-full px-5 sm:px-7 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
+                    {!activeSlide.imageUrl && (
+                      <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
+                        {activeSlide.emoji ? (
+                          <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
+                        ) : (
+                          <Star className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white/80" />
+                        )}
+                      </div>
+                    )}
+                    <div className="space-y-1 min-w-0">
+                      {activeSlide.badge && !activeSlide.imageUrl && (
+                        <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] text-white/70">
+                          {activeSlide.badge}
+                        </p>
+                      )}
+                      {activeSlide.title && !activeSlide.imageUrl && (
+                        <h2 className="text-base sm:text-xl font-black text-white tracking-tight leading-snug drop-shadow-md truncate">
+                          {activeSlide.title}
+                        </h2>
+                      )}
+                      {activeSlide.subtitle && !activeSlide.imageUrl && (
+                        <p className="text-xs sm:text-sm text-white/80 font-medium drop-shadow-sm line-clamp-2">
+                          {activeSlide.subtitle}
+                        </p>
+                      )}
+                      {activeSlide.extra && (
+                        <p className="text-[11px] sm:text-xs text-amber-300 font-semibold pt-0.5 drop-shadow-sm">
+                          {activeSlide.extra}
+                        </p>
                       )}
                     </div>
-                  )}
-                  <div className="space-y-1 min-w-0">
-                    {activeSlide.badge && !activeSlide.imageUrl && (
-                      <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] text-white/70">
-                        {activeSlide.badge}
-                      </p>
-                    )}
-                    {activeSlide.title && !activeSlide.imageUrl && (
-                      <h2 className="text-base sm:text-xl font-black text-white tracking-tight leading-snug drop-shadow-md truncate">
-                        {activeSlide.title}
-                      </h2>
-                    )}
-                    {activeSlide.subtitle && !activeSlide.imageUrl && (
-                      <p className="text-xs sm:text-sm text-white/80 font-medium drop-shadow-sm line-clamp-2">
-                        {activeSlide.subtitle}
-                      </p>
-                    )}
-                    {activeSlide.extra && (
-                      <p className="text-[11px] sm:text-xs text-amber-300 font-semibold pt-0.5 drop-shadow-sm">
-                        {activeSlide.extra}
-                      </p>
-                    )}
                   </div>
+                  {activeSlide.onCta && activeSlide.ctaLabel && !activeSlide.imageUrl && (
+                    <button
+                      onClick={activeSlide.onCta}
+                      className="shrink-0 flex items-center gap-1 text-xs font-black text-white hover:text-white/80 transition-colors"
+                    >
+                      <span>{activeSlide.ctaLabel}</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-                {activeSlide.onCta && activeSlide.ctaLabel && !activeSlide.imageUrl && (
-                  <button
-                    onClick={activeSlide.onCta}
-                    className="shrink-0 flex items-center gap-1 text-xs font-black text-white hover:text-white/80 transition-colors"
-                  >
-                    <span>{activeSlide.ctaLabel}</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
               </div>
-            </div>
+            )}
+          </div>
+          {bannerSlides.length > 1 && (
+            <>
+              <button
+                onClick={goPrev}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Previous slide"
+              >
+                <ChevronRight className="w-4 h-4 rotate-180" />
+              </button>
+              <button
+                onClick={goNext}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Next slide"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </>
           )}
+          </div>
         </div>
         {bannerSlides.length > 1 && (
-          <>
-            <button
-              onClick={goPrev}
-              className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              aria-label="Previous slide"
-            >
-              <ChevronRight className="w-4 h-4 rotate-180" />
-            </button>
-            <button
-              onClick={goNext}
-              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              aria-label="Next slide"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <div
-              role="tablist"
-              aria-label="Slide selector"
-              className="flex absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 gap-1.5"
-            >
-              {bannerSlides.map((slide, idx) => (
-                <button
-                  key={`dot_${slide.id}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={idx === currentSlide}
-                  aria-label={`Go to slide ${idx + 1} of ${bannerSlides.length}`}
-                  onClick={() => goToSlide(idx)}
-                  className={`h-1.5 rounded-full transition-all duration-300 min-w-[6px] min-h-[6px] ${
-                    idx === currentSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'
-                  }`}
-                />
-              ))}
-            </div>
-          </>
+          <div
+            role="tablist"
+            aria-label="Slide selector"
+            className="flex justify-center items-center mt-3 gap-1.5"
+          >
+            {bannerSlides.map((slide, idx) => (
+              <button
+                key={`dot_${slide.id}`}
+                type="button"
+                role="tab"
+                aria-selected={idx === currentSlide}
+                aria-label={`Go to slide ${idx + 1} of ${bannerSlides.length}`}
+                onClick={() => goToSlide(idx)}
+                className={`rounded-full transition-all duration-300 ${
+                  idx === currentSlide
+                    ? 'w-2 h-2 bg-slate-900'
+                    : 'w-2 h-2 bg-slate-300 hover:bg-slate-400'
+                }`}
+              />
+            ))}
+          </div>
         )}
       </div>
 

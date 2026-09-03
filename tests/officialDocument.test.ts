@@ -29,6 +29,7 @@ check('quotation path', officialDocumentPath('quotation', 'qtr/x'), '/portal/quo
 check('order path', officialDocumentPath('order', 'so_9'), '/portal/orders/so_9/document');
 check('receipt path', officialDocumentPath('receipt', 'pay_7'), '/portal/payments/pay_7/document');
 check('delivery-note path', officialDocumentPath('delivery-note', 'dn#1'), '/portal/deliveries/dn%231/document');
+check('statement path', officialDocumentPath('statement', 'ignored'), '/portal/customers/statement/document');
 check('unknown kind throws', (() => { try { return (officialDocumentPath as any)('nope', 'x'); } catch { return 'throws'; } })(), 'throws');
 
 // Statement period resolution (YYYY-MM-DD; 'all' defers to the ERP default).
@@ -81,8 +82,6 @@ check(
   findPaymentForStatementEntry({ reference: 'Unknown ref', date: '2026-07-01', credit: 123 }, PAYMENTS),
   null
 );
-
-// ERP-provided filename wins.
 
 // ERP-provided filename wins.
 check('plain disposition', parseContentDispositionFilename('attachment; filename="INV-A-001.pdf"', 'fallback.pdf'), 'INV-A-001.pdf');

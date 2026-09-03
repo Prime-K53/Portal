@@ -215,17 +215,3 @@
   animation: fadeIn 0.2s ease-out forwards;
 }
 
-@media print {
-  body {
-    background-color: white !important;
-    color: black !important;
-  }
-  nav, header, button {
-    display: none !important;
-  }
-  #printable-statement {
-    background-color: white !important;
-    color: black !important;
-    max-width: 100% !important;
-  }
-}

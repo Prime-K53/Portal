@@ -9,6 +9,7 @@
  * attempt to parse an error response as a PDF.
  */
 import { env } from '../config/env';
+import { authService } from '../services/authService';
 import { tokenStore } from '../services/tokenStore';
 
 export type OfficialDocumentKind =
@@ -28,6 +29,7 @@ export function officialDocumentPath(kind: OfficialDocumentKind, id: string): st
     case 'order': return `/portal/orders/${safeId}/document`;
     case 'receipt': return `/portal/payments/${safeId}/document`;
     case 'delivery-note': return `/portal/deliveries/${safeId}/document`;
+    case 'statement': return '/portal/customers/statement/document';
     default: throw new Error(`Unsupported official document kind: ${kind}`);
   }
 }
@@ -214,14 +216,24 @@ export async function fetchOfficialDocument(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  let response: Response;
-  try {
-    response = await fetch(`${env.apiUrl.replace(/\/+$/, '')}/api${apiPath}`, {
+  const requestDocument = (accessToken: string | null) =>
+    fetch(`${env.apiUrl.replace(/\/+$/, '')}/api${apiPath}`, {
       method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       credentials: 'omit',
       signal: controller.signal,
     });
+
+  let response: Response;
+  try {
+    response = await requestDocument(token);
+    // Keep binary document requests on the same single-flight token-rotation
+    // path as the JSON API. The browser never receives ERP service credentials;
+    // it only retries once with its own refreshed customer JWT.
+    if (response.status === 401 && token) {
+      const refreshedToken = await authService.refreshAccessToken();
+      if (refreshedToken) response = await requestDocument(refreshedToken);
+    }
   } catch (err) {
     clearTimeout(timer);
     if (controller.signal.aborted) throw mapDownloadTimeout();
@@ -269,11 +281,24 @@ export function triggerBrowserDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-/** One-call helper used by download buttons (kind+id OR explicit path). */
+/**
+ * One-call helper used by download buttons (kind+id OR explicit path).
+ *
+ * Always stamps the "PORTAL COPY" watermark on the downloaded PDF — the
+ * ERP bytes are the single source of truth for accounting data, and the
+ * Portal adds exactly one presentation layer on top of them.
+ *
+ * Watermarking failures are surfaced as a thrown Error so the caller UI can
+ * show the retry path (never a silent unwatermarked official document).
+ */
 export async function downloadOfficialDocument(
   target: OfficialDocumentKind | { path: string },
   id?: string
 ): Promise<void> {
   const { blob, filename } = await fetchOfficialDocument(target, id);
-  triggerBrowserDownload(blob, filename);
+  // Lazy import keeps the official-document module free of PDF-rewriting
+  // concerns until a download is actually requested.
+  const { watermarkBlob } = await import('./portalPdfPostProcess');
+  const finalBlob = await watermarkBlob(blob);
+  triggerBrowserDownload(finalBlob, filename);
 }

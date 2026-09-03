@@ -1,11 +1,12 @@
 import React, { useId, useRef, useState } from 'react';
-import { Calendar, Download, FileText, Landmark, Loader2, Printer, X } from 'lucide-react';
+import { Calendar, Download, FileText, Landmark, Loader2, X } from 'lucide-react';
 import { Invoice } from '../../types';
 import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/formatters';
 import { canRequestPayment } from '../../utils/paymentRequest';
 import { useInvoiceDetailData } from '../../hooks/usePortalData';
-import { downloadOfficialDocument } from '../../utils/officialDocument';
+import { useOfficialDocument } from '../../hooks/useOfficialDocument';
 import { useFocusTrap } from '../../utils/useFocusTrap';
+import { OfficialDocumentPreview } from '../OfficialDocumentPreview';
 
 interface InvoiceDetailModalProps {
   invoice: Invoice | null;
@@ -27,8 +28,12 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   const detailQuery = useInvoiceDetailData(invoice?.id ?? null);
   const detail = detailQuery.data;
 
-  const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const officialDocument = useOfficialDocument(
+    invoice ? { kind: 'invoice', id: invoice.id } : null,
+    invoice !== null
+  );
+  const [documentActionError, setDocumentActionError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   if (!invoice) return null;
 
@@ -36,20 +41,18 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   const statusInfo = getInvoiceStatusBadge(effectiveInvoice.status);
   const isFetchingDetail = Boolean(invoice && detailQuery.isLoading);
 
-  const handlePrint = () => {
-    window.print();
+  const handleDownload = () => {
+    setDocumentActionError(null);
+    officialDocument.download();
   };
 
-  const handleDownload = async () => {
-    setDownloadError(null);
-    setDownloading(true);
-    try {
-      await downloadOfficialDocument('invoice', effectiveInvoice.id);
-    } catch (err) {
-      setDownloadError(err instanceof Error ? err.message : 'Download failed.');
-    } finally {
-      setDownloading(false);
+  const openPreview = () => {
+    if (!officialDocument.document) {
+      setDocumentActionError('The official PDF is still loading. Please try again shortly.');
+      return;
     }
+    setDocumentActionError(null);
+    setPreviewOpen(true);
   };
 
   return (
@@ -161,27 +164,28 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
         {/* Footer Actions */}
         <div className="p-4 bg-white border-t border-slate-200 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => { void handleDownload(); }}
-                disabled={downloading}
-                className="p-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-60 text-xs font-bold flex items-center gap-1.5 transition"
-                title={downloading ? 'Downloading official ERP document…' : 'Download official ERP invoice (PDF)'}
+                onClick={openPreview}
+                disabled={!officialDocument.document || officialDocument.isLoading}
+                className="p-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5 transition"
+                title="Open the official ERP invoice PDF preview"
               >
-                {downloading ? (
+                <FileText className="w-3.5 h-3.5" />
+                <span>View PDF</span>
+              </button>
+              <button
+                onClick={handleDownload}
+                disabled={!officialDocument.document || officialDocument.isLoading}
+                className="p-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5 transition"
+                title={officialDocument.isLoading ? 'Loading official ERP document…' : 'Download official ERP invoice (PDF)'}
+              >
+                {officialDocument.isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
                 <span className="hidden sm:inline">Download</span>
-              </button>
-              <button
-                onClick={handlePrint}
-                className="p-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 text-xs font-bold flex items-center gap-1.5 transition"
-                title="Print Invoice"
-              >
-                <Printer className="w-4 h-4" />
-                <span className="hidden sm:inline">Print</span>
               </button>
             </div>
 
@@ -204,13 +208,37 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
             )}
           </div>
 
-          {downloadError && (
-            <p className="text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
-              {downloadError}
-            </p>
+          {(officialDocument.error || documentActionError) && (
+            <div className="flex items-center justify-between gap-2 text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
+              <p>{officialDocument.error || documentActionError}</p>
+              {officialDocument.error && (
+                <button onClick={officialDocument.retry} className="underline shrink-0">Retry</button>
+              )}
+            </div>
           )}
         </div>
       </div>
+
+      {previewOpen && officialDocument.document && (
+        <div className="fixed inset-0 z-[60] overflow-hidden bg-slate-900/70 backdrop-blur-xs flex items-stretch justify-center animate-fade-in">
+          <div className="w-full max-w-5xl bg-white border border-slate-200 text-slate-900 shadow-2xl flex flex-col h-full sm:h-[95vh] sm:my-auto sm:rounded-2xl overflow-hidden">
+            <OfficialDocumentPreview
+              blob={officialDocument.document.blob}
+              filename={officialDocument.document.filename}
+              title={`Official ERP Invoice ${effectiveInvoice.invoiceNumber}`}
+              subtitle="Tap a page to zoom · swipe to turn pages"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(false)}
+              className="absolute top-3 right-3 p-2 rounded-full bg-white/90 border border-slate-200 text-slate-700 hover:bg-white shadow-md z-10"
+              aria-label="Close preview"
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -785,8 +785,6 @@ function CustomerPortalShell({
       <StatementPrintModal
         isOpen={isStatementPrintModalOpen}
         onClose={() => setIsStatementPrintModalOpen(false)}
-        profile={profile ?? ({} as AccountProfile)}
-        statements={statements}
         dateFilter={statementDateFilter}
         startDate={statementStartDate}
         endDate={statementEndDate}

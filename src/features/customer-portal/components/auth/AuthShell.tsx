@@ -78,7 +78,7 @@ export function AuthShell({ children }: AuthShellProps) {
               </div>
 
               <p className="relative z-10 text-[11px] font-medium text-white/40">
-                &copy; {new Date().getFullYear()} Prime Printing Services &middot; Powered by PrimeERP
+                &copy; {new Date().getFullYear()} Prime Portal &middot; Powered by PrimeERP
               </p>
             </aside>
 

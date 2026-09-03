@@ -211,7 +211,7 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
               <div className="p-3 bg-amber-50/90 border border-amber-200/90 rounded-2xl text-amber-900 text-xs font-medium text-left flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">
-                  This request does not mark your invoice as paid. Your invoice will be updated after the payment is received and recorded by Prime Printing Services.
+                  This request does not mark your invoice as paid. Your invoice will be updated after the payment is received and recorded in PrimeERP.
                 </p>
               </div>
 

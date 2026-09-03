@@ -1,61 +1,101 @@
-import React, { useId, useRef, useState } from 'react';
-import { Download, Printer, Receipt, ShieldCheck, X } from 'lucide-react';
-import { AccountProfile, StatementEntry } from '../../types';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { CheckCircle2, Loader2, Receipt, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { useOfficialDocument } from '../../hooks/useOfficialDocument';
+import { resolveStatementPeriod, statementDocumentPath } from '../../utils/officialDocument';
 import { useFocusTrap } from '../../utils/useFocusTrap';
-import { downloadOfficialDocument, resolveStatementPeriod } from '../../utils/officialDocument';
+import { OfficialDocumentPreview } from '../OfficialDocumentPreview';
 
 interface StatementPrintModalProps {
   isOpen: boolean;
   onClose: () => void;
-  profile: AccountProfile;
-  statements: StatementEntry[];
   dateFilter: 'all' | '30days' | 'this_month' | 'custom';
   startDate: string;
   endDate: string;
 }
 
+/** Minimal self-contained toast — auto-dismisses after 4 seconds. */
+function DownloadToast({ filename, onDone }: { filename: string; onDone: () => void }) {
+  useEffect(() => {
+    const timer = window.setTimeout(onDone, 4000);
+    return () => window.clearTimeout(timer);
+  }, [onDone]);
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 px-4 animate-fade-in"
+    >
+      <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-xl max-w-[min(90vw,420px)]">
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+        <p className="text-xs font-semibold text-emerald-800 truncate">
+          Statement download started — check your device’s Downloads folder
+          {filename ? <span className="block text-[10.5px] text-emerald-700/80 font-medium mt-0.5">{filename}</span> : null}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
   isOpen,
   onClose,
-  profile,
-  statements,
   dateFilter,
   startDate,
   endDate,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   useFocusTrap(containerRef, { active: isOpen, onEscape: onClose });
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const period =
+    dateFilter === 'custom'
+      ? resolveStatementPeriod('custom', { startDate, endDate })
+      : resolveStatementPeriod(dateFilter);
+  const path = statementDocumentPath(period);
+  const officialDocument = useOfficialDocument({ path }, isOpen);
+  const visibleError = officialDocument.error ?? actionError;
+
+  // Auto-download: trigger a browser download as soon as the watermarked PDF
+  // becomes available. Tracks the last-triggered objectUrl so retries or
+  // successive modal opens don't re-fire the download for the same bytes.
+  const lastAutoDownloadedUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isOpen) {
+      lastAutoDownloadedUrlRef.current = null;
+      return;
+    }
+    const doc = officialDocument.document;
+    if (!doc) return;
+    if (lastAutoDownloadedUrlRef.current === doc.objectUrl) return;
+    lastAutoDownloadedUrlRef.current = doc.objectUrl;
+    
+    
+    
+    try {
+      // Use the existing watermarked blob directly instead of creating a new one
+      const url = URL.createObjectURL(doc.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoke after the browser has had a chance to start the download.
+      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      setToast(doc.filename);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'The download could not start.');
+    }
+  }, [isOpen, officialDocument.document]);
 
   if (!isOpen) return null;
 
-  const totalDebits = statements.reduce((sum, s) => sum + s.debit, 0);
-  const totalCredits = statements.reduce((sum, s) => sum + s.credit, 0);
-  const currentBalance = statements.length > 0 ? statements[statements.length - 1].balance : 0;
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleDownload = async () => {
-    setDownloadError(null);
-    const period =
-      dateFilter === 'custom'
-        ? resolveStatementPeriod('custom', { startDate, endDate })
-        : resolveStatementPeriod(dateFilter);
-    setIsDownloading(true);
-    try {
-      await downloadOfficialDocument({
-        path: `/portal/customers/statement/document?from=${period.from ?? ''}&to=${period.to ?? ''}`,
-      });
-    } catch (err) {
-      setDownloadError(err instanceof Error ? err.message : 'Download failed.');
-    } finally {
-      setIsDownloading(false);
-    }
+  const handleDownload = () => {
+    setActionError(null);
+    officialDocument.download();
   };
 
   return (
@@ -65,39 +105,25 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-2xl bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-5xl bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[92vh]"
       >
-        {/* Header */}
-        <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
               <Receipt className="w-5 h-5" aria-hidden="true" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 id={titleId} className="font-extrabold text-base text-slate-900">Official Account Statement</h3>
-              <p className="text-xs text-slate-500">Statement of Account Ledger</p>
+              <p className="text-xs text-slate-500 truncate">
+                ERP-generated PDF · preview, download, and print use the same document
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownload}
-              disabled={isDownloading}
-              className="p-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 text-white font-extrabold text-xs flex items-center gap-1.5 transition shadow-xs"
-            >
-              {isDownloading ? (
-                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" aria-hidden="true" />
-              )}
-              <span>Download</span>
-            </button>
-            <button
-              onClick={handlePrint}
-              className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center gap-1.5 transition shadow-xs"
-            >
-              <Printer className="w-4 h-4" aria-hidden="true" />
-              <span>Print</span>
-            </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {officialDocument.isLoading && (
+              <Loader2 className="w-4 h-4 animate-spin text-blue-600" aria-hidden="true" />
+            )}
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
@@ -108,106 +134,62 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
           </div>
         </div>
 
-        {downloadError && (
-          <div className="px-4 py-2 bg-rose-50 border-b border-rose-200">
-            <p className="text-[11.5px] font-bold text-rose-700">{downloadError}</p>
+        {visibleError && (
+          <div className="px-4 py-3 bg-rose-50 border-b border-rose-200 flex items-center justify-between gap-3">
+            <p className="text-[11.5px] font-bold text-rose-700">{visibleError}</p>
+            {officialDocument.error && (
+              <button
+                onClick={officialDocument.retry}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-white border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5 hover:bg-rose-100"
+              >
+                <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                Retry
+              </button>
+            )}
           </div>
         )}
 
-        {/* Statement Document View */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50 space-y-6 text-slate-800" id="printable-statement">
-          {/* Company & Customer Banner */}
-          <div className="flex flex-col sm:flex-row justify-between gap-4 pb-6 border-b border-slate-200">
-            <div>
-              <div className="flex items-center gap-2 text-slate-900 font-black text-lg">
-                <ShieldCheck className="w-5 h-5 text-slate-700" />
-                <span>Prime PORTAL — Account Statement</span>
+        <div className="flex-1 min-h-0 relative" data-testid="official-statement-preview">
+          {officialDocument.isLoading && !officialDocument.document && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-50 text-slate-600 z-10">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" aria-hidden="true" />
+              <div className="text-center">
+                <p className="text-sm font-extrabold text-slate-800">Generating statement in PrimeERP…</p>
+                <p className="text-xs mt-1">Loading authoritative accounting data and company settings</p>
               </div>
-              <p className="text-xs text-slate-500 mt-1 font-medium">Statement of account produced from the PrimeERP system ledger</p>
             </div>
-            <div className="text-left sm:text-right text-xs space-y-1">
-              <div className="font-black text-slate-900 text-sm">STATEMENT OF ACCOUNT</div>
-              <div className="text-slate-500 font-medium">Date: <strong className="text-slate-900 font-bold">{formatDate(new Date().toISOString())}</strong></div>
-              {profile?.accountNumber && (
-                <div className="text-slate-500 font-medium">Acct #: <strong className="text-slate-900 font-mono font-bold">{profile.accountNumber}</strong></div>
-              )}
-            </div>
-          </div>
+          )}
 
-          {/* Customer Address Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 text-xs shadow-2xs">
-            <div>
-              <span className="text-slate-400 block font-bold uppercase text-[11.5px] tracking-wider mb-1">Account Holder</span>
-              <strong className="text-sm font-extrabold text-slate-900 block">{profile?.companyName || profile?.customerName || 'Customer'}</strong>
-              {profile?.customerName && <span className="text-slate-700 block font-bold">{profile.customerName}</span>}
-              {profile?.address && <span className="text-slate-500 block font-medium">{profile.address}</span>}
+          {!officialDocument.isLoading && officialDocument.error && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-50 px-6 text-center">
+              <ShieldCheck className="w-10 h-10 text-rose-500" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-extrabold text-slate-800">Official statement unavailable</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-lg">
+                  No Portal-generated statement or fallback company identity will be substituted.
+                </p>
+              </div>
+              <button
+                onClick={officialDocument.retry}
+                className="px-3 py-1.5 rounded-lg bg-white border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5 hover:bg-rose-100"
+              >
+                <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                Retry
+              </button>
             </div>
-            <div className="sm:text-right space-y-1 font-medium">
-              <span className="text-slate-400 block font-bold uppercase text-[11.5px] tracking-wider mb-1">Summary Snapshot</span>
-              <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
-                <span>Credit Limit:</span>
-                <strong className="text-slate-900 font-bold">{formatCurrency(profile?.creditLimit || 0)}</strong>
-              </div>
-              <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
-                <span>Total Invoiced:</span>
-                <strong className="text-slate-900 font-bold">{formatCurrency(totalDebits)}</strong>
-              </div>
-              <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
-                <span>Total Payments Received:</span>
-                <strong className="text-emerald-700 font-bold">{formatCurrency(totalCredits)}</strong>
-              </div>
-              <div className="flex justify-between sm:justify-end gap-3 text-sm font-black pt-1 border-t border-slate-200">
-                <span className="text-slate-900">Current Balance Due:</span>
-                <strong className="text-slate-900">{formatCurrency(currentBalance)}</strong>
-              </div>
-            </div>
-          </div>
+          )}
 
-          {/* Ledger Table */}
-          <div>
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Statement Ledger Transactions</h4>
-            <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden text-xs shadow-2xs">
-              <div className="grid grid-cols-12 bg-slate-100 p-2.5 font-bold text-slate-600 border-b border-slate-200">
-                <div className="col-span-2">Date</div>
-                <div className="col-span-3">Reference</div>
-                <div className="col-span-3">Type</div>
-                <div className="col-span-2 text-right">Debit / Credit</div>
-                <div className="col-span-2 text-right">Balance</div>
-              </div>
-              <div className="divide-y divide-slate-200">
-                {statements.map((st) => (
-                  <div key={st.id} className="grid grid-cols-12 p-2.5 text-slate-700 font-medium">
-                    <div className="col-span-2 text-slate-400 text-[12.5px] self-center">{formatDate(st.date)}</div>
-                    <div className="col-span-3 font-mono text-slate-900 font-bold self-center">{st.reference}</div>
-                    <div className="col-span-3 self-center">
-                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                        st.type === 'Payment'
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          : 'bg-slate-100 text-slate-800 border border-slate-200'
-                      }`}>
-                        {st.type}
-                      </span>
-                    </div>
-                    <div className="col-span-2 text-right self-center font-bold">
-                      {st.debit > 0 && <span className="text-rose-700">+{formatCurrency(st.debit)}</span>}
-                      {st.credit > 0 && <span className="text-emerald-700">-{formatCurrency(st.credit)}</span>}
-                    </div>
-                    <div className="col-span-2 text-right self-center font-black text-slate-900">
-                      {formatCurrency(st.balance)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Statement Footer */}
-          <div className="pt-4 border-t border-slate-200 text-[12.5px] text-slate-500 font-medium flex flex-col sm:flex-row justify-between gap-2">
-            <p>Payments are recorded via the Portal — contact your account manager for remittance details.</p>
-            <p className="text-slate-400">Page 1 of 1 • System Generated</p>
-          </div>
+          {officialDocument.document && (
+            <OfficialDocumentPreview
+              blob={officialDocument.document.blob}
+              filename={officialDocument.document.filename}
+              title="Official Account Statement"
+              subtitle="ERP-generated PDF · preview, download, and print use the same document"
+            />
+          )}
         </div>
       </div>
+      {toast && <DownloadToast filename={toast} onDone={() => setToast(null)} />}
     </div>
   );
 };
