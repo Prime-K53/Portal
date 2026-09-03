@@ -9,6 +9,10 @@ interface DocumentSheetProps {
   documentType: string;
   /** Closes the document view (also fired on Escape). */
   onClose: () => void;
+  /** When provided, shows a "Print" button that calls this handler (uses window.print()). */
+  onPrint?: () => void;
+  /** Print-region id. Children wrapped in `<section data-print-region={id}>` get scoped print styling. */
+  printRegionId?: string;
   children: React.ReactNode;
 }
 
@@ -26,6 +30,8 @@ export const DocumentSheet: React.FC<DocumentSheetProps> = ({
   titleId,
   documentType,
   onClose,
+  onPrint,
+  printRegionId,
   children,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -59,18 +65,35 @@ export const DocumentSheet: React.FC<DocumentSheetProps> = ({
               </span>
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
-            aria-label={`Close ${documentType.toLowerCase()} view`}
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1 no-print">
+            {onPrint && (
+              <button
+                type="button"
+                onClick={onPrint}
+                className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label={`Print ${documentType.toLowerCase()}`}
+                title="Print this document"
+              >
+                <Printer className="h-5 w-5" aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
+              aria-label={`Close ${documentType.toLowerCase()} view`}
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable document content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-5 sm:px-8 sm:pt-7 lg:px-10">
+        <div
+          id={printRegionId}
+          data-print-region={printRegionId ?? 'document-sheet'}
+          className="flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-5 sm:px-8 sm:pt-7 lg:px-10"
+        >
           {children}
         </div>
       </div>

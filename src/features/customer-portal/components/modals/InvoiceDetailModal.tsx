@@ -52,6 +52,10 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
     setPreviewOpen(true);
   };
 
+  const handlePrint = () => {
+    if (typeof window !== 'undefined') window.print();
+  };
+
   // Amount emphasis uses the ERP-authoritative fields as-is — never a
   // Portal-computed total.
   const isSettled = effectiveInvoice.amountRemaining <= 0;
@@ -62,7 +66,13 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   const customerName = customer?.companyName || customer?.customerName || customer?.fullName;
 
   return (
-    <DocumentSheet titleId={titleId} documentType="Invoice" onClose={onClose}>
+    <DocumentSheet
+      titleId={titleId}
+      documentType="Invoice"
+      onClose={onClose}
+      onPrint={handlePrint}
+      printRegionId="invoice-print-region"
+    >
       {/* ── Document identity ─────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Invoice</p>
@@ -103,7 +113,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
       </ul>
 
       {/* ── Amount summary + primary action ──────────────────────────────── */}
-      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-2xs sm:p-5">
+      <div className="mt-6 avoid-break rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-2xs sm:p-5" data-print-region="amount-summary">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -142,7 +152,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
 
       {/* ── Customer ─────────────────────────────────────────────────────── */}
       {customerName && (
-        <section aria-label="Customer" className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <section aria-label="Customer" className="mt-5 avoid-break rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" data-print-region="customer">
           <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Customer</h2>
           <p className="mt-1.5 text-[15px] font-extrabold text-slate-900">{customerName}</p>
           <ul className="mt-2.5 space-y-1.5 text-xs font-medium text-slate-500">
@@ -180,7 +190,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
       </div>
 
       {/* ── Totals ───────────────────────────────────────────────────────── */}
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end" data-print-region="totals">
         <dl className="w-full max-w-sm space-y-1.5 rounded-2xl border border-slate-200 bg-white p-4 text-xs sm:text-[13px]">
           <div className="flex items-baseline justify-between gap-4 text-slate-600">
             <dt className="font-medium">Invoice Total</dt>

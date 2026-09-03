@@ -215,3 +215,137 @@
   animation: fadeIn 0.2s ease-out forwards;
 }
 
+/*
+ * Print-ready styling for the Portal HTML document view (Invoice / Quotation
+ * / Order / Delivery / Statement). Active whenever the user triggers
+ * window.print() from any DocumentSheet instance.
+ *
+ * Goals:
+ *   - Hide all chrome (backdrop, app bar, close button, dialog framing).
+ *   - Force white background + dark text, preserve -webkit-print-color-adjust
+ *     for subtle accents (badges, totals).
+ *   - Use A4 portrait sizing with sensible margins; let long line-items flow.
+ *   - Keep the totals + payment summary together via `page-break-inside: avoid`.
+ *   - Prevent URL expansion on links.
+ */
+@media print {
+  /* Hide non-document chrome */
+  .no-print,
+  [data-print-region] > .no-print,
+  header.no-print,
+  nav.no-print {
+    display: none !important;
+  }
+
+  /* Reset page geometry: A4 portrait, modest margins */
+  @page {
+    size: A4 portrait;
+    margin: 12mm 14mm 14mm 14mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 11pt;
+  }
+
+  /* The DocumentSheet modal wrapper is fixed-positioned with a backdrop —
+     strip the framing so only the paper prints. */
+  .fixed.inset-0.z-50.overflow-hidden.bg-slate-900\/45,
+  .fixed.inset-0.z-50.overflow-hidden {
+    position: static !important;
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    inset: auto !important;
+  }
+
+  /* Unwrap the dialog container to its natural block flow. */
+  [role="dialog"][aria-modal="true"] {
+    position: static !important;
+    inset: auto !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    background: #ffffff !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  /* Strip rounded/bordered print containers so the page reads as paper. */
+  [data-print-region="document-sheet"],
+  [data-print-region="invoice-print-region"],
+  [data-print-region] {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Card surfaces: keep thin borders for separation but drop shadows. */
+  [data-print-region] .rounded-2xl,
+  [data-print-region] .shadow-2xl,
+  [data-print-region] .shadow-2xs,
+  [data-print-region] .shadow-md,
+  [data-print-region] .shadow-sm,
+  [data-print-region] .shadow-xs,
+  [data-print-region] .shadow {
+    box-shadow: none !important;
+  }
+
+  /* Page break controls */
+  [data-print-region] section,
+  [data-print-region] h1,
+  [data-print-region] h2 {
+    page-break-after: avoid;
+    break-after: avoid-page;
+  }
+
+  [data-print-region] .avoid-break,
+  [data-print-region="totals"],
+  [data-print-region="customer"],
+  [data-print-region="amount-summary"] {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Line items table: allow breaks between rows but keep header with first row. */
+  [data-print-region] table thead {
+    display: table-header-group;
+  }
+  [data-print-region] table tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Don't expand URLs on printed links. */
+  [data-print-region] a[href]::after {
+    content: "";
+  }
+
+  /* Drop non-essential animations and transforms. */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+
+  /* Force stable currency / tabular numbers on print. */
+  .currency-display,
+  .finance-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+

@@ -39,8 +39,6 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   useFocusTrap(containerRef, { active: isOpen, onEscape: onClose });
   const [markingAllRead, setMarkingAllRead] = useState(false);
 
-  if (!isOpen) return null;
-
   const unreadNotifications = notifications.filter((n) => !n.isRead);
   const footerCta = useMemo(() => {
     if (unreadNotifications.length === 0) return null;
@@ -60,6 +58,8 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
     }
     return { tab: 'invoices' as TabType, label: 'View Invoices', Icon: FileText };
   }, [unreadNotifications]);
+
+  if (!isOpen) return null;
 
   const handleMarkAllRead = async () => {
     setMarkingAllRead(true);
