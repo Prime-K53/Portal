@@ -80,7 +80,14 @@ export function useOfficialDocument(
         // — they live only inside `result.blob` and are not mutated in place.
         let finalBlob = result.blob;
         try {
-          finalBlob = await watermarkBlob(result.blob);
+          // `documentKind` feeds the development-only [Portal PDF] diagnostics
+          // (never shipped to production bundles).
+          const docLabel =
+            kind ??
+            (typeof path === 'string' && path.includes('/customers/statement/document')
+              ? 'statement'
+              : 'document');
+          finalBlob = await watermarkBlob(result.blob, docLabel);
         } catch (watermarkError) {
           // Hard fail: never silently hand a customer an unwatermarked
           // official document. Log, surface the error, allow retry.

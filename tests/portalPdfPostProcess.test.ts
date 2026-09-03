@@ -210,7 +210,14 @@ check('existing page resources are merged, not replaced', () => {
   const stamped = applyPortalCopyWatermark(original);
   const src = stamped.toString('binary');
   assert.ok(src.includes('/Courier'), 'original font resource must remain');
-  assert.ok(src.includes('/F1'), 'watermark font alias must be added');
+  // The watermark font alias must be registered WITHOUT overwriting the ERP's
+  // own /F1 (collision-free naming is required by the content-preservation
+  // contract). We assert /F1 still maps to the ERP /Courier-style entry and
+  // that a PcWmF alias was added alongside it.
+  assert.ok(src.includes('/F2'), 'ERP font entry /F2 must still exist');
+  assert.ok(/\/Font << \/F2/.test(src) || src.includes('/F2 <<'), 'ERP font map must remain intact');
+  assert.ok(src.includes('/PcWmF'), 'collision-free watermark font alias must be added');
+  assert.ok(!src.includes('/F1 10 0 R') || src.includes('/F1 <<'), 'ERP /F1 must never be redirected to the watermark font');
 });
 
 check('page with no /Contents still receives a watermark', () => {

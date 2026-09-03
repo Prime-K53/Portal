@@ -1257,7 +1257,34 @@ export class ErpPortalService implements PortalService {
   async getAds(): Promise<PortalAd[]> {
     const data = await this.client.get<ErpPortalAd[] | { ads?: ErpPortalAd[] }>('/portal/ads');
     const list = Array.isArray(data) ? data : (data.ads ?? []);
-    return list.map(mapAd);
+    
+    // Filter out deleted ads - check for common deletion indicators
+    const activeAds = list.filter(ad => {
+      // Check if ad has been explicitly marked as deleted
+      if (ad.deleted === true) return false;
+      
+      // Check if ad has been tombstoned (common soft-delete pattern)
+      if (ad.tombstone === true) return false;
+      
+      // Check if ad has been archived
+      if (ad.archived === true) return false;
+      
+      // Check if ad has ended in the past (if endsAt is present)
+      if (ad.endsAt) {
+        const endDate = new Date(ad.endsAt);
+        const now = new Date();
+        if (endDate < now) return false;
+      }
+      
+      // Check if title contains common deletion indicators
+      if (ad.title && ad.title.toLowerCase().includes('deleted')) return false;
+      if (ad.title && ad.title.toLowerCase().includes('removed')) return false;
+      if (ad.title && ad.title.toLowerCase().includes('archived')) return false;
+      
+      return true;
+    });
+    
+    return activeAds.map(mapAd);
   }
 
   // ── Support / Help Desk ────────────────────────────────────────────────────

@@ -299,6 +299,12 @@ export async function downloadOfficialDocument(
   // Lazy import keeps the official-document module free of PDF-rewriting
   // concerns until a download is actually requested.
   const { watermarkBlob } = await import('./portalPdfPostProcess');
-  const finalBlob = await watermarkBlob(blob);
+  const docLabel =
+    typeof target === 'string'
+      ? target
+      : target.path.includes('/customers/statement/document')
+        ? 'statement'
+        : 'document';
+  const finalBlob = await watermarkBlob(blob, docLabel);
   triggerBrowserDownload(finalBlob, filename);
 }

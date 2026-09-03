@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>WM Visual Verification</title>
+<style>body{font-family:monospace;font-size:11px;background:#111;color:#0f0;padding:8px;white-space:pre-wrap;word-break:break-all}</style>
+</head>
+<body>
+<pre id="result">RUNNING</pre>
+<script type="module">
+  const A = atob('__ORIGINAL_B64__');
+  const B = atob('__WATERMARKED_B64__');
+  const pdfjs = await import('/node_modules/pdfjs-dist/legacy/build/pdf.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = '/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs';
+
+  const out = { pages: [], error: null };
+  const resultEl = document.getElementById('result');
+  const toU8 = (s) => { const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 0xff; return u; };
+
+  async function openDoc(bytes) {
+    return pdfjs.getDocument({ data: toU8(bytes), useSystemFonts: true, verbosity: 0, isEvalSupported: false }).promise;
+  }
+
+  async function renderPage(doc, n, scale) {
+    const page = await doc.getPage(n);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+    return { canvas, ctx, width: canvas.width, height: canvas.height };
+  }
+
+  function diffData(a, b, w, h) {
+    const ad = a.data, bd = b.data;
+    const n = w * h;
+    let changed = 0;
+    let maxDelta = 0;
+    const rowCounts = new Array(h).fill(0);
+    for (let p = 0; p < n; p++) {
+      const d = Math.max(Math.abs(ad[p * 4] - bd[p * 4]), Math.abs(ad[p * 4 + 1] - bd[p * 4 + 1]), Math.abs(ad[p * 4 + 2] - bd[p * 4 + 2]));
+      if (d > 12) {
+        changed++;
+        rowCounts[(p / w) | 0]++;
+        if (d > maxDelta) maxDelta = d;
+      }
+    }
+    return { changed, total: n, pct: (changed / n) * 100, maxDelta, rowCounts };
+  }
+
+  function blankWhite(w, h) {
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    return ctx.getImageData(0, 0, w, h);
+  }
+
+  try {
+    const docA = await openDoc(A);
+    const docB = await openDoc(B);
+    if (docA.numPages !== docB.numPages) throw new Error('page count mismatch');
+
+    for (let n = 1; n <= docA.numPages; n++) {
+      const scale = 1.4;
+      const ra = await renderPage(docA, n, scale);
+      const rb = await renderPage(docB, n, scale);
+      const imgA = ra.ctx.getImageData(0, 0, ra.width, ra.height);
+      const imgB = rb.ctx.getImageData(0, 0, rb.width, rb.height);
+      const vsOriginal = diffData(imgA, imgB, ra.width, ra.height);
+      // How much of the ERP original actually painted vs a blank page?
+      const blankDiff = diffData(imgA, blankWhite(ra.width, ra.height), ra.width, ra.height);
+      // Sanity: can we detect a manual red line via the same diff routine?
+      const sanity = ra.ctx.getImageData(0, 0, ra.width, ra.height);
+      const sanCtx = document.createElement('canvas');
+      sanCtx.width = ra.width; sanCtx.height = ra.height;
+      const sctx = sanCtx.getContext('2d');
+      sctx.drawImage(ra.canvas, 0, 0);
+      sctx.strokeStyle = '#ff0000'; sctx.lineWidth = 6;
+      sctx.beginPath(); sctx.moveTo(0, 0); sctx.lineTo(ra.width, ra.height); sctx.stroke();
+      const sanityDiff = diffData(imgA, sctx.getImageData(0, 0, ra.width, ra.height), ra.width, ra.height);
+
+      // Text layers for both docs on this page.
+      const textA = (await (await docA.getPage(n)).getTextContent()).items.map((it) => ('str' in it ? it.str : '')).join(' ');
+      const textB = (await (await docB.getPage(n)).getTextContent()).items.map((it) => ('str' in it ? it.str : '')).join(' ');
+
+      out.pages.push({
+        page: n, width: ra.width, height: ra.height,
+        vsOriginal, sanityDiff,
+        erpPaintedVsBlank: blankDiff,
+        textOriginal: textA,
+        textWatermarked: textB,
+      });
+      ra.canvas.width = 1; ra.canvas.height = 1;
+      rb.canvas.width = 1; rb.canvas.height = 1;
+    }
+    await docA.destroy(); await docB.destroy();
+  } catch (e) {
+    out.error = String((e && e.message) || e);
+  }
+  resultEl.textContent = JSON.stringify(out);
+</script>
+</body>
+</html>
