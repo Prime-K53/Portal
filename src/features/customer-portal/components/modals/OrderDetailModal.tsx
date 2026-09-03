@@ -1,155 +1,246 @@
-import React, { useId, useRef } from 'react';
-import { Calendar, Package, X } from 'lucide-react';
-import { Order } from '../../types';
+import React, { useId, useState } from 'react';
+import { Calendar, Loader2, Mail, MapPin, Package, Phone, RotateCcw, Truck, X } from 'lucide-react';
+import { AccountProfile, Order } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { canReorderOrder } from '../../utils/orderRequest';
-import { useFocusTrap } from '../../utils/useFocusTrap';
+import { useOfficialDocument } from '../../hooks/useOfficialDocument';
+import { OfficialDocumentPreview } from '../OfficialDocumentPreview';
+import { DocumentSheet } from '../document/DocumentSheet';
+import { DocumentLineItems } from '../document/DocumentLineItems';
+import { OfficialDocumentActions } from '../document/OfficialDocumentActions';
 
 interface OrderDetailModalProps {
   order: Order | null;
   onClose: () => void;
-  onReorder?: (order: Order) => Promise<Order>;
+  onReorder?: (order: Order) => Promise<unknown>;
+  /** Signed-in customer profile — used only for the read-only "Customer" card. */
+  customer?: AccountProfile | null;
 }
+
+/** Uniform blue pill (matches the Orders list) — label stays the capitalized ERP status. */
+const orderStatusPill = (status: string): string => `bg-blue-100 text-blue-800 border-blue-200`;
+
+/** The ERP serves the official order/acceptance PDF once the order leaves draft/cancelled. */
+const ORDER_PDF_BLOCKED_STATUSES = new Set(['draft', 'cancelled']);
 
 export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   order,
   onClose,
   onReorder,
+  customer,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  useFocusTrap(containerRef, { active: order !== null, onEscape: onClose });
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reordering, setReordering] = useState(false);
+
+  const orderPdfAvailable = order !== null && !ORDER_PDF_BLOCKED_STATUSES.has(order.status);
+  const officialDocument = useOfficialDocument(
+    order ? { kind: 'order', id: order.id } : null,
+    order !== null && orderPdfAvailable
+  );
 
   if (!order) return null;
 
   const statusLabel = order.status.charAt(0).toUpperCase() + order.status.slice(1);
   const reorderable = canReorderOrder(order);
+  const customerName = customer?.companyName || customer?.customerName || customer?.fullName;
+
+  const handleReorder = () => {
+    if (!onReorder || reordering) return;
+    setReordering(true);
+    onReorder(order)
+      .then(() => onClose())
+      .catch(() => {
+        // The shared action-error banner (parent) already explains the failure.
+      })
+      .finally(() => setReordering(false));
+  };
+
+  const renderDeliveryDate = (value: string): string => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : formatDate(value);
+  };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-      >
-        {/* Header */}
-        <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200" aria-hidden="true">
-              <Package className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 id={titleId} className="font-extrabold text-base text-slate-900">{order.orderNumber}</h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-100 text-blue-800 border-blue-200">
-                  {statusLabel}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">Placed on {formatDate(order.date)}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
-            aria-label="Close order details"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
-        </div>
+    <DocumentSheet titleId={titleId} documentType="Order" onClose={onClose}>
+      {/* ── Document identity ─────────────────────────────────────────────── */}
+      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Sales Order</p>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {/* Summary Box */}
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex justify-between items-center shadow-2xs">
-            <div>
-              <span className="text-xs text-slate-500 font-bold block">Total Amount</span>
-              <span className="font-black text-xl text-slate-900">{formatCurrency(order.totalAmount)}</span>
-            </div>
-            <div className="text-right">
-              <span className="text-xs text-slate-500 font-bold block">Est. Delivery</span>
-              <span className="font-extrabold text-sm text-slate-900 flex items-center gap-1 mt-0.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                {formatDate(order.estimatedDelivery)}
-              </span>
-            </div>
-          </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1
+          id={titleId}
+          className="font-mono text-[26px] font-black leading-none tracking-tight text-slate-900 sm:text-3xl"
+        >
+          {order.orderNumber}
+        </h1>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold ${orderStatusPill(order.status)}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+          {statusLabel}
+        </span>
+      </div>
 
-          {/* Delivery Address */}
-          <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex justify-between font-medium">
-            <span>Delivery Address:</span>
-            <strong className="text-slate-900 font-normal text-right max-w-[60%]">{order.deliveryAddress}</strong>
-          </div>
+      <ul className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
+        <li className="flex items-center gap-1.5">
+          <Calendar className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+          Placed {formatDate(order.date)}
+        </li>
+        {order.estimatedDelivery && (
+          <li className="flex items-center gap-1.5">
+            <Truck className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+            Est. delivery {renderDeliveryDate(order.estimatedDelivery)}
+          </li>
+        )}
+        {order.associatedInvoiceId && (
+          <li className="flex items-center gap-1.5">
+            <Package className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+            <span className="font-bold uppercase tracking-wide text-slate-400">Invoice</span>
+            <span className="font-bold text-slate-600">{order.associatedInvoiceId}</span>
+          </li>
+        )}
+      </ul>
 
-          {/* Line Items Table */}
+      {/* ── Amount summary + primary action ──────────────────────────────── */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-2xs sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Order Line Items
-            </h4>
-            <div className="bg-slate-50 rounded-2xl border border-slate-200/80 overflow-hidden text-xs shadow-2xs">
-              <div className="grid grid-cols-12 bg-slate-100 p-2.5 font-bold text-slate-600 border-b border-slate-200">
-                <div className="col-span-1 text-center">Qty</div>
-                <div className="col-span-7">Product</div>
-                <div className="col-span-2 text-right">Unit Price</div>
-                <div className="col-span-2 text-right">Total</div>
-              </div>
-              <div className="divide-y divide-slate-200">
-                {order.items.length === 0 ? (
-                  <div className="p-3 text-slate-400 font-medium text-center">
-                    No line items available for this order.
-                  </div>
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Order Total</p>
+            <p className="mt-1 text-3xl font-black tracking-tight text-slate-900 currency-display sm:text-4xl">
+              {formatCurrency(order.totalAmount)}
+            </p>
+            <p className="mt-1.5 text-[11.5px] font-medium text-slate-500">
+              {order.items.length} line item{order.items.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          {reorderable && (
+            <div className="flex shrink-0 items-center justify-start sm:justify-end">
+              <button
+                type="button"
+                onClick={handleReorder}
+                disabled={reordering}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-extrabold text-white shadow-xs transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                title="Re-submit this order through the ERP reorder pipeline"
+              >
+                {reordering ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  order.items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 p-3 text-slate-700">
-                      <div className="col-span-1 text-center self-center text-slate-600 font-bold">{item.quantity}</div>
-                      <div className="col-span-7 self-center">
-                        <div className="font-extrabold text-slate-900">{item.productName}</div>
-                      </div>
-                      <div className="col-span-2 text-right self-center font-medium text-slate-600">
-                        {formatCurrency(item.unitPrice)}
-                      </div>
-                      <div className="col-span-2 text-right self-center font-black text-slate-900">
-                        {formatCurrency(item.total)}
-                      </div>
-                    </div>
-                  ))
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
                 )}
-              </div>
+                Reorder 1-Click
+              </button>
             </div>
-          </div>
-
-          {/* Totals */}
-          <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
-            <div className="flex justify-between text-slate-500 font-medium">
-              <span>Payment Method</span>
-              <span className="font-bold text-slate-900">{order.paymentMethod}</span>
-            </div>
-            <div className="flex justify-between text-slate-900 font-bold border-t border-slate-200 pt-1 mt-1">
-              <span>Total</span>
-              <span className="finance-nums">{formatCurrency(order.totalAmount)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer Actions */}
-        <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition"
-          >
-            Close
-          </button>
-          {onReorder && reorderable && (
-            <button
-              onClick={() => onReorder(order).then(() => onClose())}
-              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
-            >
-              Reorder 1-Click
-            </button>
           )}
         </div>
       </div>
-    </div>
+
+      {/* ── Customer ─────────────────────────────────────────────────────── */}
+      {customerName && (
+        <section aria-label="Customer" className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Customer</h2>
+          <p className="mt-1.5 text-[15px] font-extrabold text-slate-900">{customerName}</p>
+          <ul className="mt-2.5 space-y-1.5 text-xs font-medium text-slate-500">
+            {customer?.address && (
+              <li className="flex items-start gap-2">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                <span>{customer.address}</span>
+              </li>
+            )}
+            {customer?.email && (
+              <li className="flex items-center gap-2">
+                <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                <span>{customer.email}</span>
+              </li>
+            )}
+            {customer?.phone && (
+              <li className="flex items-center gap-2">
+                <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                <span>{customer.phone}</span>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
+
+      {/* ── Delivery address ─────────────────────────────────────────────── */}
+      {order.deliveryAddress && (
+        <section aria-label="Delivery address" className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <h2 className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+            <Truck className="h-3.5 w-3.5" aria-hidden="true" />
+            Delivery Address
+          </h2>
+          <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-slate-700">{order.deliveryAddress}</p>
+        </section>
+      )}
+
+      {/* ── Line items ───────────────────────────────────────────────────── */}
+      <div className="mt-6">
+        <DocumentLineItems
+          label="Order Items"
+          items={order.items.map((item, idx) => ({
+            id: `${order.id}-${idx}`,
+            description: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.total,
+          }))}
+          emptyMessage="No line items are available for this order."
+        />
+      </div>
+
+      {/* ── Totals ───────────────────────────────────────────────────────── */}
+      <div className="mt-6 flex justify-end">
+        <dl className="w-full max-w-sm space-y-1.5 rounded-2xl border border-slate-200 bg-white p-4 text-xs sm:text-[13px]">
+          {order.paymentMethod && (
+            <div className="flex items-baseline justify-between gap-4 text-slate-600">
+              <dt className="font-medium">Payment Method</dt>
+              <dd className="text-right font-bold text-slate-900">{order.paymentMethod}</dd>
+            </div>
+          )}
+          <div className="flex items-baseline justify-between gap-4 border-t border-slate-200 pt-1.5 text-slate-900">
+            <dt className="font-extrabold">Total</dt>
+            <dd className="text-base font-black finance-nums">{formatCurrency(order.totalAmount)}</dd>
+          </div>
+        </dl>
+      </div>
+
+      {/* ── Official document (ERP order acceptance PDF) ─────────────────── */}
+      {orderPdfAvailable && (
+        <div className="mt-6">
+          <OfficialDocumentActions
+            state={officialDocument}
+            kindLabel="Order"
+            onViewPdf={() => {
+              if (!officialDocument.document) return;
+              setPreviewOpen(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* ── Official PDF preview overlay ─────────────────────────────────── */}
+      {previewOpen && officialDocument.document && (
+        <div className="fixed inset-0 z-[70] overflow-hidden bg-slate-900/70 backdrop-blur-xs animate-fade-in">
+          <div className="mx-auto flex h-full w-full flex-col sm:my-5 sm:h-[calc(100dvh-2.5rem)] sm:max-w-5xl sm:overflow-hidden sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl">
+            <OfficialDocumentPreview
+              blob={officialDocument.document.blob}
+              filename={officialDocument.document.filename}
+              title={`Official ERP Order ${order.orderNumber}`}
+              subtitle="Tap a page to zoom · swipe to turn pages"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(false)}
+              className="absolute bottom-4 right-4 z-10 rounded-full border border-slate-200 bg-white p-2 text-slate-700 shadow-md transition hover:bg-white"
+              aria-label="Close PDF preview"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+    </DocumentSheet>
   );
 };

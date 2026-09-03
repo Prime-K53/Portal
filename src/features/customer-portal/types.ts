@@ -389,6 +389,14 @@ export interface Quotation {
   total: number;
   notes?: string;
   pdfUrl?: string;
+  /**
+   * ERP quotation version — the ERP increments this on every revision. Used
+   * ONLY for the Portal's secondary revision indicator; never displayed when
+   * it is absent (original/version 1 documents stay unbadged).
+   */
+  version?: number;
+  /** ERP quotation row update timestamp — shown as the revision date when version > 1. */
+  updatedAt?: string;
 }
 
 /**
@@ -1147,6 +1155,10 @@ export interface ErpPortalAd {
   gradient: string | null;
   emoji: string | null;
   endsAt: string | null;
+  /** Optional soft-delete / archival indicators some ERP deployments return. */
+  deleted?: boolean;
+  tombstone?: boolean;
+  archived?: boolean;
 }
 
 /** Banner ad as consumed by the Sasa dashboard carousel. */

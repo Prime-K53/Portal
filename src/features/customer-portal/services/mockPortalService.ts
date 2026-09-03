@@ -63,6 +63,12 @@ import type { PortalService } from './portalService';
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
+/** DEV-ONLY mock revision metadata, keyed by seeded quote id. */
+const MOCK_QUOTATION_REVISIONS: Record<string, { version: number; updatedAt: string }> = {
+  qt_501: { version: 2, updatedAt: '2026-08-14T09:30:00.000Z' },
+  qt_488: { version: 1, updatedAt: '2026-06-18T08:00:00.000Z' },
+};
+
 export class MockPortalService implements PortalService {
   private profile: AccountProfile;
   private invoices: Invoice[];
@@ -365,6 +371,11 @@ export class MockPortalService implements PortalService {
           tax: 0,
           total,
           notes: request.adminNotes,
+          // DEV-ONLY revision metadata so the version indicator can be
+          // exercised before the ERP supplies it (real mode maps the ERP
+          // `version` / `updated_at` quotation columns in portalService).
+          version: MOCK_QUOTATION_REVISIONS[request.id]?.version,
+          updatedAt: MOCK_QUOTATION_REVISIONS[request.id]?.updatedAt,
         };
       })
     );

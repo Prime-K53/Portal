@@ -750,12 +750,14 @@ function CustomerPortalShell({
           setSelectedInvoiceDetail(null);
           setPaymentRequestInvoice(inv);
         }}
+        customer={profile}
       />
 
       <OrderDetailModal
         order={selectedOrderDetail}
         onClose={() => setSelectedOrderDetail(null)}
         onReorder={(order) => handleReorderOrder(order.id)}
+        customer={profile}
       />
 
       <PaymentRequestModal
@@ -793,6 +795,10 @@ function CustomerPortalShell({
       <QuotationDetailModal
         quotation={selectedQuotationDetail}
         onClose={() => setSelectedQuotationDetail(null)}
+        customer={profile}
+        onAcceptQuotation={handleAcceptQuotation}
+        onRejectQuotation={handleRejectQuotation}
+        onRequestRevision={handleRequestQuotationRevision}
       />
 
       <NotificationDrawer

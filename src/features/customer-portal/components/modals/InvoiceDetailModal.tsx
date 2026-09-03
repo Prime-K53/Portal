@@ -1,28 +1,31 @@
-import React, { useId, useRef, useState } from 'react';
-import { Calendar, Download, FileText, Landmark, Loader2, X } from 'lucide-react';
-import { Invoice } from '../../types';
+import React, { useId, useState } from 'react';
+import { Calendar, Landmark, Mail, MapPin, Phone, Receipt, X } from 'lucide-react';
+import { Invoice, AccountProfile } from '../../types';
 import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/formatters';
 import { canRequestPayment } from '../../utils/paymentRequest';
 import { useInvoiceDetailData } from '../../hooks/usePortalData';
 import { useOfficialDocument } from '../../hooks/useOfficialDocument';
-import { useFocusTrap } from '../../utils/useFocusTrap';
 import { OfficialDocumentPreview } from '../OfficialDocumentPreview';
+import { DocumentSheet } from '../document/DocumentSheet';
+import { DocumentLineItems } from '../document/DocumentLineItems';
+import { OfficialDocumentActions } from '../document/OfficialDocumentActions';
 
 interface InvoiceDetailModalProps {
   invoice: Invoice | null;
   onClose: () => void;
   /** Opens the Bank Transfer payment-REQUEST flow (workflow data only — never a payment). */
   onRequestPayment: (invoice: Invoice) => void;
+  /** Signed-in customer profile — used only for the read-only "Customer" card. */
+  customer?: AccountProfile | null;
 }
 
 export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   invoice,
   onClose,
   onRequestPayment,
+  customer,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  useFocusTrap(containerRef, { active: invoice !== null, onEscape: onClose });
   // Fetch the ERP invoice detail (line items) when the modal is open.
   // Falls back to the list data if the detail endpoint fails.
   const detailQuery = useInvoiceDetailData(invoice?.id ?? null);
@@ -32,7 +35,6 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
     invoice ? { kind: 'invoice', id: invoice.id } : null,
     invoice !== null
   );
-  const [documentActionError, setDocumentActionError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   if (!invoice) return null;
@@ -42,203 +44,208 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   const isFetchingDetail = Boolean(invoice && detailQuery.isLoading);
 
   const handleDownload = () => {
-    setDocumentActionError(null);
     officialDocument.download();
   };
 
   const openPreview = () => {
-    if (!officialDocument.document) {
-      setDocumentActionError('The official PDF is still loading. Please try again shortly.');
-      return;
-    }
-    setDocumentActionError(null);
+    if (!officialDocument.document) return;
     setPreviewOpen(true);
   };
 
+  // Amount emphasis uses the ERP-authoritative fields as-is — never a
+  // Portal-computed total.
+  const isSettled = effectiveInvoice.amountRemaining <= 0;
+  const heroLabel = isSettled ? 'Invoice Total' : 'Amount Due';
+  const heroValue = isSettled ? effectiveInvoice.amount : effectiveInvoice.amountRemaining;
+  const showPaidRow = effectiveInvoice.amountPaid > 0;
+
+  const customerName = customer?.companyName || customer?.customerName || customer?.fullName;
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-      >
-        {/* Header */}
-        <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200" aria-hidden="true">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 id={titleId} className="font-extrabold text-base text-slate-900">{effectiveInvoice.invoiceNumber}</h3>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
-                  {statusInfo.label}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">Issued on {formatDate(effectiveInvoice.issueDate)}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
-            aria-label="Close invoice details"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
-        </div>
+    <DocumentSheet titleId={titleId} documentType="Invoice" onClose={onClose}>
+      {/* ── Document identity ─────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Invoice</p>
+        {/* Version information stays secondary metadata (only rendered when the
+            ERP data reports a revision — invoices currently carry no version). */}
+      </div>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {/* Summary Box */}
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex justify-between items-center shadow-2xs">
-            <div>
-              <span className="text-xs text-slate-500 font-bold block">Due Date</span>
-              <span className="font-extrabold text-sm text-slate-900 flex items-center gap-1 mt-0.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                {formatDate(effectiveInvoice.dueDate)}
-              </span>
-            </div>
-            <div className="text-right">
-              <span className="text-xs text-slate-500 font-bold block">Amount Remaining</span>
-              <span className="font-black text-xl text-slate-900">{formatCurrency(effectiveInvoice.amountRemaining)}</span>
-            </div>
-          </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1
+          id={titleId}
+          className="font-mono text-[26px] font-black leading-none tracking-tight text-slate-900 sm:text-3xl"
+        >
+          {effectiveInvoice.invoiceNumber}
+        </h1>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold ${statusInfo.bg}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+          {statusInfo.label}
+        </span>
+      </div>
 
-          {effectiveInvoice.poNumber && (
-            <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex justify-between font-medium">
-              <span>Purchase Order Ref:</span>
-              <strong className="text-slate-900 font-mono">{effectiveInvoice.poNumber}</strong>
-            </div>
-          )}
+      <ul className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
+        <li className="flex items-center gap-1.5">
+          <Calendar className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+          Issued {formatDate(effectiveInvoice.issueDate)}
+        </li>
+        <li className="flex items-center gap-1.5">
+          <Receipt className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+          Due {formatDate(effectiveInvoice.dueDate)}
+        </li>
+        {effectiveInvoice.poNumber && (
+          <li className="flex items-center gap-1.5">
+            <span className="font-bold uppercase tracking-wide text-slate-400">PO</span>
+            <span className="font-bold text-slate-600">{effectiveInvoice.poNumber}</span>
+          </li>
+        )}
+      </ul>
 
-          {/* Line Items Table */}
+      {/* ── Amount summary + primary action ──────────────────────────────── */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-2xs sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Invoice Item Breakdown
-              {isFetchingDetail && (
-                <span className="ml-2 inline-flex items-center gap-1 text-slate-400 font-bold normal-case">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Loading ERP detail...
-                </span>
-              )}
-            </h4>
-            <div className="bg-slate-50 rounded-2xl border border-slate-200/80 overflow-hidden text-xs shadow-2xs">
-              <div className="grid grid-cols-12 bg-slate-100 p-2.5 font-bold text-slate-600 border-b border-slate-200">
-                <div className="col-span-6">Description</div>
-                <div className="col-span-2 text-center">Qty</div>
-                <div className="col-span-4 text-right">Total</div>
-              </div>
-              <div className="divide-y divide-slate-200">
-                {effectiveInvoice.items.length === 0 && !isFetchingDetail ? (
-                  <div className="p-3 text-slate-400 font-medium text-center">
-                    Line item detail is not available for this invoice.
-                  </div>
-                ) : (
-                  effectiveInvoice.items.map((item) => (
-                    <div key={item.id} className="grid grid-cols-12 p-3 text-slate-700">
-                      <div className="col-span-6">
-                        <div className="font-extrabold text-slate-900">{item.description}</div>
-                        <div className="text-[11.5px] text-slate-400">{formatCurrency(item.unitPrice)} / unit</div>
-                      </div>
-                      <div className="col-span-2 text-center self-center text-slate-600 font-bold">{item.quantity}</div>
-                      <div className="col-span-4 text-right self-center font-black text-slate-900">
-                        {formatCurrency(item.total)}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Notes */}
-          {effectiveInvoice.notes && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed font-medium">
-              <span className="font-bold text-amber-950 block mb-0.5">Notes & Terms:</span>
-              {effectiveInvoice.notes}
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="p-4 bg-white border-t border-slate-200 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={openPreview}
-                disabled={!officialDocument.document || officialDocument.isLoading}
-                className="p-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5 transition"
-                title="Open the official ERP invoice PDF preview"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>View PDF</span>
-              </button>
-              <button
-                onClick={handleDownload}
-                disabled={!officialDocument.document || officialDocument.isLoading}
-                className="p-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5 transition"
-                title={officialDocument.isLoading ? 'Loading official ERP document…' : 'Download official ERP invoice (PDF)'}
-              >
-                {officialDocument.isLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
-                <span className="hidden sm:inline">Download</span>
-              </button>
-            </div>
-
-            {canRequestPayment(effectiveInvoice) ? (
-              <button
-                onClick={() => {
-                  onClose();
-                  onRequestPayment(effectiveInvoice);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
-                title="Request to pay this invoice by bank transfer (not an immediate payment)"
-              >
-                <Landmark className="w-3.5 h-3.5" />
-                <span>Request Payment</span>
-              </button>
-            ) : (
-              <div className="px-4 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl font-bold text-xs">
-                ✓ Fully Settled
-              </div>
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+              {heroLabel}
+            </p>
+            <p className="mt-1 text-3xl font-black tracking-tight text-slate-900 currency-display sm:text-4xl">
+              {formatCurrency(heroValue)}
+            </p>
+            {!isSettled && effectiveInvoice.amountPaid > 0 && (
+              <p className="mt-1.5 text-[11.5px] font-medium text-slate-500">
+                {formatCurrency(effectiveInvoice.amountPaid)} paid · invoice total{' '}
+                {formatCurrency(effectiveInvoice.amount)}
+              </p>
             )}
           </div>
 
-          {(officialDocument.error || documentActionError) && (
-            <div className="flex items-center justify-between gap-2 text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
-              <p>{officialDocument.error || documentActionError}</p>
-              {officialDocument.error && (
-                <button onClick={officialDocument.retry} className="underline shrink-0">Retry</button>
-              )}
-            </div>
-          )}
+          <div className="flex shrink-0 items-center justify-start sm:justify-end">
+            {canRequestPayment(effectiveInvoice) ? (
+              <button
+                type="button"
+                onClick={() => onRequestPayment(effectiveInvoice)}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-extrabold text-white shadow-xs transition hover:bg-slate-800"
+                title="Request to pay this invoice by bank transfer (not an immediate payment)"
+              >
+                <Landmark className="h-4 w-4" aria-hidden="true" />
+                Request Payment
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-extrabold text-emerald-700">
+                ✓ Fully Settled
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* ── Customer ─────────────────────────────────────────────────────── */}
+      {customerName && (
+        <section aria-label="Customer" className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Customer</h2>
+          <p className="mt-1.5 text-[15px] font-extrabold text-slate-900">{customerName}</p>
+          <ul className="mt-2.5 space-y-1.5 text-xs font-medium text-slate-500">
+            {customer?.address && (
+              <li className="flex items-start gap-2">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                <span>{customer.address}</span>
+              </li>
+            )}
+            {customer?.email && (
+              <li className="flex items-center gap-2">
+                <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                <span>{customer.email}</span>
+              </li>
+            )}
+            {customer?.phone && (
+              <li className="flex items-center gap-2">
+                <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                <span>{customer.phone}</span>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
+
+      {/* ── Line items ───────────────────────────────────────────────────── */}
+      <div className="mt-6">
+        <DocumentLineItems
+          label="Invoice Items"
+          items={effectiveInvoice.items}
+          isLoading={isFetchingDetail}
+          loadingMessage="Loading line items from the ERP…"
+          emptyMessage="Line item detail is not available for this invoice."
+        />
+      </div>
+
+      {/* ── Totals ───────────────────────────────────────────────────────── */}
+      <div className="mt-6 flex justify-end">
+        <dl className="w-full max-w-sm space-y-1.5 rounded-2xl border border-slate-200 bg-white p-4 text-xs sm:text-[13px]">
+          <div className="flex items-baseline justify-between gap-4 text-slate-600">
+            <dt className="font-medium">Invoice Total</dt>
+            <dd className="font-bold text-slate-900 finance-nums">{formatCurrency(effectiveInvoice.amount)}</dd>
+          </div>
+          {showPaidRow && (
+            <div className="flex items-baseline justify-between gap-4 text-emerald-700">
+              <dt className="font-medium">Amount Paid</dt>
+              <dd className="font-bold finance-nums">−{formatCurrency(effectiveInvoice.amountPaid)}</dd>
+            </div>
+          )}
+          {showPaidRow && (
+            <div className="flex items-baseline justify-between gap-4 border-t border-slate-200 pt-1.5 text-slate-900">
+              <dt className="font-extrabold">{effectiveInvoice.amountRemaining > 0 ? 'Balance Due' : 'Balance'}</dt>
+              <dd className="text-base font-black finance-nums">
+                {formatCurrency(effectiveInvoice.amountRemaining)}
+              </dd>
+            </div>
+          )}
+        </dl>
+      </div>
+
+      {/* ── Payment information (existing notes/terms, ERP data) ─────────── */}
+      {effectiveInvoice.notes && (
+        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800">
+            Payment Information
+          </h2>
+          <p className="mt-1.5 text-xs font-medium leading-relaxed text-amber-900">
+            {effectiveInvoice.notes}
+          </p>
+        </div>
+      )}
+
+      {/* ── Official document (ERP PDF) ──────────────────────────────────── */}
+      <div className="mt-6">
+        <OfficialDocumentActions
+          state={officialDocument}
+          kindLabel="Invoice"
+          onViewPdf={openPreview}
+        />
+      </div>
+
+      {/* ── Official PDF preview overlay ─────────────────────────────────── */}
       {previewOpen && officialDocument.document && (
-        <div className="fixed inset-0 z-[60] overflow-hidden bg-slate-900/70 backdrop-blur-xs flex items-stretch justify-center animate-fade-in">
-          <div className="w-full max-w-5xl bg-white border border-slate-200 text-slate-900 shadow-2xl flex flex-col h-full sm:h-[95vh] sm:my-auto sm:rounded-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[70] overflow-hidden bg-slate-900/70 backdrop-blur-xs animate-fade-in">
+          <div className="mx-auto flex h-full w-full flex-col sm:my-5 sm:h-[calc(100dvh-2.5rem)] sm:max-w-5xl sm:overflow-hidden sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl">
             <OfficialDocumentPreview
               blob={officialDocument.document.blob}
               filename={officialDocument.document.filename}
               title={`Official ERP Invoice ${effectiveInvoice.invoiceNumber}`}
               subtitle="Tap a page to zoom · swipe to turn pages"
+              onDownload={handleDownload}
             />
             <button
               type="button"
               onClick={() => setPreviewOpen(false)}
-              className="absolute top-3 right-3 p-2 rounded-full bg-white/90 border border-slate-200 text-slate-700 hover:bg-white shadow-md z-10"
-              aria-label="Close preview"
+              className="absolute bottom-4 right-4 z-10 rounded-full border border-slate-200 bg-white p-2 text-slate-700 shadow-md transition hover:bg-white"
+              aria-label="Close PDF preview"
             >
-              <X className="w-4 h-4" aria-hidden="true" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
       )}
-    </div>
+    </DocumentSheet>
   );
 };

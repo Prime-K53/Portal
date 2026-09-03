@@ -1,16 +1,10 @@
-import React, { useId, useRef, useState } from 'react';
-import {
-  CheckCircle2,
-  Download,
-  FileText,
-  Printer,
-  Receipt,
-  X,
-} from 'lucide-react';
+import React, { useId, useState } from 'react';
+import { CheckCircle2, Download, Loader2 } from 'lucide-react';
 import { AccountProfile, Invoice, Payment, StatementEntry } from '../../types';
-import { useFocusTrap } from '../../utils/useFocusTrap';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadOfficialDocument, findPaymentForStatementEntry } from '../../utils/officialDocument';
+import { DocumentSheet } from '../document/DocumentSheet';
+import { DocumentOfficialStrip } from '../document/DocumentOfficialStrip';
 
 interface StatementItemDetailModalProps {
   entry: StatementEntry | null;
@@ -31,9 +25,7 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
   isOpen,
   onClose,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  useFocusTrap(containerRef, { active: isOpen && entry !== null, onEscape: onClose });
 
   // Official-document download state (ERP-authoritative PDF).
   const [downloading, setDownloading] = useState(false);
@@ -46,6 +38,22 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
   const email = profile?.email;
 
   const isPayment = entry.type === 'Payment';
+  const isInvoice = entry.type === 'Invoice';
+  const supportsOfficialPdf = isPayment || isInvoice;
+
+  const entryPillClass = isPayment
+    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+    : isInvoice
+      ? 'bg-sky-100 text-sky-800 border-sky-300'
+      : 'bg-slate-200 text-slate-700 border-slate-300';
+
+  const amountLabel = isPayment
+    ? 'Credit Applied'
+    : isInvoice
+      ? 'Debit Invoiced'
+      : entry.type === 'Adjustment'
+        ? 'Ledger Adjustment'
+        : 'Credit Applied';
 
   const handleDownload = async () => {
     setDownloadError(null);
@@ -54,9 +62,7 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
       // then stream the OFFICIAL receipt PDF from the ERP.
       const payment = findPaymentForStatementEntry(entry, payments ?? []);
       if (!payment) {
-        setDownloadError(
-          'We could not match this entry to a recorded payment. Please contact support.'
-        );
+        setDownloadError('We could not match this entry to a recorded payment. Please contact support.');
         return;
       }
       setDownloading(true);
@@ -67,12 +73,6 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
       } finally {
         setDownloading(false);
       }
-      return;
-    }
-    if (entry.type !== 'Invoice') {
-      setDownloadError(
-        'The ERP does not yet issue an official document for this statement entry type.'
-      );
       return;
     }
     const invoice = (invoices || []).find(
@@ -93,145 +93,153 @@ export const StatementItemDetailModal: React.FC<StatementItemDetailModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up"
-      >
-        {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
-          <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-xl ${isPayment ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-800'}`} aria-hidden="true">
-              {isPayment ? <Receipt className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
-            </div>
-            <div>
-              <h3 id={titleId} className="font-extrabold text-base text-slate-900">{entry.type} Statement Record</h3>
-              <p className="text-[12.5px] font-mono text-slate-500">{entry.reference}</p>
-            </div>
-          </div>
+    <DocumentSheet titleId={titleId} documentType="Statement" onClose={onClose}>
+      {/* ── Document identity ─────────────────────────────────────────────── */}
+      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+        Statement Entry · {entry.type}
+      </p>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
-            aria-label="Close statement record"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
-        </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1
+          id={titleId}
+          className="font-mono text-[26px] font-black leading-none tracking-tight text-slate-900 sm:text-3xl"
+        >
+          {entry.reference}
+        </h1>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold ${entryPillClass}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+          {entry.type}
+        </span>
+      </div>
 
-        {/* Modal Content Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
-          {/* Status Badge & Primary Amount Banner */}
-          <div className={`p-4 rounded-2xl border flex items-center justify-between ${
-            isPayment
-              ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
-              : 'bg-slate-50 border-slate-200 text-slate-900'
-          }`}>
-            <div>
-              <span className="text-[11.5px] font-extrabold uppercase tracking-wider block opacity-70">
-                {isPayment ? 'Credit Applied' : 'Debit Invoiced'}
-              </span>
-              <div className="text-2xl font-black mt-0.5">
-                {formatCurrency(entry.credit || entry.debit)}
-              </div>
-            </div>
+      <ul className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
+        <li>Posted {formatDate(entry.date)}</li>
+        {email && <li className="text-slate-400">Account email · {email}</li>}
+      </ul>
 
-            <div className="text-right">
-              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                isPayment
-                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                  : 'bg-slate-200 text-slate-800 border-slate-300'
-              }`}>
-                {entry.type}
-              </span>
-              <span className="text-[11.5px] text-slate-500 block font-medium mt-1">
-                {formatDate(entry.date)}
-              </span>
-            </div>
-          </div>
-
-          {/* Transaction Metadata */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Transaction Breakdown</h4>
-
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2.5 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                <span className="text-slate-500 font-medium">Description</span>
-                <span className="font-bold text-slate-900">{entry.description}</span>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                <span className="text-slate-500 font-medium">Customer Account</span>
-                <span className="font-bold text-slate-900">{companyName}{accountNumber ? ` (${accountNumber})` : ''}</span>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                <span className="text-slate-500 font-medium">Statement Reference</span>
-                <span className="font-mono font-bold text-slate-900">{entry.reference}</span>
-              </div>
-
-              {entry.debit > 0 && (
-                <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                  <span className="text-slate-500 font-medium">Debit Amount</span>
-                  <span className="font-extrabold text-rose-600">+{formatCurrency(entry.debit)}</span>
-                </div>
-              )}
-
-              {entry.credit > 0 && (
-                <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                  <span className="text-slate-500 font-medium">Credit Amount</span>
-                  <span className="font-extrabold text-emerald-600">-{formatCurrency(entry.credit)}</span>
-                </div>
-              )}
-
-              <div className="flex justify-between items-center pt-1 font-bold">
-                <span className="text-slate-700">Resulting Ledger Balance</span>
-                <span className="font-black text-slate-900 text-sm">{formatCurrency(entry.balance)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Audit Verification */}
-          <div className="flex items-center gap-2 p-3 bg-blue-50/60 rounded-2xl border border-blue-100 text-blue-900 text-xs font-medium">
-            <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-            <span>Audited entry signed by the PrimeERP Financial Ledger System.</span>
-          </div>
-        </div>
-
-        {/* Modal Footer with Download / Print Button */}
-        <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 space-y-2">
-          {downloadError && (
-            <p className="text-[11.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
-              {downloadError}
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs transition"
-            >
-              Close
-            </button>
-
-            <button
-              onClick={() => { void handleDownload(); }}
-              disabled={downloading}
-              title={downloading ? 'Downloading official ERP document…' : 'Download official ERP document (PDF)'}
-              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-extrabold text-xs shadow-md flex items-center gap-2 transition"
-            >
-              {downloading ? (
-                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              <span>Download {isPayment ? 'Receipt' : 'Invoice'} PDF</span>
-            </button>
-          </div>
+      {/* ── Amount summary ───────────────────────────────────────────────── */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-2xs sm:p-5">
+        <div>
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+            {amountLabel}
+          </p>
+          <p className="mt-1 text-3xl font-black tracking-tight text-slate-900 currency-display sm:text-4xl">
+            {formatCurrency(entry.credit || entry.debit)}
+          </p>
+          <p className="mt-1.5 text-[11.5px] font-medium text-slate-500">{entry.description}</p>
         </div>
       </div>
-    </div>
+
+      {/* ── Transaction breakdown ────────────────────────────────────────── */}
+      <div className="mt-6">
+        <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+          Transaction Breakdown
+        </h2>
+        <dl className="mt-2 space-y-2.5 rounded-2xl border border-slate-200 bg-white p-4 text-xs sm:text-[13px]">
+          <div className="flex items-baseline justify-between gap-6 py-1">
+            <dt className="font-medium text-slate-500">Description</dt>
+            <dd className="text-right font-bold text-slate-900">{entry.description}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-6 border-t border-slate-100 py-1">
+            <dt className="font-medium text-slate-500">Customer Account</dt>
+            <dd className="text-right font-bold text-slate-900">
+              {companyName}
+              {accountNumber ? ` (${accountNumber})` : ''}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-6 border-t border-slate-100 py-1">
+            <dt className="font-medium text-slate-500">Statement Reference</dt>
+            <dd className="font-mono text-right font-bold text-slate-900">{entry.reference}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-6 border-t border-slate-100 py-1">
+            <dt className="font-medium text-slate-500">Posted Date</dt>
+            <dd className="text-right font-bold text-slate-900">{formatDate(entry.date)}</dd>
+          </div>
+          {entry.debit > 0 && (
+            <div className="flex items-baseline justify-between gap-6 border-t border-slate-100 py-1">
+              <dt className="font-medium text-slate-500">Debit Amount</dt>
+              <dd className="text-right font-extrabold text-rose-600 finance-nums">
+                +{formatCurrency(entry.debit)}
+              </dd>
+            </div>
+          )}
+          {entry.credit > 0 && (
+            <div className="flex items-baseline justify-between gap-6 border-t border-slate-100 py-1">
+              <dt className="font-medium text-slate-500">Credit Amount</dt>
+              <dd className="text-right font-extrabold text-emerald-600 finance-nums">
+                −{formatCurrency(entry.credit)}
+              </dd>
+            </div>
+          )}
+          <div className="flex items-baseline justify-between gap-6 border-t border-slate-200 pt-2">
+            <dt className="font-extrabold text-slate-700">Resulting Ledger Balance</dt>
+            <dd className="text-sm font-black text-slate-900 finance-nums">
+              {formatCurrency(entry.balance)}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      {/* ── Audit verification ───────────────────────────────────────────── */}
+      <div className="mt-5 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 text-xs font-medium text-blue-900">
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
+        <span>Audited entry signed by the PrimeERP Financial Ledger System.</span>
+      </div>
+
+      {/* ── Official document (ERP PDF) ──────────────────────────────────── */}
+      <div className="mt-6">
+        {supportsOfficialPdf ? (
+          <DocumentOfficialStrip
+            kindLabel={isPayment ? 'Receipt' : 'Invoice'}
+            description={
+              isPayment
+                ? 'Official receipt PDF issued by Prime ERP for this recorded payment.'
+                : 'Official invoice PDF issued by Prime ERP for this statement entry.'
+            }
+            notice={
+              downloadError ? (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-[11.5px] font-bold text-rose-700">
+                  <p className="min-w-0">{downloadError}</p>
+                </div>
+              ) : undefined
+            }
+            controls={
+              <button
+                type="button"
+                onClick={() => {
+                  void handleDownload();
+                }}
+                disabled={downloading}
+                title={
+                  downloading
+                    ? 'Downloading official ERP document…'
+                    : `Download the official ERP ${isPayment ? 'receipt' : 'invoice'} (PDF)`
+                }
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs font-extrabold text-white shadow-xs transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {downloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                <span>Download Official {isPayment ? 'Receipt' : 'Invoice'}</span>
+              </button>
+            }
+          />
+        ) : (
+          <DocumentOfficialStrip
+            kindLabel={entry.type}
+            description="Prime ERP does not issue an official document for this statement entry type. The ledger row above is your online record."
+            controls={
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-400">
+                No official document
+              </span>
+            }
+          />
+        )}
+      </div>
+    </DocumentSheet>
   );
 };

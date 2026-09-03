@@ -58,7 +58,7 @@ function getWhatsAppUrl(phone: string | null | undefined): string | null {
   return `https://wa.me/${normalized}`;
 }
 
-function FAQItem({ article }: { article: SupportArticle }) {
+const FAQItem: React.FC<{ article: SupportArticle }> = ({ article }) => {
   const [open, setOpen] = useState(false);
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden transition-all hover:border-slate-300">
@@ -82,7 +82,7 @@ function FAQItem({ article }: { article: SupportArticle }) {
       )}
     </div>
   );
-}
+};
 
 function NewTicketForm({
   onSubmit,

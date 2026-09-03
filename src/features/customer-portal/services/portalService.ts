@@ -321,6 +321,10 @@ function mapQuotation(quotation: ErpQuotation): Quotation {
     total: quotation.total ?? quotation.totalAmount ?? 0,
     notes: quotation.payment_terms ?? quotation.paymentTerms ?? undefined,
     pdfUrl: undefined,
+    // Existing ERP revision metadata — carried through untouched for the
+    // Portal's secondary version indicator (never shown for v1 originals).
+    version: quotation.version ?? undefined,
+    updatedAt: quotation.updated_at ?? undefined,
   };
 }
 

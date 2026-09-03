@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { CheckCircle2, Loader2, Receipt, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { CheckCircle2, Download, Loader2, Printer, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { useOfficialDocument } from '../../hooks/useOfficialDocument';
 import { resolveStatementPeriod, statementDocumentPath } from '../../utils/officialDocument';
 import { useFocusTrap } from '../../utils/useFocusTrap';
@@ -57,45 +57,16 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
   const officialDocument = useOfficialDocument({ path }, isOpen);
   const visibleError = officialDocument.error ?? actionError;
 
-  // Auto-download: trigger a browser download as soon as the watermarked PDF
-  // becomes available. Tracks the last-triggered objectUrl so retries or
-  // successive modal opens don't re-fire the download for the same bytes.
-  const lastAutoDownloadedUrlRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isOpen) {
-      lastAutoDownloadedUrlRef.current = null;
-      return;
-    }
-    const doc = officialDocument.document;
-    if (!doc) return;
-    if (lastAutoDownloadedUrlRef.current === doc.objectUrl) return;
-    lastAutoDownloadedUrlRef.current = doc.objectUrl;
-    
-    
-    
-    try {
-      // Use the existing watermarked blob directly instead of creating a new one
-      const url = URL.createObjectURL(doc.blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.filename;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Revoke after the browser has had a chance to start the download.
-      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-      setToast(doc.filename);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'The download could not start.');
-    }
-  }, [isOpen, officialDocument.document]);
-
+  // Downloads NEVER start automatically. The modal is a viewer: the customer
+  // previews the watermarked ERP PDF here and clicks an explicit Download PDF
+  // button (header or preview toolbar) to save it.
   if (!isOpen) return null;
 
   const handleDownload = () => {
     setActionError(null);
+    if (!officialDocument.document) return;
     officialDocument.download();
+    setToast(officialDocument.document.filename);
   };
 
   return (
@@ -105,16 +76,23 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-5xl bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[92vh]"
+        className="w-full max-w-[960px] bg-white border border-slate-200 text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[92vh]"
       >
         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
-              <Receipt className="w-5 h-5" aria-hidden="true" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-xs">
+              <Printer className="h-4 w-4" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h3 id={titleId} className="font-extrabold text-base text-slate-900">Official Account Statement</h3>
-              <p className="text-xs text-slate-500 truncate">
+              <p className="truncate text-[13px] font-black tracking-tight text-slate-900">Prime Printing</p>
+              <p className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-500">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+                Portal view · account statement
+              </p>
+              <h3 id={titleId} className="mt-1 truncate text-sm font-extrabold text-slate-900">
+                Official Account Statement
+              </h3>
+              <p className="truncate text-[11px] text-slate-500">
                 ERP-generated PDF · preview, download, and print use the same document
               </p>
             </div>
@@ -124,6 +102,20 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
             {officialDocument.isLoading && (
               <Loader2 className="w-4 h-4 animate-spin text-blue-600" aria-hidden="true" />
             )}
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={!officialDocument.document}
+              className="p-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-extrabold flex items-center gap-1 transition"
+              title={
+                officialDocument.document
+                  ? 'Download the official ERP statement (PDF)'
+                  : 'The statement PDF is still loading'
+              }
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Download PDF</span>
+            </button>
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
