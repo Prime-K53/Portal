@@ -37,7 +37,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     <>
       <nav
         aria-label="Primary navigation"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-xl border-t border-slate-200/60 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-xl border-t border-slate-200/60 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe bottom-nav-print-hide"
       >
         <div className="max-w-md mx-auto grid grid-cols-5 gap-0 px-1 pt-1.5 pb-1.5">
           {primaryTabs.map((tab) => {

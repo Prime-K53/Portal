@@ -52,9 +52,19 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
     return true;
   });
 
-  const totalCredits = filteredStatements.reduce((sum, s) => sum + s.credit, 0);
-  const sortedFiltered = [...filteredStatements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const outstandingBalance = profile.outstandingBalance ?? (statements.length > 0 ? statements[statements.length - 1].balance : 0);
+  // Outstanding balance is the ERP's running account balance — NEVER derived
+  // from the (date-filtered) ledger, which can truncate payments inside the
+  // window. The profile field is authoritative; we fall back to the most
+  // recent unfiltered ledger row only when the ERP does not provide it.
+  const outstandingBalance =
+    profile.outstandingBalance ??
+    (statements.length > 0
+      ? statements[statements.length - 1].balance
+      : 0);
+
+  // Total payment is always all-time so it matches the dashboard widget.
+  const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
+
   const isFullyPaid = outstandingBalance === 0;
 
   const handleExportCSV = () => {
@@ -116,58 +126,47 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
       <div className="grid grid-cols-2 gap-3">
         {/* Outstanding Card */}
         <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-2xs ${
-          isFullyPaid ? 'bg-[#FFF8E1] border-[#FDE68A]' : 'bg-rose-50 border-rose-100'
+          isFullyPaid ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-100'
         }`}>
           <div className="flex items-center justify-between">
             <span className={`text-xs font-black uppercase tracking-wider block ${
-              isFullyPaid ? 'text-[#92400E]' : 'text-rose-700'
+              isFullyPaid ? 'text-emerald-700' : 'text-rose-700'
             }`}>
               OUTSTANDING
             </span>
             <div className={`p-1.5 rounded-full ${
-              isFullyPaid ? 'bg-[#FDE68A] text-[#92400E]' : 'bg-rose-100 text-rose-600'
+              isFullyPaid ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-100 text-rose-600'
             }`}>
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className={`text-xl font-black mt-1 tabular-nums ${
-            isFullyPaid ? 'text-[#92400E]' : 'text-rose-700'
+            isFullyPaid ? 'text-emerald-700' : 'text-rose-700'
           }`}>
              {formatCurrency(outstandingBalance)}
           </div>
           <div className={`text-xs font-bold mt-1 ${
-            isFullyPaid ? 'text-[#A16207]' : 'text-rose-600'
+            isFullyPaid ? 'text-emerald-600' : 'text-rose-600'
           }`}>
-            {isFullyPaid ? 'No Unpaid Balance' : 'Has Outstanding Balance'}
+            {isFullyPaid ? 'Fully Settled' : 'Has Outstanding Balance'}
           </div>
         </div>
 
         {/* Total Payment Card */}
-        <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-2xs ${
-          isFullyPaid ? 'bg-[#14532D] border-[#14532D]' : 'bg-slate-100 border-slate-200'
-        }`}>
+        <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-2xs bg-white border-slate-200`}>
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-black uppercase tracking-wider block ${
-              isFullyPaid ? 'text-white' : 'text-slate-600'
-            }`}>
+            <span className="text-xs font-black uppercase tracking-wider block text-slate-600">
               TOTAL PAYMENT
             </span>
-            <div className={`p-1.5 rounded-full ${
-              isFullyPaid ? 'bg-[#FACC15] text-[#14532D]' : 'bg-slate-200 text-slate-500'
-            }`}>
+            <div className="p-1.5 rounded-full bg-slate-100 text-slate-500">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-xl font-black mt-1 tabular-nums ${
-            isFullyPaid ? 'text-white' : 'text-slate-700'
-          }`}>
-            {formatCurrency(totalCredits)}
+          <div className="text-xl font-black mt-1 tabular-nums text-slate-900">
+            {formatCurrency(totalPayment)}
           </div>
-          <div className={`text-xs font-bold mt-1 flex items-center gap-1 ${
-            isFullyPaid ? 'text-emerald-400' : 'text-slate-500'
-          }`}>
-            {isFullyPaid && <CheckCircle2 className="w-3 h-3" />}
-            {isFullyPaid ? 'Fully Settled' : 'Amount Paid'}
+          <div className="text-xs font-bold mt-1 flex items-center gap-1 text-slate-500">
+            All time
           </div>
         </div>
       </div>
@@ -282,8 +281,8 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
 
             <div className="text-right shrink-0 flex items-center gap-2">
               <div className="text-right font-medium">
-                {st.debit > 0 && <span className="text-xs font-black text-rose-600 block tabular-nums">+{formatCurrency(st.debit)}</span>}
-                {st.credit > 0 && <span className="text-xs font-black text-emerald-600 block tabular-nums">-{formatCurrency(st.credit)}</span>}
+                {st.debit > 0 && <span className="text-xs font-black text-rose-600 block tabular-nums">−{formatCurrency(st.debit)}</span>}
+                {st.credit > 0 && <span className="text-xs font-black text-emerald-600 block tabular-nums">+{formatCurrency(st.credit)}</span>}
                 <span className="text-[12.5px] text-slate-500 block font-medium tabular-nums">Bal: {formatCurrency(st.balance)}</span>
               </div>
               <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />

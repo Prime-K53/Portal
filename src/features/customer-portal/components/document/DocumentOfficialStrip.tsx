@@ -31,14 +31,14 @@ export const DocumentOfficialStrip: React.FC<DocumentOfficialStripProps> = ({
   return (
     <div className="space-y-2.5">
       {notice}
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-2.5">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
           <div className="min-w-0">
-            <p className="text-xs font-extrabold text-slate-800">Official ERP {kindLabel}</p>
+            <p className="text-xs font-extrabold text-slate-800">OFFICIAL DOCUMENT</p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
               {description ??
-                `Downloadable PDF issued by Prime ERP — the official record of this ${label}. The view above is a convenient online reading experience.`}
+                `This online view is provided for convenient viewing. The downloadable PDF is the official ERP ${label}.`}
             </p>
           </div>
         </div>

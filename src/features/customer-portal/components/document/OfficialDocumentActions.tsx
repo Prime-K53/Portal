@@ -8,14 +8,14 @@ interface OfficialDocumentActionsProps {
   state: OfficialDocumentState;
   /** 'Invoice' | 'Quotation' | 'Order' — used for button/copy labels. */
   kindLabel: 'Invoice' | 'Quotation' | 'Order';
-  /** Opens the in-dialog PDF preview (blob is already watermarked). */
+  /** Opens the in-dialog PDF preview (blob is loaded from the ERP). */
   onViewPdf: () => void;
 }
 
 /**
  * Official-document actions for document views whose ERP PDF is auto-loaded
  * through `useOfficialDocument` (invoices, quotations, orders). Preview and
- * download reuse the exact same watermarked blob — this component never
+ * download reuse the exact same ERP-sourced blob — this component never
  * fetches or fabricates content.
  */
 export const OfficialDocumentActions: React.FC<OfficialDocumentActionsProps> = ({
@@ -63,20 +63,20 @@ export const OfficialDocumentActions: React.FC<OfficialDocumentActionsProps> = (
             <button
               type="button"
               onClick={onViewPdf}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-extrabold text-slate-700 transition hover:bg-slate-100"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-700 transition hover:bg-slate-100"
               title={`Open the official ERP ${label} (PDF) preview`}
             >
-              <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">View PDF</span>
+              <FileText className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">View Official PDF</span>
               <span className="sm:hidden">Preview</span>
             </button>
             <button
               type="button"
               onClick={download}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs font-extrabold text-white shadow-xs transition hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:bg-slate-800"
               title={`Download the official ERP ${label} (PDF)`}
             >
-              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              <Download className="h-4 w-4" aria-hidden="true" />
               <span>Download Official {kindLabel}</span>
             </button>
           </>

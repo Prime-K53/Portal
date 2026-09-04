@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react';
-import { Calendar, Landmark, Mail, MapPin, Phone, Receipt, X } from 'lucide-react';
+import { Calendar, Download, Landmark, Mail, MapPin, Phone, Receipt, X } from 'lucide-react';
 import { Invoice, AccountProfile } from '../../types';
 import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/formatters';
 import { canRequestPayment } from '../../utils/paymentRequest';
@@ -42,6 +42,8 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   const effectiveInvoice: Invoice = detail ?? invoice;
   const statusInfo = getInvoiceStatusBadge(effectiveInvoice.status);
   const isFetchingDetail = Boolean(invoice && detailQuery.isLoading);
+  const detailDone = !detailQuery.isLoading && (detailQuery.data !== undefined || detailQuery.error !== null);
+  const itemsMissing = detailDone && effectiveInvoice.items.length === 0;
 
   const handleDownload = () => {
     officialDocument.download();
@@ -74,158 +76,165 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
       printRegionId="invoice-print-region"
     >
       {/* ── Document identity ─────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Invoice</p>
+      <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200">
+        <div>
+          <h1 className="text-[11px] font-black uppercase tracking-wider text-slate-500">INVOICE</h1>
+          <div className="mt-1 flex items-center gap-2">
+            <h2
+              id={titleId}
+              className="text-[28px] font-black leading-none tracking-tight text-slate-900 sm:text-[32px]"
+            >
+              #{effectiveInvoice.invoiceNumber}
+            </h2>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-extrabold ${statusInfo.bg}`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+              {statusInfo.label}
+            </span>
+          </div>
+        </div>
         {/* Version information stays secondary metadata (only rendered when the
             ERP data reports a revision — invoices currently carry no version). */}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1
-          id={titleId}
-          className="font-mono text-[26px] font-black leading-none tracking-tight text-slate-900 sm:text-3xl"
-        >
-          {effectiveInvoice.invoiceNumber}
-        </h1>
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold ${statusInfo.bg}`}
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-          {statusInfo.label}
-        </span>
-      </div>
-
-      <ul className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
-        <li className="flex items-center gap-1.5">
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-medium text-slate-500">
+        <div className="flex items-center gap-1.5">
           <Calendar className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
           Issued {formatDate(effectiveInvoice.issueDate)}
-        </li>
-        <li className="flex items-center gap-1.5">
+        </div>
+        <div className="flex items-center gap-1.5">
           <Receipt className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
           Due {formatDate(effectiveInvoice.dueDate)}
-        </li>
+        </div>
         {effectiveInvoice.poNumber && (
-          <li className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5">
             <span className="font-bold uppercase tracking-wide text-slate-400">PO</span>
             <span className="font-bold text-slate-600">{effectiveInvoice.poNumber}</span>
-          </li>
+          </div>
         )}
-      </ul>
+      </div>
 
-      {/* ── Amount summary + primary action ──────────────────────────────── */}
-      <div className="mt-6 avoid-break rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-2xs sm:p-5" data-print-region="amount-summary">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
-              {heroLabel}
+      {/* ── Payment Summary ─────────────────────────────────────────────── */}
+      <div className="mt-6 avoid-break rounded-xl border border-slate-200 bg-white p-5 shadow-sm" data-print-region="amount-summary">
+        <div className="text-center sm:text-left">
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">
+            BALANCE DUE
+          </p>
+          <p className="text-[32px] font-black tracking-tight text-slate-900 currency-display sm:text-[36px]">
+            {formatCurrency(effectiveInvoice.amountRemaining)}
+          </p>
+          {!isSettled && effectiveInvoice.amountPaid > 0 && (
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              {formatCurrency(effectiveInvoice.amountPaid)} paid of {formatCurrency(effectiveInvoice.amount)}
             </p>
-            <p className="mt-1 text-3xl font-black tracking-tight text-slate-900 currency-display sm:text-4xl">
-              {formatCurrency(heroValue)}
-            </p>
-            {!isSettled && effectiveInvoice.amountPaid > 0 && (
-              <p className="mt-1.5 text-[11.5px] font-medium text-slate-500">
-                {formatCurrency(effectiveInvoice.amountPaid)} paid · invoice total{' '}
-                {formatCurrency(effectiveInvoice.amount)}
-              </p>
-            )}
-          </div>
+          )}
+        </div>
 
-          <div className="flex shrink-0 items-center justify-start sm:justify-end">
-            {canRequestPayment(effectiveInvoice) ? (
-              <button
-                type="button"
-                onClick={() => onRequestPayment(effectiveInvoice)}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-extrabold text-white shadow-xs transition hover:bg-slate-800"
-                title="Request to pay this invoice by bank transfer (not an immediate payment)"
-              >
-                <Landmark className="h-4 w-4" aria-hidden="true" />
-                Request Payment
-              </button>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-extrabold text-emerald-700">
-                ✓ Fully Settled
-              </span>
-            )}
-          </div>
+        <div className="mt-4 flex justify-center sm:justify-end">
+          {canRequestPayment(effectiveInvoice) ? (
+            <button
+              type="button"
+              onClick={() => onRequestPayment(effectiveInvoice)}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:bg-slate-800"
+              title="Request to pay this invoice by bank transfer (not an immediate payment)"
+            >
+              <Landmark className="h-4 w-4" aria-hidden="true" />
+              Request Payment
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-extrabold text-emerald-700">
+              ✓ Fully Settled
+            </span>
+          )}
         </div>
       </div>
 
-      {/* ── Customer ─────────────────────────────────────────────────────── */}
+      {/* ── Bill To ─────────────────────────────────────────────────────── */}
       {customerName && (
-        <section aria-label="Customer" className="mt-5 avoid-break rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" data-print-region="customer">
-          <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Customer</h2>
-          <p className="mt-1.5 text-[15px] font-extrabold text-slate-900">{customerName}</p>
-          <ul className="mt-2.5 space-y-1.5 text-xs font-medium text-slate-500">
+        <section aria-label="Customer" className="mt-6 avoid-break" data-print-region="customer">
+          <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-2">BILL TO</h2>
+          <div className="text-sm">
+            <p className="font-bold text-slate-900">{customerName}</p>
             {customer?.address && (
-              <li className="flex items-start gap-2">
-                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                <span>{customer.address}</span>
-              </li>
+              <p className="mt-1 text-slate-600">{customer.address}</p>
             )}
             {customer?.email && (
-              <li className="flex items-center gap-2">
-                <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                <span>{customer.email}</span>
-              </li>
+              <p className="mt-1 text-slate-600">{customer.email}</p>
             )}
             {customer?.phone && (
-              <li className="flex items-center gap-2">
-                <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                <span>{customer.phone}</span>
-              </li>
+              <p className="mt-1 text-slate-600">{customer.phone}</p>
             )}
-          </ul>
+          </div>
         </section>
       )}
 
-      {/* ── Line items ───────────────────────────────────────────────────── */}
+      {/* ── Invoice Items ────────────────────────────────────────────────── */}
       <div className="mt-6">
+        {itemsMissing && (
+          <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-700">Line items are not available for this invoice.</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {effectiveInvoice.status === 'unpaid' || effectiveInvoice.status === 'overdue'
+                  ? 'Items are released after payment is recorded. Download the official PDF for full details.'
+                  : 'The ERP has not returned line item details for this invoice. Download the official PDF for full details.'}
+              </p>
+            </div>
+            {officialDocument.document && (
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                Download PDF
+              </button>
+            )}
+          </div>
+        )}
         <DocumentLineItems
-          label="Invoice Items"
+          label="INVOICE ITEMS"
           items={effectiveInvoice.items}
           isLoading={isFetchingDetail}
           loadingMessage="Loading line items from the ERP…"
-          emptyMessage="Line item detail is not available for this invoice."
+          emptyMessage="No line items on this invoice."
         />
       </div>
 
       {/* ── Totals ───────────────────────────────────────────────────────── */}
-      <div className="mt-6 flex justify-end" data-print-region="totals">
-        <dl className="w-full max-w-sm space-y-1.5 rounded-2xl border border-slate-200 bg-white p-4 text-xs sm:text-[13px]">
-          <div className="flex items-baseline justify-between gap-4 text-slate-600">
-            <dt className="font-medium">Invoice Total</dt>
+      <div className="mt-6" data-print-region="totals">
+        <dl className="text-sm space-y-2 border-t border-slate-200 pt-4">
+          <div className="flex justify-between">
+            <dt className="font-medium text-slate-600">Invoice Total</dt>
             <dd className="font-bold text-slate-900 finance-nums">{formatCurrency(effectiveInvoice.amount)}</dd>
           </div>
           {showPaidRow && (
-            <div className="flex items-baseline justify-between gap-4 text-emerald-700">
+            <div className="flex justify-between text-emerald-700">
               <dt className="font-medium">Amount Paid</dt>
               <dd className="font-bold finance-nums">−{formatCurrency(effectiveInvoice.amountPaid)}</dd>
             </div>
           )}
-          {showPaidRow && (
-            <div className="flex items-baseline justify-between gap-4 border-t border-slate-200 pt-1.5 text-slate-900">
-              <dt className="font-extrabold">{effectiveInvoice.amountRemaining > 0 ? 'Balance Due' : 'Balance'}</dt>
-              <dd className="text-base font-black finance-nums">
-                {formatCurrency(effectiveInvoice.amountRemaining)}
-              </dd>
-            </div>
-          )}
+          <div className="flex justify-between border-t border-slate-200 pt-2">
+            <dt className="font-extrabold text-slate-900">Balance Due</dt>
+            <dd className="text-lg font-black text-slate-900 finance-nums">
+              {formatCurrency(effectiveInvoice.amountRemaining)}
+            </dd>
+          </div>
         </dl>
       </div>
 
-      {/* ── Payment information (existing notes/terms, ERP data) ─────────── */}
+      {/* ── Payment Information ─────────────────────────────────────────── */}
       {effectiveInvoice.notes && (
-        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800">
-            Payment Information
-          </h2>
-          <p className="mt-1.5 text-xs font-medium leading-relaxed text-amber-900">
+        <div className="mt-6">
+          <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-2">PAYMENT INFORMATION</h2>
+          <div className="text-sm text-slate-600 leading-relaxed">
             {effectiveInvoice.notes}
-          </p>
+          </div>
         </div>
       )}
 
-      {/* ── Official document (ERP PDF) ──────────────────────────────────── */}
+      {/* ── Official Document ───────────────────────────────────────────── */}
       <div className="mt-6">
         <OfficialDocumentActions
           state={officialDocument}

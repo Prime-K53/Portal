@@ -44,33 +44,33 @@ export const DocumentSheet: React.FC<DocumentSheetProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="mx-auto flex h-dvh w-full max-w-[960px] flex-col bg-white text-slate-900 sm:h-[calc(100dvh-3rem)] sm:my-6 sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl sm:overflow-hidden"
+        className="mx-auto flex h-dvh w-full max-w-[1000px] flex-col bg-white text-slate-900 sm:h-[calc(100dvh-3rem)] sm:my-6 sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl sm:overflow-hidden"
       >
         {/* Sticky app bar — brand + "portal view" marker + close */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3.5 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
             <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-xs"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm"
               aria-hidden="true"
             >
-              <Printer className="h-4 w-4" />
+              <Printer className="h-5 w-5" />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-[13px] font-black tracking-tight text-slate-900">
+              <span className="block text-[14px] font-black tracking-tight text-slate-900">
                 Prime Printing
               </span>
-              <span className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-500">
+              <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
-                Portal view · {documentType.toLowerCase()}
+                Customer Portal · {documentType}
               </span>
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-1 no-print">
+          <div className="flex shrink-0 items-center gap-2 no-print">
             {onPrint && (
               <button
                 type="button"
                 onClick={onPrint}
-                className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                className="shrink-0 rounded-lg p-2.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
                 aria-label={`Print ${documentType.toLowerCase()}`}
                 title="Print this document"
               >
@@ -80,7 +80,7 @@ export const DocumentSheet: React.FC<DocumentSheetProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
+              className="shrink-0 rounded-lg p-2.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
               aria-label={`Close ${documentType.toLowerCase()} view`}
             >
               <X className="h-5 w-5" aria-hidden="true" />
@@ -92,7 +92,7 @@ export const DocumentSheet: React.FC<DocumentSheetProps> = ({
         <div
           id={printRegionId}
           data-print-region={printRegionId ?? 'document-sheet'}
-          className="flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-5 sm:px-8 sm:pt-7 lg:px-10"
+          className="flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-6 sm:px-8 sm:pt-8 lg:px-12"
         >
           {children}
         </div>

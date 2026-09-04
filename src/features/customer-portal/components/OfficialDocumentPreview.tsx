@@ -20,11 +20,11 @@ import {
  * PDF viewer is missing or disabled.
  *
  * Uses the same blob across all actions (preview / download / print) so
- * the watermarked ERP PDF remains the single source of truth.
+ * the ERP PDF remains the single source of truth.
  */
 
 interface OfficialDocumentPreviewProps {
-  /** The already-watermarked PDF blob. The preview never re-watermarks. */
+  /** The ERP PDF blob. The preview never re-processes it. */
   blob: Blob;
   /** Optional filename for download. */
   filename?: string;
@@ -314,7 +314,7 @@ export const OfficialDocumentPreview: React.FC<OfficialDocumentPreviewProps> = (
     if (!pdfDocument || isPrinting) return;
     setIsPrinting(true);
     try {
-      // Reuse the official download path — it guarantees the watermarked blob.
+      // Reuse the official download path — it guarantees the same ERP blob.
       const url = URL.createObjectURL(blob);
       const iframe = document.createElement('iframe');
       iframe.style.position = 'fixed';

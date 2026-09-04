@@ -116,16 +116,16 @@ export const AccountTab: React.FC<AccountTabProps> = ({
   const [passwordFeedback, setPasswordFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
 
   const canSubmitPassword =
-    currentPassword.length > 0 &&
+    currentPassword.trim().length > 0 &&
     newPassword.length >= 6 &&
-    confirmPassword.length > 0 &&
+    confirmPassword.trim().length > 0 &&
     !isChangingPassword;
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordFeedback(null);
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!currentPassword.trim() || !newPassword || !confirmPassword.trim()) {
       setPasswordFeedback({ kind: 'error', message: 'Please fill in all three password fields.' });
       return;
     }
@@ -171,6 +171,7 @@ export const AccountTab: React.FC<AccountTabProps> = ({
 
         {onSignOut && (
           <button
+            type="button"
             onClick={onSignOut}
             className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl font-bold text-xs flex items-center gap-2 transition shrink-0"
           >
@@ -214,7 +215,7 @@ export const AccountTab: React.FC<AccountTabProps> = ({
               <p className="text-xs text-slate-500 font-mono font-bold">Account #: {profile.accountNumber}</p>
             )}
             {profile?.tier ? (
-              <span className="inline-block mt-1 text-[10px] bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-full font-bold">
+              <span className="inline-block mt-1 text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
                 {profile.tier}
               </span>
             ) : (
@@ -364,11 +365,26 @@ export const AccountTab: React.FC<AccountTabProps> = ({
           </h3>
 
           <div className="flex items-center gap-3">
-            <img
-              src={profile.accountManager.avatar || undefined}
-              alt={profile.accountManager.name}
-              className="w-12 h-12 rounded-full object-cover border-2 border-slate-300"
-            />
+            {profile.accountManager.avatar ? (
+              <img
+                src={profile.accountManager.avatar}
+                alt={profile.accountManager.name}
+                className="w-12 h-12 rounded-full object-cover border-2 border-slate-300"
+                onError={(e) => {
+                  // Fall back to initials if the avatar URL fails to load.
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  const sibling = (e.currentTarget as HTMLImageElement).nextElementSibling;
+                  if (sibling instanceof HTMLElement) sibling.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <div
+              className="w-12 h-12 rounded-full bg-slate-900 text-white items-center justify-center font-black text-sm border-2 border-slate-300"
+              style={{ display: profile.accountManager.avatar ? 'none' : 'flex' }}
+              aria-hidden={profile.accountManager.avatar ? 'true' : undefined}
+            >
+              {(profile.accountManager.name || 'AM').slice(0, 2).toUpperCase()}
+            </div>
             <div>
               <h4 className="font-extrabold text-sm text-slate-900">{profile.accountManager.name}</h4>
               <p className="text-xs text-slate-500">{profile.accountManager.email}</p>

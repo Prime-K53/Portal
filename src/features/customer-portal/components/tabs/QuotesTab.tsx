@@ -78,8 +78,11 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
   const [activeTab, setActiveTab] = useState<QuoteTab>('submitted');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<{ id: string; message: string } | null>(null);
-  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  // Unified action state for in-flight quotations actions (revise/reject/accept).
+  const [busyActionId, setBusyActionId] = useState<string | null>(null);
+  // Two-step confirmations: accept + reject both require a deliberate second click.
   const [pendingAcceptId, setPendingAcceptId] = useState<string | null>(null);
+  const [pendingRejectId, setPendingRejectId] = useState<string | null>(null);
 
   const handleDownloadPDF = async (quoteId: string) => {
     setDownloadError(null);
@@ -249,14 +252,14 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPendingActionId(q.id);
-                            onRequestRevision(q.id).finally(() => setPendingActionId(null));
+                            setBusyActionId(q.id);
+                            onRequestRevision(q.id).finally(() => setBusyActionId(null));
                           }}
-                          disabled={pendingActionId === q.id}
+                          disabled={busyActionId === q.id}
                           className="px-3 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition disabled:opacity-60"
                           title="Request changes to this quotation"
                         >
-                          {pendingActionId === q.id ? (
+                          {busyActionId === q.id ? (
                             <span className="w-3.5 h-3.5 border-2 border-slate-400/40 border-t-slate-400 rounded-full animate-spin" />
                           ) : (
                             <RefreshCcw className="w-3.5 h-3.5" />
@@ -266,38 +269,51 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPendingActionId(q.id);
-                            onRejectQuotation(q.id).finally(() => setPendingActionId(null));
+                            if (pendingRejectId === q.id) {
+                              setBusyActionId(q.id);
+                              setPendingRejectId(null);
+                              onRejectQuotation(q.id).finally(() => setBusyActionId(null));
+                            } else {
+                              setPendingRejectId(q.id);
+                              setPendingAcceptId(null);
+                            }
                           }}
-                          disabled={pendingActionId === q.id}
-                          className="px-3 py-2 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition disabled:opacity-60"
+                          disabled={busyActionId === q.id}
+                          className={`px-3 py-2 rounded-xl border font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition disabled:opacity-60 ${
+                            pendingRejectId === q.id
+                              ? 'border-rose-600 bg-rose-600 text-white hover:bg-rose-700'
+                              : 'border-rose-300 text-rose-700 hover:bg-rose-50'
+                          }`}
                         >
-                          {pendingActionId === q.id ? (
-                            <span className="w-3.5 h-3.5 border-2 border-rose-400/40 border-t-rose-400 rounded-full animate-spin" />
+                          {busyActionId === q.id ? (
+                            <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                          ) : pendingRejectId === q.id ? (
+                            <XCircle className="w-3.5 h-3.5" />
                           ) : (
                             <XCircle className="w-3.5 h-3.5" />
                           )}
-                          <span>Decline</span>
+                          <span>{pendingRejectId === q.id ? 'Confirm Decline?' : 'Decline'}</span>
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             if (pendingAcceptId === q.id) {
-                              setPendingActionId(q.id);
+                              setBusyActionId(q.id);
                               setPendingAcceptId(null);
-                              onAcceptQuotation(q.id).finally(() => setPendingActionId(null));
+                              onAcceptQuotation(q.id).finally(() => setBusyActionId(null));
                             } else {
                               setPendingAcceptId(q.id);
+                              setPendingRejectId(null);
                             }
                           }}
-                          disabled={pendingActionId === q.id}
+                          disabled={busyActionId === q.id}
                           className={`px-4 py-2 rounded-xl font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition disabled:opacity-60 ${
                             pendingAcceptId === q.id
                               ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                               : 'bg-slate-900 hover:bg-slate-800 text-white'
                           }`}
                         >
-                          {pendingActionId === q.id ? (
+                          {busyActionId === q.id ? (
                             <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                           ) : pendingAcceptId === q.id ? (
                             <CheckCircle2 className="w-3.5 h-3.5 text-white" />

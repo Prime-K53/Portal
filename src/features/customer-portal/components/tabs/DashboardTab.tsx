@@ -80,7 +80,7 @@ const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
     <div className="absolute inset-0 z-0" style={{ background: slide.gradientCss }} />
   ) : (
     <div
-      className={`absolute inset-0 z-0 bg-gradient-to-r ${
+      className={`absolute inset-0 z-0 bg-gradient-to-br ${
         slide.gradientClass ?? 'from-slate-900 via-indigo-950 to-slate-900'
       }`}
     />
@@ -89,19 +89,21 @@ const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
   return (
     <>
       {gradientLayer}
+      {/* Subtle vignette for depth */}
+      <div className="absolute inset-0 z-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
+      {/* Fine grid pattern overlay */}
+      <div className="absolute inset-0 z-[1] opacity-[0.08] pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.5)_1px,transparent_1px)] [background-size:32px_32px]" />
       {slide.imageUrl && !imageFailed && (
         <img
           src={slide.imageUrl}
           alt={slide.title}
           onError={() => setImageFailed(true)}
-          className="absolute inset-0 z-[1] w-full h-full object-cover"
+          className="absolute inset-0 z-[2] w-full h-full object-cover"
         />
       )}
     </>
   );
 };
-
-type IconComponent = React.ComponentType<{ className?: string }>;
 
 interface BannerSlide {
   id: string;
@@ -133,18 +135,6 @@ function timeAgo(dateStr: string): string {
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
   return formatDate(dateStr);
-}
-
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
-
-function formatDateTimeShort(dateStr: string): string {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${formatDate(dateStr)}, ${formatTime(dateStr)}`;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -191,20 +181,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     .slice(0, 4);
 
   // ── Banner slides ──────────────────────────────────────────────────────
-  const customerDisplayName = profile?.customerName || profile?.companyName || 'Customer';
-  const customerIdDisplay = profile?.accountNumber || '—';
-  const tierDisplay = profile?.tier ? ` • ${profile.tier} Tier` : '';
-
-  const bannerSlides: BannerSlide[] = [
-    {
-      id: 'slide_welcome',
-      badge: 'WELCOME BACK',
-      badgeBg: 'bg-white/20 text-white backdrop-blur-md',
-      title: `Welcome back, ${customerDisplayName}`,
-      subtitle: `Account ID: ${customerIdDisplay}${tierDisplay}`,
-      gradientClass: 'from-slate-900 via-indigo-950 to-slate-900',
-    },
-  ];
+  const bannerSlides: BannerSlide[] = [];
 
   ads.forEach((ad) => {
     const ctaTab = tabForCtaTarget(ad.ctaTarget);
@@ -353,23 +330,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           aria-live="polite"
           aria-label="Announcements and account updates"
           tabIndex={bannerSlides.length > 1 ? 0 : -1}
-          className="relative aspect-[3/1] rounded-2xl bg-white p-[3px] shadow-sm transition-all duration-500 group w-full"
+          className="relative aspect-[3/1] rounded-2xl bg-white p-[4px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/5 transition-all duration-500 group w-full"
          >
-          <div className="relative overflow-hidden rounded-[calc(1rem-3px)] w-full h-full bg-slate-900">
+          <div className="relative overflow-hidden rounded-[calc(1rem-4px)] w-full h-full bg-slate-900">
           <div
             key={activeSlide.id}
             className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
           >
             <BannerBackground slide={activeSlide} />
-            {!activeSlide.imageUrl && (
-              <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px] z-0" />
-            )}
             {(activeSlide.title || activeSlide.subtitle || activeSlide.emoji || activeSlide.onCta) && (
               <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
-                <div className="w-full px-5 sm:px-7 flex items-center justify-between gap-4">
+                <div className="w-full px-5 sm:px-8 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
                     {!activeSlide.imageUrl && (
-                      <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
+                      <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-lg shadow-black/20">
                         {activeSlide.emoji ? (
                           <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
                         ) : (
@@ -377,11 +351,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         )}
                       </div>
                     )}
-                    <div className="space-y-1 min-w-0">
+                    <div className="space-y-1 sm:space-y-1.5 min-w-0">
                       {activeSlide.badge && !activeSlide.imageUrl && (
-                        <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] text-white/70">
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-black uppercase tracking-[0.14em] ${activeSlide.badgeBg}`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
                           {activeSlide.badge}
-                        </p>
+                        </div>
                       )}
                       {activeSlide.title && !activeSlide.imageUrl && (
                         <h2 className="text-base sm:text-xl font-black text-white tracking-tight leading-snug drop-shadow-md truncate">
@@ -389,7 +364,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         </h2>
                       )}
                       {activeSlide.subtitle && !activeSlide.imageUrl && (
-                        <p className="text-xs sm:text-sm text-white/80 font-medium drop-shadow-sm line-clamp-2">
+                        <p className="text-xs sm:text-sm text-white/85 font-medium drop-shadow-sm line-clamp-2">
                           {activeSlide.subtitle}
                         </p>
                       )}
@@ -403,10 +378,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   {activeSlide.onCta && activeSlide.ctaLabel && !activeSlide.imageUrl && (
                     <button
                       onClick={activeSlide.onCta}
-                      className="shrink-0 flex items-center gap-1 text-xs font-black text-white hover:text-white/80 transition-colors"
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/25 text-xs font-black text-white transition-all shadow-lg shadow-black/10 hover:shadow-black/20"
                     >
                       <span>{activeSlide.ctaLabel}</span>
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
@@ -417,14 +392,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <>
               <button
                 onClick={goPrev}
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white text-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg shadow-black/20 hover:scale-105"
                 aria-label="Previous slide"
               >
                 <ChevronRight className="w-4 h-4 rotate-180" />
               </button>
               <button
                 onClick={goNext}
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white text-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg shadow-black/20 hover:scale-105"
                 aria-label="Next slide"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -437,7 +412,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <div
             role="tablist"
             aria-label="Slide selector"
-            className="flex justify-center items-center mt-3 gap-1.5"
+            className="flex justify-center items-center mt-3.5 gap-2"
           >
             {bannerSlides.map((slide, idx) => (
               <button
@@ -449,8 +424,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 onClick={() => goToSlide(idx)}
                 className={`rounded-full transition-all duration-300 ${
                   idx === currentSlide
-                    ? 'w-2 h-2 bg-slate-900'
-                    : 'w-2 h-2 bg-slate-300 hover:bg-slate-400'
+                    ? 'w-6 h-1.5 bg-slate-900'
+                    : 'w-1.5 h-1.5 bg-slate-300 hover:bg-slate-400'
                 }`}
               />
             ))}

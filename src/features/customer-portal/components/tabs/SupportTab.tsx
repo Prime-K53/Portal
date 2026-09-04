@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import {
   BookOpen,
   ChevronDown,
+  ChevronRight,
   Headphones,
+  Inbox,
   Loader2,
   Mail,
   MessageCircle,
@@ -21,7 +23,6 @@ interface SupportTabProps {
   isLoadingTickets?: boolean;
   isLoadingArticles?: boolean;
   onCreateTicket?: (payload: NewSupportTicketPayload) => Promise<void>;
-  onViewTicket?: (ticket: SupportTicket) => void;
 }
 
 const CATEGORY_LABELS: Record<SupportTicketCategory, string> = {
@@ -183,7 +184,7 @@ function NewTicketForm({
         <button
           type="submit"
           disabled={isSubmitting || !subject.trim() || !description.trim()}
-          className="flex-1 h-12 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] text-sm font-bold text-white shadow-lg shadow-blue-900/20 hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2"
+          className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-sm font-bold text-white shadow-lg shadow-slate-900/20 active:scale-[0.98] transition disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2"
         >
           {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
           {isSubmitting ? 'Submitting…' : 'Submit'}
@@ -200,11 +201,11 @@ export const SupportTab: React.FC<SupportTabProps> = ({
   isLoadingTickets,
   isLoadingArticles,
   onCreateTicket,
-  onViewTicket,
 }) => {
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'faq' | 'tickets'>('faq');
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
 
   const handleCreateTicket = async (payload: NewSupportTicketPayload) => {
     if (!onCreateTicket) return;
@@ -219,11 +220,16 @@ export const SupportTab: React.FC<SupportTabProps> = ({
 
   const openTickets = tickets.filter((t) => t.status === 'open' || t.status === 'in_progress');
 
+  const hasContactChannel =
+    Boolean(companyContact?.email) ||
+    Boolean(companyContact?.phone || companyContact?.phones?.[0]) ||
+    Boolean(getWhatsAppUrl(companyContact?.whatsapp));
+
   return (
     <div className="min-h-full bg-slate-50/50">
       <div className="px-5 py-6 max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] shadow-lg shadow-blue-900/20">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 shadow-lg shadow-slate-900/20">
             <Headphones className="h-5 w-5 text-white" />
           </div>
           <div>
@@ -231,6 +237,13 @@ export const SupportTab: React.FC<SupportTabProps> = ({
             <p className="text-sm text-slate-500">We're here to help</p>
           </div>
         </div>
+
+        {!hasContactChannel && (
+          <div className="mb-6 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-xs font-medium text-slate-500">
+            <Inbox className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            <span>No direct contact channels are available right now. Submit a ticket and our team will respond by email.</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3 mb-6">
           {companyContact?.email && (
@@ -356,32 +369,68 @@ export const SupportTab: React.FC<SupportTabProps> = ({
                 <p className="text-sm text-slate-500">No support tickets yet</p>
               </div>
             ) : (
-              tickets.map((ticket) => (
-                <button
-                  key={ticket.id}
-                  onClick={() => onViewTicket?.(ticket)}
-                  className="w-full text-left bg-white rounded-2xl border border-slate-200 p-4 hover:border-slate-300 hover:shadow-md hover:shadow-slate-200/50 transition-all"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <span className="font-semibold text-[15px] text-slate-800">{ticket.subject}</span>
-                    <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg ${STATUS_COLORS[ticket.status] ?? 'bg-slate-100 text-slate-500'}`}>
-                      {ticket.status.replace('_', ' ')}
-                    </span>
+              tickets.map((ticket) => {
+                const isExpanded = expandedTicketId === ticket.id;
+                const lastMessage =
+                  ticket.messages.length > 0
+                    ? ticket.messages[ticket.messages.length - 1]
+                    : null;
+                return (
+                  <div
+                    key={ticket.id}
+                    className="w-full text-left bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-slate-300 hover:shadow-md hover:shadow-slate-200/50 transition-all"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setExpandedTicketId(isExpanded ? null : ticket.id)}
+                      aria-expanded={isExpanded}
+                      className="w-full flex items-start justify-between gap-3 p-4 text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="font-semibold text-[15px] text-slate-800 truncate block">
+                          {ticket.subject}
+                        </span>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                          <span>{ticket.ticketNumber}</span>
+                          <span className="w-1 h-1 rounded-full bg-slate-300" />
+                          <span>{CATEGORY_LABELS[ticket.category]}</span>
+                          <span className="w-1 h-1 rounded-full bg-slate-300" />
+                          <span>{formatRelativeTime(ticket.updatedAt)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg ${STATUS_COLORS[ticket.status] ?? 'bg-slate-100 text-slate-500'}`}>
+                          {ticket.status.replace('_', ' ')}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4 text-slate-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-slate-400" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="border-t border-slate-100 bg-slate-50/40 p-4 space-y-3">
+                        {lastMessage ? (
+                          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700 leading-relaxed">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                              Latest message · {formatRelativeTime(lastMessage.sentAt)}
+                            </p>
+                            <p className="line-clamp-4">{lastMessage.content}</p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400">No messages on this ticket yet.</p>
+                        )}
+                        <p className="text-[11px] text-slate-400">
+                          Submitted {formatDate(ticket.createdAt)}
+                          {ticket.assignedTo ? ` · Assigned to ${ticket.assignedTo}` : ''}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <span>{ticket.ticketNumber}</span>
-                    <span className="w-1 h-1 rounded-full bg-slate-300" />
-                    <span>{CATEGORY_LABELS[ticket.category]}</span>
-                    <span className="w-1 h-1 rounded-full bg-slate-300" />
-                    <span>{formatRelativeTime(ticket.updatedAt)}</span>
-                  </div>
-                  {ticket.messages.length > 0 && (
-                    <p className="mt-2 text-sm text-slate-500 line-clamp-2">
-                      {ticket.messages[ticket.messages.length - 1].content}
-                    </p>
-                  )}
-                </button>
-              ))
+                );
+              })
             )}
           </div>
         )}

@@ -9,8 +9,13 @@ interface VariantSelectModalProps {
   product: Product | null;
   /** Quantity queued for this add (from the card/table stepper). */
   quantity: number;
+  /** Variant id to pre-select if the user already chose one in the catalog
+      table; the modal still requires an EXPLICIT click to confirm but the
+      initial radio matches the user's prior intent. Ignored if not present
+      in `product.variants`. */
+  initialVariantId?: string;
   onClose: () => void;
-  /** Fired ONLY after an explicit variant choice; receives the effective product. */
+  /** Fires ONLY after an explicit variant choice; receives the effective product. */
   onConfirm: (effectiveProduct: Product, quantity: number) => void;
 }
 
@@ -24,6 +29,7 @@ interface VariantSelectModalProps {
 export const VariantSelectModal: React.FC<VariantSelectModalProps> = ({
   product,
   quantity,
+  initialVariantId,
   onClose,
   onConfirm,
 }) => {
@@ -31,13 +37,21 @@ export const VariantSelectModal: React.FC<VariantSelectModalProps> = ({
   const titleId = useId();
   useFocusTrap(containerRef, { active: product !== null, onEscape: onClose });
 
-  // Mandatory: start with NO selection on every open.
+  // Start with NO selection on every open, BUT honor the user's prior
+  // choice from the catalog if it is still a valid variant. The user still
+  // must click "Add" to confirm — the radio default only avoids forcing a
+  // re-pick on every add.
   const [selectedVariantId, setSelectedVariantId] = useState('');
 
   // Reset the choice whenever a different product opens.
   useEffect(() => {
-    setSelectedVariantId('');
-  }, [product?.id]);
+    const variants = product?.variants ?? [];
+    const candidate =
+      initialVariantId && variants.some((v) => v.id === initialVariantId)
+        ? initialVariantId
+        : '';
+    setSelectedVariantId(candidate);
+  }, [product?.id, initialVariantId]);
 
   if (!product) return null;
 
@@ -92,6 +106,11 @@ export const VariantSelectModal: React.FC<VariantSelectModalProps> = ({
 
         {/* Variant options */}
         <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-2">
+          {variants.length === 0 && (
+            <p className="text-xs text-slate-500 text-center py-6">
+              No options found for this product.
+            </p>
+          )}
           {variants.map((variant) => {
             const isSelected = variant.id === selectedVariantId;
             return (

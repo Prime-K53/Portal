@@ -1045,6 +1045,11 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
       <VariantSelectModal
         product={variantPickerQueue[0]?.product ?? null}
         quantity={variantPickerQueue[0]?.quantity ?? 1}
+        initialVariantId={
+          variantPickerQueue[0]
+            ? selectedVariantIds[variantPickerQueue[0].product.id]
+            : undefined
+        }
         onClose={() => setVariantPickerQueue((prev) => prev.slice(1))}
         onConfirm={handleVariantPickerConfirm}
       />

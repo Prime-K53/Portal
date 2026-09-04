@@ -42,7 +42,7 @@ export const DocumentLineItems: React.FC<DocumentLineItemsProps> = ({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">{label}</h2>
+        <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">{label}</h2>
         {isLoading && (
           <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-slate-400">
             <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
@@ -65,42 +65,42 @@ export const DocumentLineItems: React.FC<DocumentLineItemsProps> = ({
           {loadingMessage ?? 'Loading line items…'}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {/* Desktop: semantic table */}
           <div className="hidden md:block">
             <table className="w-full border-collapse text-left">
               <caption className="sr-only">{label}</caption>
               <thead>
-                <tr className="bg-slate-100/90 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                  <th scope="col" className="px-4 py-2.5">
+                <tr className="bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                  <th scope="col" className="px-4 py-3">
                     Description
                   </th>
-                  <th scope="col" className="w-20 px-3 py-2.5 text-right">
+                  <th scope="col" className="w-20 px-3 py-3 text-right">
                     Qty
                   </th>
-                  <th scope="col" className="w-32 px-3 py-2.5 text-right">
+                  <th scope="col" className="w-32 px-3 py-3 text-right">
                     Unit
                   </th>
-                  <th scope="col" className="w-36 px-4 py-2.5 text-right">
+                  <th scope="col" className="w-40 px-4 py-3 text-right font-bold text-slate-700">
                     Amount
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((item) => (
-                  <tr key={item.id} className="align-top">
-                    <td className="px-4 py-3">
-                      <span className="block text-[13px] font-bold leading-snug text-slate-800">
+                  <tr key={item.id} className="align-top hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3.5">
+                      <span className="block text-[13px] font-bold leading-snug text-slate-900">
                         {item.description}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-right text-xs font-bold text-slate-600 tabular-nums">
+                    <td className="px-3 py-3.5 text-right text-xs font-bold text-slate-600 tabular-nums">
                       {item.quantity}
                     </td>
-                    <td className="px-3 py-3 text-right text-xs font-medium text-slate-500 finance-nums">
+                    <td className="px-3 py-3.5 text-right text-xs font-medium text-slate-500 finance-nums">
                       {item.unitPrice ? formatCurrency(item.unitPrice) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right text-[13px] font-black text-slate-900 finance-nums">
+                    <td className="px-4 py-3.5 text-right text-[13px] font-black text-slate-900 finance-nums">
                       {formatCurrency(item.total)}
                     </td>
                   </tr>
@@ -114,12 +114,12 @@ export const DocumentLineItems: React.FC<DocumentLineItemsProps> = ({
             {items.map((item) => (
               <li key={item.id} className="flex items-start justify-between gap-4 px-4 py-3.5">
                 <div className="min-w-0">
-                  <p className="text-[13px] font-bold leading-snug text-slate-900">{item.description}</p>
-                  <p className="mt-1 text-[11px] font-medium text-slate-400">
-                    {item.unitPrice
-                      ? `${item.quantity} × ${formatCurrency(item.unitPrice)}`
-                      : `${item.quantity} unit${item.quantity !== 1 ? 's' : ''}`}
-                  </p>
+<p className="text-[13px] font-bold leading-snug text-slate-900">{item.description}</p>
+                   <p className="mt-1 text-[11px] font-medium text-slate-500">
+                     {item.unitPrice
+                       ? `${item.quantity} × ${formatCurrency(item.unitPrice)}`
+                       : `${item.quantity} unit${item.quantity !== 1 ? 's' : ''}`}
+                   </p>
                 </div>
                 <p className="shrink-0 text-[13px] font-black text-slate-900 finance-nums">
                   {formatCurrency(item.total)}

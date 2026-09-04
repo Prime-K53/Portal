@@ -58,7 +58,7 @@ export const StatementPrintModal: React.FC<StatementPrintModalProps> = ({
   const visibleError = officialDocument.error ?? actionError;
 
   // Downloads NEVER start automatically. The modal is a viewer: the customer
-  // previews the watermarked ERP PDF here and clicks an explicit Download PDF
+  // previews the ERP PDF here and clicks an explicit Download PDF
   // button (header or preview toolbar) to save it.
   if (!isOpen) return null;
 

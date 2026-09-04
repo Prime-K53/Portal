@@ -284,27 +284,12 @@ export function triggerBrowserDownload(blob: Blob, filename: string): void {
 /**
  * One-call helper used by download buttons (kind+id OR explicit path).
  *
- * Always stamps the "PORTAL COPY" watermark on the downloaded PDF — the
- * ERP bytes are the single source of truth for accounting data, and the
- * Portal adds exactly one presentation layer on top of them.
- *
- * Watermarking failures are surfaced as a thrown Error so the caller UI can
- * show the retry path (never a silent unwatermarked official document).
+ * Streams the ERP-authoritative PDF to the browser as a download.
  */
 export async function downloadOfficialDocument(
   target: OfficialDocumentKind | { path: string },
   id?: string
 ): Promise<void> {
   const { blob, filename } = await fetchOfficialDocument(target, id);
-  // Lazy import keeps the official-document module free of PDF-rewriting
-  // concerns until a download is actually requested.
-  const { watermarkBlob } = await import('./portalPdfPostProcess');
-  const docLabel =
-    typeof target === 'string'
-      ? target
-      : target.path.includes('/customers/statement/document')
-        ? 'statement'
-        : 'document';
-  const finalBlob = await watermarkBlob(blob, docLabel);
-  triggerBrowserDownload(finalBlob, filename);
+  triggerBrowserDownload(blob, filename);
 }

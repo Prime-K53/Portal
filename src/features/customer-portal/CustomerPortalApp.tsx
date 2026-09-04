@@ -505,22 +505,22 @@ function CustomerPortalShell({
 
       {/* Main Workspace Area */}
       <div className="flex-1 min-w-0 flex flex-col min-h-screen-safe bg-slate-50/50 dark:bg-slate-900/50">
-        {/* Top Navigation Bar Header - Only visible on Dashboard */}
-        {activeTab === 'dashboard' && (
-          <MobileHeader
-            profile={profile}
-            unreadCount={notificationBadgeCount}
-            onOpenNotifications={handleOpenNotifications}
-            onOpenAccount={() => handleNavigateTab('account')}
-            cartCount={cartCount}
-            onOpenCart={() => setIsCartOpen(true)}
-            onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-          />
-        )}
+        {/* Top Navigation Bar Header (persistent on every tab so mobile users
+            keep access to cart, notifications, and command palette). */}
+        <MobileHeader
+          profile={profile}
+          unreadCount={notificationBadgeCount}
+          onOpenNotifications={handleOpenNotifications}
+          onOpenAccount={() => handleNavigateTab('account')}
+          cartCount={cartCount}
+          onOpenCart={() => setIsCartOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        />
 
-        {/* Action Error Banner (real API failures are never hidden) */}
+        {/* Action Error Banner (real API failures are never hidden).
+            Lives outside the tab conditional so it surfaces on every tab. */}
         {actionError && (
-          <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 pt-4">
             <div className="flex items-start justify-between gap-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium">
               <span className="leading-relaxed">{actionError}</span>
               <button

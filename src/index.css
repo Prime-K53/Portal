@@ -233,7 +233,13 @@
   .no-print,
   [data-print-region] > .no-print,
   header.no-print,
-  nav.no-print {
+  nav.no-print,
+  /* Global app chrome must not bleed into the print output. */
+  body > header,
+  body > nav,
+  body > aside,
+  body > [role="dialog"] > .no-print,
+  .bottom-nav-print-hide {
     display: none !important;
   }
 
