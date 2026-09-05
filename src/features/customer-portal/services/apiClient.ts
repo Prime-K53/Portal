@@ -69,6 +69,14 @@ export interface ApiRequestOptions {
   signal?: AbortSignal;
   /** Do not attach the Authorization header (login/refresh endpoints). */
   skipAuth?: boolean;
+  /**
+   * Maximum retry attempts for transient errors (429 rate-limit, 5xx server
+   * errors, network failures, timeouts). Only used for GET / HEAD / OPTIONS
+   * requests — mutations are never retried automatically to avoid duplicate
+   * operations. Set to 0 to disable retry for a specific call.
+   * Default: 3.
+   */
+  maxRetries?: number;
 }
 
 export interface ApiClientDependencies {
@@ -143,7 +151,7 @@ async function normalizeError(response: Response): Promise<ApiError> {
   if (status === 401) code = 'UNAUTHORIZED';
   else if (status === 403) code = 'FORBIDDEN';
   else if (status === 404) code = 'NOT_FOUND';
-  else if (status === 429) code = 'BAD_REQUEST';
+  else if (status === 429) code = 'UNAVAILABLE'; // rate-limited — retryable
   else if (status >= 400 && status < 500) code = 'BAD_REQUEST';
   else if (status >= 500) code = 'SERVER_ERROR';
   else code = 'UNKNOWN';
@@ -217,41 +225,96 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
       );
     }
 
-    // Session-recovery gate — fails fast with the original stale-session
-    // reason when the auth layer has concluded the session is unrecoverable.
-    // Auth endpoints themselves (login/activate/refresh) are exempt: they are
-    // exactly how the user RECOVERS from that state.
-    const blocked = !options.skipAuth ? deps.requestGate?.() : null;
-    if (blocked) throw blocked;
+    const maxRetries = options.maxRetries ?? 3;
+    // Only GET, HEAD, and OPTIONS are retryable without risk of duplication.
+    // All other methods (POST/PUT/PATCH/DELETE) are fire-and-forget from the
+    // portal's perspective — the ERP is the authoritative idempotency layer.
+    const isIdempotent = ['GET', 'HEAD', 'OPTIONS'].includes(method);
 
-    let response = await perform(method, path, options, 1);
+    async function wait(ms: number): Promise<void> {
+      await new Promise((resolve) => setTimeout(resolve, ms));
+    }
 
-    // 401 → single-flight refresh (deps.refreshAccessToken) → retry exactly once.
-    // skipAuth calls (the login/refresh endpoints themselves) NEVER recurse into
-    // recovery: their 401 IS the terminal answer, and recursing would await the
-    // very rotation promise that is waiting on them — a self-deadlock.
-    if (response.status === 401 && !options.skipAuth) {
-      const freshToken = await deps.refreshAccessToken();
-      if (freshToken) {
-        response = await perform(method, path, options, 2);
+    function backoffWithJitter(attempt: number): number {
+      // Exponential: 500ms base, doubling per attempt, capped at 4s.
+      // ±25% jitter prevents thundering-herd synchronisation across tabs.
+      const base = Math.min(500 * 2 ** attempt, 4000);
+      const jitter = base * 0.25 * (Math.random() * 2 - 1);
+      return Math.round(base + jitter);
+    }
+
+    function isRetryable(error: ApiError): boolean {
+      return (
+        isIdempotent &&
+        maxRetries > 0 &&
+        (error.code === 'UNAVAILABLE' ||
+          error.code === 'SERVER_ERROR' ||
+          error.code === 'NETWORK_ERROR' ||
+          error.code === 'TIMEOUT')
+      );
+    }
+
+    let lastError: ApiError | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // Session-recovery gate — fails fast with the original stale-session
+      // reason when the auth layer has concluded the session is unrecoverable.
+      // Auth endpoints themselves (login/activate/refresh) are exempt: they are
+      // exactly how the user RECOVERS from that state.
+      const blocked = !options.skipAuth && attempt === 0 ? deps.requestGate?.() : null;
+      if (blocked) throw blocked;
+
+      try {
+        let response = await perform(method, path, options, attempt + 1);
+
+        // 401 → single-flight refresh → retry exactly once with the fresh token.
+        // skipAuth calls (login/refresh) NEVER recurse — their 401 IS terminal.
+        if (response.status === 401 && !options.skipAuth) {
+          const freshToken = await deps.refreshAccessToken();
+          if (freshToken) {
+            response = await perform(method, path, options, attempt + 2);
+          }
+        }
+
+        if (!response.ok) {
+          if (response.status === 401) deps.onAuthFailure?.({ skipAuth: !!options.skipAuth });
+          const terminated = !options.skipAuth ? deps.requestGate?.() : null;
+          if (terminated) throw terminated;
+
+          const error = await normalizeError(response);
+          if (isRetryable(error) && attempt < maxRetries) {
+            lastError = error;
+            const delay = backoffWithJitter(attempt);
+            await wait(delay);
+            continue;
+          }
+          throw error;
+        }
+
+        if (response.status === 204) return undefined as T;
+        try {
+          return (await response.json()) as T;
+        } catch {
+          return undefined as T;
+        }
+      } catch (error) {
+        // Network / timeout errors from `perform` are ApiErrors.
+        if (error instanceof ApiError) {
+          if (isRetryable(error) && attempt < maxRetries) {
+            lastError = error;
+            const delay = backoffWithJitter(attempt);
+            await wait(delay);
+            continue;
+          }
+          throw error;
+        }
+        // Non-ApiError from perform (should not happen, but defensive).
+        throw error;
       }
     }
 
-    if (!response.ok) {
-      if (response.status === 401) deps.onAuthFailure?.({ skipAuth: !!options.skipAuth });
-      // Prefer the ORIGINAL stale-session reason over the secondary
-      // headerless/invalid-token body whenever recovery has concluded.
-      const terminated = !options.skipAuth ? deps.requestGate?.() : null;
-      if (terminated) throw terminated;
-      throw await normalizeError(response);
-    }
-
-    if (response.status === 204) return undefined as T;
-    try {
-      return (await response.json()) as T;
-    } catch {
-      return undefined as T;
-    }
+    // All retries exhausted — surface the last error encountered.
+    throw lastError ?? new ApiError('Maximum retry attempts exceeded.', { code: 'UNAVAILABLE' });
   }
 
   return {

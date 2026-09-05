@@ -20,6 +20,10 @@
  *   VITE_ENABLE_MOCK_AUTH    DEVELOPMENT ONLY — set to 'true' to enable the
  *                            in-memory mock AuthService. Ignored when
  *                            VITE_USE_REAL_BACKEND=true.
+ *   VITE_SENTRY_DSN          Sentry Data Source Name for error tracking. When
+ *                            absent Sentry is not initialised (safe for local
+ *                            dev where npm run dev has no network). Set only
+ *                            in the production Vite environment.
  *
  * Session storage follows the ERP contract: sessionStorage key `portal_session`
  * holds the ERP envelope { access_token, refresh_token, expires_in, user }.
@@ -36,6 +40,8 @@ export interface AppEnv {
   readonly enableMockApi: boolean;
   /** DEVELOPMENT ONLY flag — routes authentication through the mock AuthService. */
   readonly enableMockAuth: boolean;
+  /** Sentry DSN — absent means error tracking is disabled. */
+  readonly sentryDsn: string | undefined;
   /** sessionStorage key for the ERP portal session envelope. */
   readonly sessionStorageKey: string;
 }
@@ -49,6 +55,7 @@ export const env: AppEnv = {
   enableMockApi: metaEnv.VITE_ENABLE_MOCK_API === 'true',
   enableMockAuth: metaEnv.VITE_ENABLE_MOCK_AUTH === 'true',
   sessionStorageKey: 'portal_session',
+  sentryDsn: metaEnv.VITE_SENTRY_DSN,
 };
 
 /**
