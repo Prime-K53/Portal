@@ -93,8 +93,8 @@ export function useCustomerData(overrides?: Partial<AccountProfile>): PortalQuer
   return query;
 }
 
-export function useInvoicesData(): PortalQueryResult<Invoice[]> {
-  return usePortalQuery(() => portalService.getInvoices(), []);
+export function useInvoicesData(enabled = true): PortalQueryResult<Invoice[]> {
+  return usePortalQuery(() => portalService.getInvoices(), [], enabled);
 }
 
 export function useInvoiceDetailData(invoiceId: string | null): PortalQueryResult<Invoice> {
@@ -113,36 +113,44 @@ export function useInvoiceDetailData(invoiceId: string | null): PortalQueryResul
   );
 }
 
-export function useOrdersData(): PortalQueryResult<Order[]> {
-  return usePortalQuery(() => portalService.getOrders(), []);
+export function useOrdersData(enabled = true): PortalQueryResult<Order[]> {
+  return usePortalQuery(() => portalService.getOrders(), [], enabled);
 }
 
 /**
  * Customer order REQUESTS (ODR-...) — submitted requests from the ERP request
  * pipeline. Distinct from official Sales Orders (useOrdersData).
  */
-export function useOrderRequestsData(): PortalQueryResult<OrderRequest[]> {
-  return usePortalQuery(() => portalService.getOrderRequests(), []);
+export function useOrderRequestsData(enabled = true): PortalQueryResult<OrderRequest[]> {
+  return usePortalQuery(() => portalService.getOrderRequests(), [], enabled);
 }
 
-export function useQuoteRequestsData(): PortalQueryResult<QuoteRequest[]> {
-  return usePortalQuery(() => portalService.getQuoteRequests(), []);
+export function useQuoteRequestsData(enabled = true): PortalQueryResult<QuoteRequest[]> {
+  return usePortalQuery(() => portalService.getQuoteRequests(), [], enabled);
 }
 
-export function useQuotationsData(): PortalQueryResult<Quotation[]> {
-  return usePortalQuery(() => portalService.getQuotations(), []);
+export function useQuotationsData(enabled = true): PortalQueryResult<Quotation[]> {
+  return usePortalQuery(() => portalService.getQuotations(), [], enabled);
 }
 
-export function useDeliveriesData(): PortalQueryResult<DeliveryNotification[]> {
-  return usePortalQuery(() => portalService.getDeliveries(), []);
+export function useDeliveriesData(enabled = true): PortalQueryResult<DeliveryNotification[]> {
+  return usePortalQuery(() => portalService.getDeliveries(), [], enabled);
 }
 
-export function useStatementsData(startDate?: string, endDate?: string): PortalQueryResult<StatementEntry[]> {
-  return usePortalQuery(() => portalService.getStatements(startDate, endDate), [startDate, endDate]);
+export function useStatementsData(
+  startDate?: string,
+  endDate?: string,
+  enabled = true
+): PortalQueryResult<StatementEntry[]> {
+  return usePortalQuery(
+    () => portalService.getStatements(startDate, endDate),
+    [startDate, endDate],
+    enabled
+  );
 }
 
-export function usePaymentsData(): PortalQueryResult<Payment[]> {
-  return usePortalQuery(() => portalService.getPayments(), []);
+export function usePaymentsData(enabled = true): PortalQueryResult<Payment[]> {
+  return usePortalQuery(() => portalService.getPayments(), [], enabled);
 }
 
 /**
@@ -154,24 +162,24 @@ export function usePaymentRequestsData(enabled = true): PortalQueryResult<Paymen
   return usePortalQuery(() => portalService.getPaymentRequests(), [], enabled);
 }
 
-export function useReferralsData(): PortalQueryResult<PortalReferral[]> {
-  return usePortalQuery(() => portalService.getReferrals(), []);
+export function useReferralsData(enabled = true): PortalQueryResult<PortalReferral[]> {
+  return usePortalQuery(() => portalService.getReferrals(), [], enabled);
 }
 
-export function useReferralStatsData(): PortalQueryResult<ReferralStats> {
-  return usePortalQuery(() => portalService.getReferralStats(), []);
+export function useReferralStatsData(enabled = true): PortalQueryResult<ReferralStats> {
+  return usePortalQuery(() => portalService.getReferralStats(), [], enabled);
 }
 
-export function useReferralRewardsData(): PortalQueryResult<ReferralReward[]> {
-  return usePortalQuery(() => portalService.getReferralRewards(), []);
+export function useReferralRewardsData(enabled = true): PortalQueryResult<ReferralReward[]> {
+  return usePortalQuery(() => portalService.getReferralRewards(), [], enabled);
 }
 
-export function useWalletData(): PortalQueryResult<Wallet> {
-  return usePortalQuery(() => portalService.getWallet(), []);
+export function useWalletData(enabled = true): PortalQueryResult<Wallet> {
+  return usePortalQuery(() => portalService.getWallet(), [], enabled);
 }
 
-export function useCatalogData(): PortalQueryResult<Product[]> {
-  return usePortalQuery(() => portalService.getCatalog(), []);
+export function useCatalogData(enabled = true): PortalQueryResult<Product[]> {
+  return usePortalQuery(() => portalService.getCatalog(), [], enabled);
 }
 
 export function useNotificationsData(): PortalQueryResult<PortalNotification[]> {
@@ -186,16 +194,16 @@ export function useLoyaltyData(): PortalQueryResult<ErpLoyalty> {
   return usePortalQuery(() => portalService.getLoyalty(), []);
 }
 
-export function useAdsData(): PortalQueryResult<PortalAd[]> {
-  return usePortalQuery(() => portalService.getAds(), []);
+export function useAdsData(enabled = true): PortalQueryResult<PortalAd[]> {
+  return usePortalQuery(() => portalService.getAds(), [], enabled);
 }
 
-export function useSupportTicketsData(): PortalQueryResult<SupportTicket[]> {
-  return usePortalQuery(() => portalService.getSupportTickets(), []);
+export function useSupportTicketsData(enabled = true): PortalQueryResult<SupportTicket[]> {
+  return usePortalQuery(() => portalService.getSupportTickets(), [], enabled);
 }
 
-export function useSupportArticlesData(): PortalQueryResult<SupportArticle[]> {
-  return usePortalQuery(() => portalService.getSupportArticles(), []);
+export function useSupportArticlesData(enabled = true): PortalQueryResult<SupportArticle[]> {
+  return usePortalQuery(() => portalService.getSupportArticles(), [], enabled);
 }
 
 export function useCompanyContactData(): PortalQueryResult<CompanyContactInfo | null> {

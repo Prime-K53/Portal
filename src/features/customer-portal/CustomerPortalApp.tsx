@@ -106,27 +106,63 @@ function CustomerPortalShell({
   const auth = useCustomerAuth();
   const { path, navigate } = useHashRoute();
 
+  // ── Routing (computed before data hooks so the per-tab enabled flags
+  //    below can reference the active tab on the very first render). ────
+  const defaultPath = pathForTab(initialTab);
+  const activeTab: TabType = tabFromPath(path) ?? tabFromPath(defaultPath) ?? 'dashboard';
+
   // ── Portal data (all reads flow through the PortalService boundary) ───────
+  //
+  // Query gating — the ERP /api/portal/* endpoints return HTTP 429 when a
+  // single JWT fires many requests in a short window. To prevent a busy
+  // dashboard from triggering 20+ concurrent GETs against the same customer
+  // session, ONLY the active tab's list queries subscribe to the SSE
+  // invalidation bus. The other hooks are silenced via `enabled=false`.
+  //
+  // Always-on (every tab): the customer profile, unread notification count,
+  // notifications drawer data, and company contact info — these are needed
+  // by the header, the bell badge, and the Support tab respectively.
+  //
+  // Dashboard-required: invoices, orders, order requests, deliveries,
+  // statements, catalog, ads. The DashboardTab renders KPIs (Outstanding
+  // Balance, Total Paid, Active Orders, Recent Deliveries, Account Snapshot)
+  // that depend on these queries, so they MUST be loaded whenever the
+  // dashboard could be visited. Treating them as always-on costs us 6
+  // extra fetches per session — acceptable given they refresh on every SSE
+  // event anyway.
+  //
+  // Per-tab gated (only fetched when that tab is active): quote-related,
+  // referral-related, payment-request, statements-detail, support articles
+  // + tickets. Switching to one of these tabs will trigger a fresh fetch;
+  // leaving the tab silences them.
+  //
+  // Tests: tests/conditionalQueryFetching.test.ts pins this contract.
+
+  // Always-on (header, bell, cross-tab UI).
   const customerQuery = useCustomerData(initialProfileData);
+  const notificationsQuery = useNotificationsData();
+  const unreadQuery = useUnreadNotificationCount();
+  const companyContactQuery = useCompanyContactData();
+
+  // Dashboard-required (Dashboard tab reads from these for KPIs + lists).
   const invoicesQuery = useInvoicesData();
   const deliveriesQuery = useDeliveriesData();
   const ordersQuery = useOrdersData();
   const orderRequestsQuery = useOrderRequestsData();
-  const quotationsQuery = useQuotationsData();
-  const quoteRequestsQuery = useQuoteRequestsData();
-  const statementsQuery = useStatementsData();
-  const paymentsQuery = usePaymentsData();
-  const referralsQuery = useReferralsData();
-  const referralStatsQuery = useReferralStatsData();
-  const referralRewardsQuery = useReferralRewardsData();
-  const walletQuery = useWalletData();
   const catalogQuery = useCatalogData();
-  const notificationsQuery = useNotificationsData();
-  const unreadQuery = useUnreadNotificationCount();
+  const statementsQuery = useStatementsData();
   const adsQuery = useAdsData();
-  const supportTicketsQuery = useSupportTicketsData();
-  const supportArticlesQuery = useSupportArticlesData();
-  const companyContactQuery = useCompanyContactData();
+
+  // Per-tab gated (only fetched when their tab is the active tab).
+  const quotationsQuery = useQuotationsData(activeTab === 'quotes');
+  const quoteRequestsQuery = useQuoteRequestsData(activeTab === 'quotes');
+  const paymentsQuery = usePaymentsData(activeTab === 'statements');
+  const referralsQuery = useReferralsData(activeTab === 'referrals');
+  const referralStatsQuery = useReferralStatsData(activeTab === 'referrals');
+  const referralRewardsQuery = useReferralRewardsData(activeTab === 'referrals');
+  const walletQuery = useWalletData(activeTab === 'referrals');
+  const supportTicketsQuery = useSupportTicketsData(activeTab === 'support');
+  const supportArticlesQuery = useSupportArticlesData(activeTab === 'support');
 
   // ── Live ERP events (SSE) ─────────────────────────────────────────────────
   usePortalEvents();
@@ -192,9 +228,7 @@ function CustomerPortalShell({
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // ── Routing ───────────────────────────────────────────────────────────────
-  const defaultPath = pathForTab(initialTab);
-  const activeTab: TabType = tabFromPath(path) ?? tabFromPath(defaultPath) ?? 'dashboard';
+  // ── Routing (activeTab already computed above for query gating) ────────
 
   // Tracks a monotonically-increasing nonce used to remount the Invoices tab
   // on every re-entry. Combined with the preset filter key, this gives us

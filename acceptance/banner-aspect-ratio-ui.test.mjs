@@ -4,7 +4,9 @@
  * Run with:   npx tsx acceptance/banner-aspect-ratio-ui.test.mjs
  *
  * Verifies the dashboard banner:
- *   - container is exactly 4:1 at desktop / laptop / tablet / mobile widths
+ *   - container is exactly 3:1 at desktop / laptop / tablet widths and 7:2
+ *     (3.5:1) on mobile — the mobile-specific aspect ratio is tighter to
+ *     reduce vertical space on small screens.
  *   - artwork fills the container without distortion (cover for >= 4:1,
  *     contain for legacy taller images like squares)
  *   - no layout shift while a slow image loads (container height reserved)
@@ -96,7 +98,9 @@ const pngs = {
   'square-400x400.png':   solidPng(400, 400, [40, 90, 180]),
 };
 
-const BANNER_SELECTOR = 'main [class*="aspect-[4/1]"]';
+// Mobile uses 7:2 (~3.5:1); everything ≥sm uses 3:1. We use the same
+// "aspect-[...]" attribute selector — both values match.
+const BANNER_SELECTOR = 'main [class*="aspect-[7/2]"], main [class*="aspect-[3/1]"]';
 
 async function bannerMetrics(page) {
   return page.evaluate((sel) => {
@@ -225,17 +229,18 @@ async function main() {
     executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
   });
 
-  // ── 1. Correct 4:1 banner across four viewports ──────────────────────────
-  for (const [label, viewport] of [
-    ['desktop', { width: 1920, height: 1080 }],
-    ['laptop', { width: 1440, height: 900 }],
-    ['tablet', { width: 768, height: 1024 }],
-    ['mobile', { width: 390, height: 844 }],
+  // ── 1. Correct banner across four viewports ─────────────────────────────
+  // Desktop / laptop / tablet use 3:1; mobile uses 7:2 (~3.5:1).
+  for (const [label, viewport, expectedRatio] of [
+    ['desktop', { width: 1920, height: 1080 }, 3],
+    ['laptop',  { width: 1440, height: 900 }, 3],
+    ['tablet',  { width: 768, height: 1024 }, 3],
+    ['mobile',  { width: 390, height: 844 }, 3.5],
   ]) {
     const { context, page, consoleErrors } = await openDashboard(browser, banners.correct, viewport);
     await page.waitForSelector(`${BANNER_SELECTOR} img[src*="correct-1600x400"]`, { timeout: 20000 });
     const m = await bannerMetrics(page);
-    check(`${label}: banner container is 4:1`, m && Math.abs(m.ratio - 4) < 0.01, `w=${m?.width.toFixed(1)} h=${m?.height.toFixed(1)} ratio=${m?.ratio.toFixed(4)}`);
+    check(`${label}: banner container is ${expectedRatio}:1`, m && Math.abs(m.ratio - expectedRatio) < 0.01, `w=${m?.width.toFixed(1)} h=${m?.height.toFixed(1)} ratio=${m?.ratio.toFixed(4)}`);
     check(`${label}: 1600x400 artwork loaded at natural ratio`, m?.hasImg && m.imgNatural.w === 1600 && m.imgNatural.h === 400, m?.hasImg ? `natural=${m.imgNatural.w}x${m.imgNatural.h}` : 'no img');
     check(`${label}: artwork fills without distortion (object-fit: cover)`, m?.objectFit === 'cover', `fit=${m?.objectFit}`);
     check(`${label}: no console errors`, consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
@@ -247,7 +252,7 @@ async function main() {
     const { context, page, consoleErrors } = await openDashboard(browser, banners.legacy, { width: 1440, height: 900 });
     await page.waitForSelector(`${BANNER_SELECTOR} img[src*="legacy-568x140"]`, { timeout: 20000 });
     const m = await bannerMetrics(page);
-    check('Legacy 568x140 (4.06:1): container still 4:1', m && Math.abs(m.ratio - 4) < 0.01, `ratio=${m?.ratio.toFixed(4)}`);
+    check('Legacy 568x140 (4.06:1): container still 3:1', m && Math.abs(m.ratio - 3) < 0.01, `ratio=${m?.ratio.toFixed(4)}`);
     check('Legacy 568x140: fills with object-cover (no stretch, no crop)', m?.objectFit === 'cover', `fit=${m?.objectFit}`);
     check('Legacy 568x140: no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
     await context.close();
@@ -257,7 +262,7 @@ async function main() {
     const { context, page, consoleErrors } = await openDashboard(browser, banners.wide, { width: 1440, height: 900 });
     await page.waitForSelector(`${BANNER_SELECTOR} img[src*="wide-3200x400"]`, { timeout: 20000 });
     const m = await bannerMetrics(page);
-    check('Very wide 3200x400 (8:1): container still 4:1', m && Math.abs(m.ratio - 4) < 0.01, `ratio=${m?.ratio.toFixed(4)}`);
+    check('Very wide 3200x400 (8:1): container still 3:1', m && Math.abs(m.ratio - 3) < 0.01, `ratio=${m?.ratio.toFixed(4)}`);
     check('Very wide 3200x400: fills with object-cover (no stretch)', m?.objectFit === 'cover', `fit=${m?.objectFit}`);
     check('Very wide 3200x400: no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
     await context.close();
@@ -267,7 +272,7 @@ async function main() {
     const { context, page, consoleErrors } = await openDashboard(browser, banners.square, { width: 1440, height: 900 });
     await page.waitForSelector(`${BANNER_SELECTOR} img[src*="square-400x400"]`, { timeout: 20000 });
     const m = await bannerMetrics(page);
-    check('Square 400x400 (legacy): container still 4:1', m && Math.abs(m.ratio - 4) < 0.01, `ratio=${m?.ratio.toFixed(4)}`);
+    check('Square 400x400 (legacy): container still 3:1', m && Math.abs(m.ratio - 3) < 0.01, `ratio=${m?.ratio.toFixed(4)}`);
     check('Square 400x400: object-contain — full image visible, NEVER cropped', m?.objectFit === 'contain', `fit=${m?.objectFit}`);
     check('Square 400x400: no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
     await context.close();
@@ -281,7 +286,7 @@ async function main() {
     const dashboardOk = await page.evaluate(
       () => document.body.innerText.length > 300 && !/Failed to load|Something went wrong/i.test(document.body.innerText)
     );
-    check('Missing image: banner container intact at 4:1', m && Math.abs(m.ratio - 4) < 0.01, `ratio=${m?.ratio?.toFixed(4)}`);
+    check('Missing image: banner container intact at 3:1', m && Math.abs(m.ratio - 3) < 0.01, `ratio=${m?.ratio?.toFixed(4)}`);
     check('Missing image: broken <img> removed — gradient fallback shown', m?.hasImg === false);
     check('Missing image: dashboard unaffected', dashboardOk);
     const unexpected = consoleErrors.filter((e) => !/404|banner\.test/i.test(e));
@@ -293,21 +298,21 @@ async function main() {
   {
     const { context, page, consoleErrors, imgRequests } = await openDashboard(browser, banners.correct, { width: 1440, height: 900 }, 2500);
     await page.waitForFunction(
-      () => document.querySelector('[class*="aspect-[4/1]"] img') !== null,
+      () => document.querySelector('[class*="aspect-[3/1]"] img, [class*="aspect-[7/2]"] img') !== null,
       { timeout: 20000 }
     );
     // The img element is in the DOM but its response is still pending (2.5s delay).
     await page.waitForTimeout(400);
     const before = await bannerMetrics(page);
     await page.waitForFunction(() => {
-      const img = document.querySelector('[class*="aspect-[4/1]"] img');
+      const img = document.querySelector('[class*="aspect-[3/1]"] img, [class*="aspect-[7/2]"] img');
       return img && img.complete && img.naturalWidth > 0;
     }, { timeout: 20000 });
     await page.waitForTimeout(300);
     const after = await bannerMetrics(page);
     check('Slow image: height reserved BEFORE load (no layout jump)', before && after && Math.abs(before.height - after.height) < 1, `before h=${before?.height.toFixed(1)} after h=${after?.height.toFixed(1)}`);
     check('Slow image: content below banner did not shift', before && after && before.nextTop !== null && Math.abs(before.nextTop - after.nextTop) < 1, `before top=${before?.nextTop?.toFixed(1)} after top=${after?.nextTop?.toFixed(1)}`);
-    check('Slow image: final render is 4:1', after && Math.abs(after.ratio - 4) < 0.01, `ratio=${after?.ratio.toFixed(4)}`);
+    check('Slow image: final render is 3:1', after && Math.abs(after.ratio - 3) < 0.01, `ratio=${after?.ratio.toFixed(4)}`);
     check('Slow image: no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
     await context.close();
   }
