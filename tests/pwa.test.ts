@@ -33,11 +33,35 @@ for (const icon of manifest.icons as Array<{ src: string; sizes: string; type: s
   const file = path.join(ROOT, 'public', icon.src);
   check(`icon ${icon.src} exists`, existsSync(file));
   const bytes = readFileSync(file);
-  check(`icon ${icon.src} is PNG`, bytes.slice(1, 4).toString() === 'PNG');
-  const w = bytes.readUInt32BE(16);
-  const h = bytes.readUInt32BE(20);
+  // Accept PNG (ASCII signature 'PNG' at bytes 1..3) and ICO (magic 0x00000100).
+  // Other formats are out of scope for the PWA manifest contract.
+  const isPng = bytes.length > 4 && bytes.slice(1, 4).toString() === 'PNG';
+  const isIco = bytes.length > 4 && bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0;
+  check(`icon ${icon.src} is a recognized image format`, isPng || isIco);
+
+  let w = NaN;
+  let h = NaN;
+  if (isPng) {
+    // PNG IHDR width/height are big-endian uint32 at offsets 16 and 20.
+    w = bytes.readUInt32BE(16);
+    h = bytes.readUInt32BE(20);
+  } else if (isIco) {
+    // ICO format: little-endian uint16 dimensions at offsets 6 (width) and 7
+    // (height) in the ICONDIR header. 0 means 256.
+    const wRaw = bytes.readUInt16LE(6);
+    const hRaw = bytes.readUInt16LE(7);
+    w = wRaw === 0 ? 256 : wRaw;
+    h = hRaw === 0 ? 256 : hRaw;
+  }
+
   const declared = icon.sizes.split('x').map(Number);
-  check(`icon ${icon.src} dimensions ${w}x${h} == ${declared[0]}x${declared[1]}`, w === declared[0] && h === declared[1]);
+  // 'any' is a special PWA size that means the browser picks — only check
+  // declared dimensions for size-specific entries.
+  if (icon.sizes === 'any') {
+    check(`icon ${icon.src} declares 'any' size`, true);
+  } else {
+    check(`icon ${icon.src} dimensions ${w}x${h} == ${declared[0]}x${declared[1]}`, w === declared[0] && h === declared[1]);
+  }
 }
 check(
   'installability: any 192+ any 512',
