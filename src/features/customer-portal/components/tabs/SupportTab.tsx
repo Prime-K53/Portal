@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { CompanyContactInfo, NewSupportTicketPayload, SupportArticle, SupportTicket, SupportTicketCategory } from '../../types';
 import { formatDate, formatRelativeTime } from '../../utils/formatters';
+import { StatusBadge } from '../ui';
 
 interface SupportTabProps {
   tickets: SupportTicket[];
@@ -32,13 +33,6 @@ const CATEGORY_LABELS: Record<SupportTicketCategory, string> = {
   order: 'Order',
   product: 'Product',
   other: 'Other',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  open: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
-  in_progress: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-  resolved: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  closed: 'bg-slate-100 text-slate-500',
 };
 
 function normalizeWhatsAppNumber(phone: string | null | undefined): string | null {
@@ -399,9 +393,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg ${STATUS_COLORS[ticket.status] ?? 'bg-slate-100 text-slate-500'}`}>
-                          {ticket.status.replace('_', ' ')}
-                        </span>
+                        <StatusBadge status={ticket.status} type="ticket" />
                         {isExpanded ? (
                           <ChevronDown className="w-4 h-4 text-slate-400" />
                         ) : (

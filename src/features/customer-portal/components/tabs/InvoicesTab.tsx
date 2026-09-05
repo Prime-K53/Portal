@@ -9,11 +9,12 @@ import {
   Search,
 } from 'lucide-react';
 import { Invoice } from '../../types';
-import { formatCurrency, formatDate, getInvoiceStatusBadge } from '../../utils/formatters';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadOfficialDocument } from '../../utils/officialDocument';
 import { exportToCSV } from '../../utils/exportUtils';
 import { canRequestPayment } from '../../utils/paymentRequest';
 import { getCachedInvoiceItems } from '../../hooks/usePortalData';
+import { StatusBadge, EmptyState, SectionHeader } from '../ui';
 
 export type InvoiceFilter = 'all' | 'unpaid' | 'overdue' | 'paid';
 
@@ -177,14 +178,15 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
       {/* 4. Invoice List */}
       <div className="space-y-3 pt-1">
         {filteredInvoices.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-slate-500 space-y-2">
-            <FileText className="w-10 h-10 mx-auto stroke-1 text-slate-400" />
-            <p className="font-bold text-sm text-slate-700">No invoices found</p>
-            <p className="text-xs text-slate-500">Try adjusting your search query or selected tab filter.</p>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-card">
+            <EmptyState
+              icon={FileText}
+              title="No invoices found"
+              description="Try adjusting your search query or selected tab filter."
+            />
           </div>
         ) : (
           filteredInvoices.map((inv) => {
-            const statusInfo = getInvoiceStatusBadge(inv.status);
             const isPayable = inv.status === 'unpaid' || inv.status === 'overdue' || inv.status === 'partially_paid';
             const isNew = (() => {
               const issued = new Date(inv.issueDate);
@@ -208,9 +210,7 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
                           NEW
                         </span>
                       )}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
-                        {statusInfo.label}
-                      </span>
+                      <StatusBadge status={inv.status} type="invoice" />
                     </div>
                     <p className="text-[12.5px] text-slate-500 mt-0.5">Issued on {formatDate(inv.issueDate)}</p>
                   </div>

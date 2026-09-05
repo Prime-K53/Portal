@@ -9,8 +9,9 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { Quotation, QuoteRequest } from '../../types';
-import { formatCurrency, formatDate, getQuoteStatusBadge } from '../../utils/formatters';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadOfficialDocument } from '../../utils/officialDocument';
+import { StatusBadge } from '../ui';
 
 type QuoteTab = 'submitted' | 'converted';
 
@@ -181,7 +182,6 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
           [...visible]
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .map((q) => {
-              const statusInfo = getQuoteStatusBadge(q.status);
               const isActionable = q.isQuotation && q.status === 'quoted';
 
               return (
@@ -193,15 +193,13 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
                       : quoteRequests.find((qr) => qr.id === q.id);
                     if (original) onSelectQuotation(original);
                   }}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition"
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-card cursor-pointer hover:border-indigo-300 hover:shadow-card-hover transition"
                 >
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-sm text-slate-900">{q.number}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.bg}`}>
-                          {statusInfo.label}
-                        </span>
+                        <StatusBadge status={q.status} type="quote" />
                       </div>
                       <p className="text-[12.5px] text-slate-500 mt-0.5">
                         {q.isQuotation ? 'Issued' : 'Requested'} on {formatDate(q.date)}

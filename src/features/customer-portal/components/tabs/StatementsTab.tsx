@@ -1,8 +1,9 @@
 import React from 'react';
-import { Calendar, CheckCircle2, ChevronRight, Clock, FileSpreadsheet, FileText, Filter, Printer, Receipt, ShieldCheck } from 'lucide-react';
+import { Calendar, ChevronRight, Clock, FileSpreadsheet, FileText, Receipt } from 'lucide-react';
 import { AccountProfile, StatementEntry } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { exportToCSV } from '../../utils/exportUtils';
+import { KpiCard, SectionHeader } from '../ui';
 
 interface StatementsTabProps {
   profile: AccountProfile;
@@ -93,82 +94,46 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
 
   return (
     <div className="space-y-4 pb-20 text-slate-900">
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-200/80 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-emerald-700 text-white shadow-xs">
-            <FileText className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Account Financial Statements</h2>
-            <p className="text-xs text-slate-500">Audit debit/credit transactions, filter ledger periods, and download official statements</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportCSV}
-            className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 font-extrabold text-xs shadow-2xs flex items-center gap-1.5 transition"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span className="hidden sm:inline">Export CSV</span>
-          </button>
-
-          <button
-            onClick={onOpenStatementPrintModal}
-            className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 transition"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Print / Save PDF</span>
-          </button>
-        </div>
-      </div>
+      <SectionHeader
+        icon={FileText}
+        iconBg="bg-emerald-700"
+        title="Account Financial Statements"
+        subtitle="Audit debit/credit transactions, filter ledger periods, and download official statements"
+        action={
+          <>
+            <button
+              onClick={handleExportCSV}
+              className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 font-extrabold text-xs shadow-card flex items-center gap-1.5 transition"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
+            <button
+              onClick={onOpenStatementPrintModal}
+              className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-card flex items-center gap-1.5 transition"
+            >
+              <Receipt className="w-4 h-4" />
+              <span>Print / Save PDF</span>
+            </button>
+          </>
+        }
+      />
 
       {/* Outstanding & Total Payment KPI */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Outstanding Card */}
-        <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-2xs ${
-          isFullyPaid ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-100'
-        }`}>
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-black uppercase tracking-wider block ${
-              isFullyPaid ? 'text-emerald-700' : 'text-rose-700'
-            }`}>
-              OUTSTANDING
-            </span>
-            <div className={`p-1.5 rounded-full ${
-              isFullyPaid ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-100 text-rose-600'
-            }`}>
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className={`text-xl font-black mt-1 tabular-nums ${
-            isFullyPaid ? 'text-emerald-700' : 'text-rose-700'
-          }`}>
-             {formatCurrency(outstandingBalance)}
-          </div>
-          <div className={`text-xs font-bold mt-1 ${
-            isFullyPaid ? 'text-emerald-600' : 'text-rose-600'
-          }`}>
-            {isFullyPaid ? 'Fully Settled' : 'Has Outstanding Balance'}
-          </div>
-        </div>
-
-        {/* Total Payment Card */}
-        <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-2xs bg-white border-slate-200`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-wider block text-slate-600">
-              TOTAL PAYMENT
-            </span>
-            <div className="p-1.5 rounded-full bg-slate-100 text-slate-500">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-xl font-black mt-1 tabular-nums text-slate-900">
-            {formatCurrency(totalPayment)}
-          </div>
-          <div className="text-xs font-bold mt-1 flex items-center gap-1 text-slate-500">
-            All time
-          </div>
-        </div>
+        <KpiCard
+          label="OUTSTANDING"
+          value={formatCurrency(outstandingBalance)}
+          hint={isFullyPaid ? 'Fully Settled' : 'Has Outstanding Balance'}
+          variant={isFullyPaid ? 'success' : 'danger'}
+          icon={Clock}
+        />
+        <KpiCard
+          label="TOTAL PAYMENT"
+          value={formatCurrency(totalPayment)}
+          hint="All time"
+          icon={Receipt}
+        />
       </div>
 
       {/* Date Range Selection Bar */}

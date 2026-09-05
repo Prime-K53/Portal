@@ -26,7 +26,7 @@ import {
 } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { generateIdempotencyKey } from '../../utils/idempotency';
-import { getReferralStatusBadge, getRewardStatusBadge } from '../../utils/referral';
+import { StatusBadge } from '../ui';
 import { ReferralCodeCard } from './ReferralCodeCard';
 
 interface ReferralsTabProps {
@@ -400,7 +400,6 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
         ) : (
           <ul className="divide-y divide-slate-100">
             {referrals.map((referral) => {
-              const statusBadge = getReferralStatusBadge(referral.status);
               const isExpanded = expandedTimelineId === referral.id;
               const timeline = timelines[referral.id];
               return (
@@ -417,10 +416,8 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                         {referral.referredCustomerEmail || referral.referredCustomerPhone || 'No contact'} · Referred {formatDate(referral.createdAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${statusBadge.bg}`}>
-                        {statusBadge.label}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <StatusBadge status={referral.status} type="referral" />
                       {isExpanded ? (
                         <ChevronDown className="h-4 w-4 text-slate-400" />
                       ) : (
@@ -514,9 +511,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {rewards.map((reward) => {
-              const statusBadge = getRewardStatusBadge(reward.status);
-              return (
+            {rewards.map((reward) => (
                 <li key={reward.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <p className="text-sm font-black text-slate-900 finance-nums">
@@ -527,12 +522,9 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                       {reward.invoiceId ? ` · ${reward.invoiceId}` : ''}
                     </p>
                   </div>
-                  <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${statusBadge.bg}`}>
-                    {statusBadge.label}
-                  </span>
+                  <StatusBadge status={reward.status} type="reward" dot={false} />
                 </li>
-              );
-            })}
+            ))}
           </ul>
         )}
       </div>
