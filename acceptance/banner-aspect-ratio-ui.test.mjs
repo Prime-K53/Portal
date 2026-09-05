@@ -98,9 +98,8 @@ const pngs = {
   'square-400x400.png':   solidPng(400, 400, [40, 90, 180]),
 };
 
-// Mobile uses 7:2 (~3.5:1); everything ≥sm uses 3:1. We use the same
-// "aspect-[...]" attribute selector — both values match.
-const BANNER_SELECTOR = 'main [class*="aspect-[7/2]"], main [class*="aspect-[3/1]"]';
+// All viewports use 3:1 aspect ratio.
+const BANNER_SELECTOR = 'main [class*="aspect-[3/1]"]';
 
 async function bannerMetrics(page) {
   return page.evaluate((sel) => {
@@ -298,14 +297,14 @@ async function main() {
   {
     const { context, page, consoleErrors, imgRequests } = await openDashboard(browser, banners.correct, { width: 1440, height: 900 }, 2500);
     await page.waitForFunction(
-      () => document.querySelector('[class*="aspect-[3/1]"] img, [class*="aspect-[7/2]"] img') !== null,
+      () => document.querySelector('[class*="aspect-[3/1]"] img') !== null,
       { timeout: 20000 }
     );
     // The img element is in the DOM but its response is still pending (2.5s delay).
     await page.waitForTimeout(400);
     const before = await bannerMetrics(page);
     await page.waitForFunction(() => {
-      const img = document.querySelector('[class*="aspect-[3/1]"] img, [class*="aspect-[7/2]"] img');
+      const img = document.querySelector('[class*="aspect-[3/1]"] img');
       return img && img.complete && img.naturalWidth > 0;
     }, { timeout: 20000 });
     await page.waitForTimeout(300);

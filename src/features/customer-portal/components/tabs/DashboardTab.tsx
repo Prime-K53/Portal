@@ -330,7 +330,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           aria-live="polite"
           aria-label="Announcements and account updates"
           tabIndex={bannerSlides.length > 1 ? 0 : -1}
-          className="relative aspect-[7/2] sm:aspect-[3/1] rounded-2xl bg-white p-[2px] shadow-md shadow-slate-900/5 ring-1 ring-slate-200/70 transition-all duration-500 group w-full"
+          className="relative aspect-[3/1] rounded-2xl bg-white p-[2px] shadow-md shadow-slate-900/5 ring-1 ring-slate-200/70 transition-all duration-500 group w-full"
          >
           <div className="relative overflow-hidden rounded-[calc(1rem-2px)] w-full h-full bg-slate-900">
           <div
