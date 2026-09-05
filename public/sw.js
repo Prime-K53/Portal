@@ -9,10 +9,11 @@
  *
  * Version bump the CACHE_NAME to invalidate everything on deploy.
  */
-const CACHE_NAME = 'prime-portal-v2';
+const CACHE_NAME = 'prime-portal-v3';
 const PRECACHE = [
   '/offline.html',
   '/manifest.webmanifest',
+  '/favicon.ico',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];
