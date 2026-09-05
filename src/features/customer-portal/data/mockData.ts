@@ -20,7 +20,7 @@ export const initialProfile: AccountProfile = {
   address: '100 Logistics Way, Suite 800, Chicago, IL 60601',
   creditLimit: 10000,
   currentBalance: 5320.00,
-  tier: 'Gold Partner',
+  tier: 'Individual',
   accountManager: {
     name: 'Sarah Jenkins',
     email: 's.jenkins@apexprint.com',

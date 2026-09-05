@@ -70,7 +70,7 @@ export interface AuthRegisterInput {
   email: string;
   password: string;
   phone?: string;
-  tier?: 'Gold Partner' | 'Silver Member' | 'Platinum Preferred';
+  tier?: 'Individual' | 'School Account' | 'Institution' | 'Government';
   /** Referral code used during self-service registration, if any. */
   referredByCode?: string;
 }

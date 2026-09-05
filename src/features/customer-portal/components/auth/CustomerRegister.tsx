@@ -297,9 +297,10 @@ export function CustomerRegister() {
               disabled={submitting}
             >
               <option value="">Select account type...</option>
-              <option value="Platinum Preferred">Platinum Preferred</option>
-              <option value="Gold Partner">Gold Partner</option>
-              <option value="Silver Member">Silver Member</option>
+              <option value="Individual">Individual</option>
+              <option value="School Account">School Account</option>
+              <option value="Institution">Institution</option>
+              <option value="Government">Government</option>
             </select>
           </div>
         </div>
