@@ -220,8 +220,8 @@ export const SupportTab: React.FC<SupportTabProps> = ({
     Boolean(getWhatsAppUrl(companyContact?.whatsapp));
 
   return (
-    <div className="min-h-full bg-slate-50/50">
-      <div className="px-5 py-6 max-w-2xl mx-auto">
+    <div className="min-h-full bg-slate-50/50 pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
+      <div className="px-3 sm:px-5 py-5 sm:py-6 max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 shadow-lg shadow-slate-900/20">
             <Headphones className="h-5 w-5 text-white" />
@@ -239,7 +239,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 mb-6">
           {companyContact?.email && (
             <a
               href={`mailto:${companyContact.email}`}

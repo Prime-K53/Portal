@@ -157,15 +157,15 @@ export const AccountTab: React.FC<AccountTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-20 text-slate-900">
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-slate-900 text-white shadow-xs">
+    <div className="space-y-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] text-slate-900">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 pb-3 border-b border-slate-200/80">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2.5 rounded-2xl bg-slate-900 text-white shadow-xs shrink-0">
             <User className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Account & Company Profile</h2>
-            <p className="text-xs text-slate-500">Company credentials, assigned account manager, and payment terms configuration</p>
+          <div className="min-w-0">
+            <h2 className="text-xl font-black text-slate-900 tracking-tight truncate">Account & Company Profile</h2>
+            <p className="text-xs text-slate-500 truncate">Company credentials, assigned account manager, and payment terms configuration</p>
           </div>
         </div>
 
@@ -173,7 +173,7 @@ export const AccountTab: React.FC<AccountTabProps> = ({
           <button
             type="button"
             onClick={onSignOut}
-            className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl font-bold text-xs flex items-center gap-2 transition shrink-0"
+            className="self-end sm:self-auto px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl font-bold text-xs flex items-center gap-2 transition shrink-0"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>
@@ -286,7 +286,7 @@ export const AccountTab: React.FC<AccountTabProps> = ({
         </h3>
 
         <form onSubmit={handleChangePassword} className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-2.5">
             <PasswordField
               id="current-password"
               label="Current Password"

@@ -274,7 +274,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const isFullyPaid = outstandingTotal === 0;
 
   return (
-    <div className="space-y-4 sm:space-y-5 pb-24 text-slate-900 animate-fade-in">
+    <div className="space-y-4 sm:space-y-5 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] text-slate-900 animate-fade-in">
 
       {/* ═══ 1. HEADER — Company Identity ═══════════════════════════════════ */}
       <div className="flex items-center justify-between gap-3 min-w-0">
@@ -330,9 +330,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           aria-live="polite"
           aria-label="Announcements and account updates"
           tabIndex={bannerSlides.length > 1 ? 0 : -1}
-          className="relative aspect-[3/1] rounded-2xl bg-white p-[4px] shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/5 transition-all duration-500 group w-full"
+          className="relative aspect-[7/2] sm:aspect-[3/1] rounded-2xl bg-white p-[2px] shadow-md shadow-slate-900/5 ring-1 ring-slate-200/70 transition-all duration-500 group w-full"
          >
-          <div className="relative overflow-hidden rounded-[calc(1rem-4px)] w-full h-full bg-slate-900">
+          <div className="relative overflow-hidden rounded-[calc(1rem-2px)] w-full h-full bg-slate-900">
           <div
             key={activeSlide.id}
             className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
@@ -340,36 +340,36 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <BannerBackground slide={activeSlide} />
             {(activeSlide.title || activeSlide.subtitle || activeSlide.emoji || activeSlide.onCta) && (
               <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
-                <div className="w-full px-5 sm:px-8 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
+                <div className="w-full px-3.5 sm:px-8 flex items-center justify-between gap-3 sm:gap-4">
+                  <div className="flex items-center gap-3.5 sm:gap-5 min-w-0 flex-1">
                     {!activeSlide.imageUrl && (
-                      <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-lg shadow-black/20">
+                      <div className="hidden sm:flex shrink-0 w-14 h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/25 items-center justify-center shadow-lg shadow-black/20">
                         {activeSlide.emoji ? (
-                          <span className="text-2xl sm:text-3xl leading-none">{activeSlide.emoji}</span>
+                          <span className="text-3xl leading-none">{activeSlide.emoji}</span>
                         ) : (
-                          <Star className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white/80" />
+                          <Star className="w-7 h-7 text-white fill-white/80" />
                         )}
                       </div>
                     )}
-                    <div className="space-y-1 sm:space-y-1.5 min-w-0">
+                    <div className="space-y-0.5 sm:space-y-1.5 min-w-0 flex-1">
                       {activeSlide.badge && !activeSlide.imageUrl && (
-                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-black uppercase tracking-[0.14em] ${activeSlide.badgeBg}`}>
+                        <div className={`hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-[0.14em] ${activeSlide.badgeBg}`}>
                           <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
                           {activeSlide.badge}
                         </div>
                       )}
                       {activeSlide.title && !activeSlide.imageUrl && (
-                        <h2 className="text-base sm:text-xl font-black text-white tracking-tight leading-snug drop-shadow-md truncate">
+                        <h2 className="text-[13px] sm:text-xl font-black text-white tracking-tight leading-tight sm:leading-snug drop-shadow-md truncate">
                           {activeSlide.title}
                         </h2>
                       )}
                       {activeSlide.subtitle && !activeSlide.imageUrl && (
-                        <p className="text-xs sm:text-sm text-white/85 font-medium drop-shadow-sm line-clamp-2">
+                        <p className="hidden sm:block text-sm text-white/85 font-medium drop-shadow-sm line-clamp-2">
                           {activeSlide.subtitle}
                         </p>
                       )}
                       {activeSlide.extra && (
-                        <p className="text-[11px] sm:text-xs text-amber-300 font-semibold pt-0.5 drop-shadow-sm">
+                        <p className="hidden sm:block text-xs text-amber-300 font-semibold pt-0.5 drop-shadow-sm truncate">
                           {activeSlide.extra}
                         </p>
                       )}
@@ -378,7 +378,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   {activeSlide.onCta && activeSlide.ctaLabel && !activeSlide.imageUrl && (
                     <button
                       onClick={activeSlide.onCta}
-                      className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/25 text-xs font-black text-white transition-all shadow-lg shadow-black/10 hover:shadow-black/20"
+                      className="hidden sm:inline-flex shrink-0 items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/25 text-xs font-black text-white transition-all shadow-lg shadow-black/10 hover:shadow-black/20"
                     >
                       <span>{activeSlide.ctaLabel}</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -412,7 +412,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <div
             role="tablist"
             aria-label="Slide selector"
-            className="flex justify-center items-center mt-3.5 gap-2"
+            className="flex justify-center items-center mt-2 sm:mt-3.5 gap-2"
           >
             {bannerSlides.map((slide, idx) => (
               <button
@@ -450,7 +450,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <div className="absolute top-3 right-3 sm:top-4 sm:right-4 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div className="flex items-center gap-3 sm:gap-5 min-w-0 pr-12 sm:pr-14">
+          <div className="flex items-center gap-3 sm:gap-5 min-w-0 pr-11 sm:pr-14">
             {/* Outstanding Balance — left half, rose (money owed) */}
             <button
               type="button"
@@ -460,11 +460,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                 Outstanding Balance
               </p>
-              <p className="text-[clamp(1.125rem,4.5vw,1.5rem)] font-black text-rose-600 leading-tight currency-display truncate">
+              <p className="text-[clamp(1rem,4.2vw,1.5rem)] font-black text-rose-600 leading-tight currency-display">
                 {formatCurrencyCompact(outstandingTotal)}
               </p>
               {overdueInvoices.length > 0 ? (
-                <p className="text-[10px] font-bold text-rose-600 mt-1.5 flex items-center gap-1 truncate">
+                <p className="text-[10px] font-bold text-rose-600 mt-1.5 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3 shrink-0" />
                   <span className="truncate">{overdueInvoices.length} Overdue</span>
                 </p>
@@ -486,7 +486,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                 Total Paid
               </p>
-              <p className="text-[clamp(1.125rem,4.5vw,1.5rem)] font-black text-emerald-600 leading-tight currency-display truncate">
+              <p className="text-[clamp(1rem,4.2vw,1.5rem)] font-black text-emerald-600 leading-tight currency-display">
                 {formatCurrencyCompact(totalPayment)}
               </p>
               <p className="text-[10px] font-medium text-slate-400 mt-1.5">All time</p>
@@ -505,12 +505,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               type="button"
               onClick={go}
               aria-label={label}
-              className="group flex flex-col items-center justify-center gap-1.5 p-2 sm:p-2.5 bg-white border border-slate-200/60 rounded-xl hover:border-slate-300 hover:shadow-sm active:scale-95 transition-all min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="group flex flex-col items-center justify-center gap-1.5 p-2 sm:p-2.5 bg-white border border-slate-200/60 rounded-xl hover:border-slate-300 hover:shadow-sm active:scale-95 transition-all min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[68px] sm:min-h-0"
             >
               <span className={`shrink-0 p-2 sm:p-2.5 rounded-xl transition-colors ${chip}`} aria-hidden="true">
                 <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
               </span>
-              <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-center leading-tight w-full truncate">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-center leading-tight w-full line-clamp-2 break-words">
                 {label}
               </span>
             </button>

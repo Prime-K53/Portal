@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   CheckCircle2,
+  ChevronRight,
   Download,
   FileSpreadsheet,
   MessageSquareQuote,
@@ -218,7 +219,9 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
                     <span className="text-[11.5px] text-slate-400 font-medium">
                       {q.itemsCount} line item{q.itemsCount !== 1 ? 's' : ''}
                     </span>
-                    <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
+                    <span className="inline-flex items-center gap-0.5 text-[11.5px] text-indigo-600 font-bold">
+                      View details <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </span>
                   </div>
 
                   {/* Actions */}

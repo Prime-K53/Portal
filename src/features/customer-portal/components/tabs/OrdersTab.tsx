@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Eye,
   FileText,
@@ -881,7 +882,9 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           <span className="text-[11.5px] text-slate-400 font-medium">
                             {request.items.length} line item{request.items.length !== 1 ? 's' : ''}
                           </span>
-                          <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
+                          <span className="inline-flex items-center gap-0.5 text-[11.5px] text-indigo-600 font-bold">
+                          View details <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+                        </span>
                         </div>
 
                         <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
@@ -981,7 +984,9 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                           <span className="text-[11.5px] text-slate-400 font-medium">
                             {order.items.length} line item{order.items.length !== 1 ? 's' : ''}
                           </span>
-                          <span className="text-[11.5px] text-indigo-600 font-bold">View details →</span>
+                          <span className="inline-flex items-center gap-0.5 text-[11.5px] text-indigo-600 font-bold">
+                          View details <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+                        </span>
                         </div>
 
                         <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
@@ -1020,21 +1025,24 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
 
       {/* Floating Bottom Cart Bar */}
       {totalCartCount > 0 && (
-        <div className="fixed bottom-16 left-0 right-0 z-20 p-3 bg-slate-950/95 text-white border-t border-slate-800 backdrop-blur-md shadow-2xl animate-slide-up">
+        <div className="fixed left-0 right-0 z-50 p-2.5 sm:p-3 bg-slate-950/95 text-white border-t border-slate-800 backdrop-blur-md shadow-2xl animate-slide-up bottom-nav-print-hide"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+        >
           <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-400 text-slate-950 rounded-xl font-black text-xs shadow-xs">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="p-2 sm:p-2.5 bg-amber-400 text-slate-950 rounded-xl font-black text-xs shadow-xs shrink-0">
                 <ShoppingCart className="w-5 h-5" />
               </div>
-              <div>
-                <span className="text-xs font-black block">{totalCartCount} Item(s) in Order Cart</span>
-                <span className="text-[11.5px] text-indigo-200 font-medium">Ready for quick account checkout</span>
+              <div className="min-w-0">
+                <span className="text-xs font-black block truncate">{totalCartCount} Item(s) in Order Cart</span>
+                <span className="text-[11px] sm:text-[11.5px] text-indigo-200 font-medium truncate block">Ready for checkout</span>
               </div>
             </div>
             <button
               onClick={onOpenCart}
-              className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-md flex items-center gap-1.5 transition"
+              className="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-md flex items-center gap-1.5 transition shrink-0"
             >
+              <span className="hidden xs:inline sm:hidden">Cart</span>
               <span>View Cart & Checkout</span>
             </button>
           </div>

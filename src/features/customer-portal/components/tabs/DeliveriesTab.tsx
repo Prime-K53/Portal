@@ -16,7 +16,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ deliveries }) => {
   };
 
   return (
-    <div className="space-y-4 pb-20 text-slate-900">
+    <div className="space-y-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] text-slate-900">
       <SectionHeader
         icon={Truck}
         title="Deliveries"

@@ -93,7 +93,7 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-20 text-slate-900">
+    <div className="space-y-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] text-slate-900">
       <SectionHeader
         icon={FileText}
         iconBg="bg-emerald-700"

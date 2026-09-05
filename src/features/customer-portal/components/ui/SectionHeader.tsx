@@ -31,21 +31,21 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`flex items-center justify-between gap-3 pb-3 border-b border-slate-200/80 ${className}`}>
-      <div className="flex items-center gap-3">
+    <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 pb-3 border-b border-slate-200/80 ${className}`}>
+      <div className="flex items-center gap-3 min-w-0">
         {Icon && (
-          <div className={`p-2.5 rounded-2xl ${iconBg} text-white shadow-xs`}>
+          <div className={`p-2.5 rounded-2xl ${iconBg} text-white shadow-xs shrink-0`}>
             <Icon className="w-5 h-5" aria-hidden="true" />
           </div>
         )}
-        <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">{title}</h2>
+        <div className="min-w-0">
+          <h2 className="text-xl font-black text-slate-900 tracking-tight truncate">{title}</h2>
           {subtitle && (
-            <p className="text-xs text-slate-500">{subtitle}</p>
+            <p className="text-xs text-slate-500 truncate">{subtitle}</p>
           )}
         </div>
       </div>
-      {action && <div className="flex items-center gap-2 shrink-0">{action}</div>}
+      {action && <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">{action}</div>}
     </div>
   );
 };
