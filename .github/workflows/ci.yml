@@ -32,5 +32,10 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # CI build doesn't need real ERP creds — uses the dev/mock config
           VITE_USE_REAL_BACKEND: 'false'
+
+      - name: Smoke tests
+        run: npm run test:smoke
+
+      - name: Load & concurrency tests
+        run: npm run test:load
