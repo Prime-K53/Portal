@@ -213,6 +213,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         : '',
       gradientClass: 'from-slate-950 via-sky-950 to-slate-900',
     });
+  } else if (bannerSlides.length === 0) {
+    bannerSlides.push({
+      id: 'slide_welcome',
+      badge: 'WELCOME',
+      badgeBg: 'bg-white/20 text-white backdrop-blur-md',
+      title: 'Welcome to Prime Portal',
+      subtitle: 'Your one-stop shop for all your needs. Browse products, track orders, and manage your account.',
+      gradientClass: 'from-slate-900 via-indigo-950 to-slate-900',
+    });
   }
 
   useEffect(() => {
