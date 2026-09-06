@@ -224,7 +224,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return () => clearInterval(timer);
   }, [bannerSlides.length, isCarouselPaused]);
 
-  const activeSlide = bannerSlides[Math.min(currentSlide, bannerSlides.length - 1)];
+  const activeSlide = bannerSlides[Math.min(currentSlide, Math.max(0, bannerSlides.length - 1))];
 
   const goNext = () => {
     setSlideDirection('next');
@@ -313,6 +313,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       </div>
 
       {/* ═══ 2. AD BANNER CAROUSEL ════════════════════════════════════════════ */}
+      {bannerSlides.length > 0 && (
       <div className="w-full">
         <div
           onTouchStart={handleTouchStart}
@@ -432,6 +433,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* ═══ 3. ACCOUNT SUMMARY — Unified card (reference match) ═══════════════ */}
       <div>
