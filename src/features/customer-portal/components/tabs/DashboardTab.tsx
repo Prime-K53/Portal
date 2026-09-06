@@ -335,17 +335,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
          >
           <div className="relative overflow-hidden rounded-[calc(1rem-2px)] w-full h-full bg-slate-900">
           <div
-            key={activeSlide.id}
+            key={activeSlide?.id ?? 'slide'}
             className={`absolute inset-0 ${slideDirection === 'next' ? 'animate-slide-left' : 'animate-slide-right'}`}
           >
             <BannerBackground slide={activeSlide} />
-            {(activeSlide.title || activeSlide.subtitle || activeSlide.emoji || activeSlide.onCta) && (
+            {(activeSlide?.title || activeSlide?.subtitle || activeSlide?.emoji || activeSlide?.onCta) && (
               <div className="absolute inset-x-0 inset-y-0 z-10 flex items-center">
                 <div className="w-full px-3.5 sm:px-8 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="flex items-center gap-3.5 sm:gap-5 min-w-0 flex-1">
-                    {!activeSlide.imageUrl && (
+                    {!activeSlide?.imageUrl && (
                       <div className="hidden sm:flex shrink-0 w-14 h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/25 items-center justify-center shadow-lg shadow-black/20">
-                        {activeSlide.emoji ? (
+                        {activeSlide?.emoji ? (
                           <span className="text-3xl leading-none">{activeSlide.emoji}</span>
                         ) : (
                           <Star className="w-7 h-7 text-white fill-white/80" />
@@ -353,35 +353,35 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       </div>
                     )}
                     <div className="space-y-0.5 sm:space-y-1.5 min-w-0 flex-1">
-                      {activeSlide.badge && !activeSlide.imageUrl && (
-                        <div className={`hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-[0.14em] ${activeSlide.badgeBg}`}>
+                      {activeSlide?.badge && !activeSlide?.imageUrl && (
+                        <div className={`hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-[0.14em] ${activeSlide?.badgeBg ?? ''}`}>
                           <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
-                          {activeSlide.badge}
+                          {activeSlide?.badge}
                         </div>
                       )}
-                      {activeSlide.title && !activeSlide.imageUrl && (
+                      {activeSlide?.title && !activeSlide?.imageUrl && (
                         <h2 className="text-[13px] sm:text-xl font-black text-white tracking-tight leading-tight sm:leading-snug drop-shadow-md truncate">
-                          {activeSlide.title}
+                          {activeSlide?.title}
                         </h2>
                       )}
-                      {activeSlide.subtitle && !activeSlide.imageUrl && (
+                      {activeSlide?.subtitle && !activeSlide?.imageUrl && (
                         <p className="hidden sm:block text-sm text-white/85 font-medium drop-shadow-sm line-clamp-2">
-                          {activeSlide.subtitle}
+                          {activeSlide?.subtitle}
                         </p>
                       )}
-                      {activeSlide.extra && (
+                      {activeSlide?.extra && (
                         <p className="hidden sm:block text-xs text-amber-300 font-semibold pt-0.5 drop-shadow-sm truncate">
-                          {activeSlide.extra}
+                          {activeSlide?.extra}
                         </p>
                       )}
                     </div>
                   </div>
-                  {activeSlide.onCta && activeSlide.ctaLabel && !activeSlide.imageUrl && (
+                  {activeSlide?.onCta && activeSlide?.ctaLabel && !activeSlide?.imageUrl && (
                     <button
-                      onClick={activeSlide.onCta}
+                      onClick={activeSlide?.onCta}
                       className="hidden sm:inline-flex shrink-0 items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/25 text-xs font-black text-white transition-all shadow-lg shadow-black/10 hover:shadow-black/20"
                     >
-                      <span>{activeSlide.ctaLabel}</span>
+                      <span>{activeSlide?.ctaLabel}</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   )}
