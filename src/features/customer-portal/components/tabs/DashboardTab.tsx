@@ -73,8 +73,10 @@ const DELIVERY_STATUS_STYLES: Record<string, { label: string; dot: string; bg: s
   delayed: { label: 'Delayed', dot: 'bg-rose-500', bg: 'bg-rose-50 text-rose-700' },
 };
 
-const BannerBackground: React.FC<{ slide: BannerSlide }> = ({ slide }) => {
+const BannerBackground: React.FC<{ slide?: BannerSlide }> = ({ slide }) => {
   const [imageFailed, setImageFailed] = useState(false);
+
+  if (!slide) return null;
 
   const gradientLayer = slide.gradientCss ? (
     <div className="absolute inset-0 z-0" style={{ background: slide.gradientCss }} />
@@ -355,7 +357,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     {!activeSlide?.imageUrl && (
                       <div className="hidden sm:flex shrink-0 w-14 h-14 rounded-xl bg-white/15 backdrop-blur-md border border-white/25 items-center justify-center shadow-lg shadow-black/20">
                         {activeSlide?.emoji ? (
-                          <span className="text-3xl leading-none">{activeSlide.emoji}</span>
+                          <span className="text-3xl leading-none">{activeSlide?.emoji}</span>
                         ) : (
                           <Star className="w-7 h-7 text-white fill-white/80" />
                         )}
