@@ -153,3 +153,38 @@ for (const size of [192, 512]) {
 // Maskable: full-bleed background, glyph inside safe zone (one 512 suffices).
 writeFileSync(path.join(iconsDir, 'icon-512-maskable.png'), encodePng(512, 512, drawIcon(512, true)));
 console.log('wrote icons/icon-512-maskable.png');
+
+// ── favicon.ico (same brand tile, multi-resolution PNG-embedded ICO) ────────
+// Keeps the browser-tab favicon and the PWA manifest icons visually identical.
+// Windows desktop shortcuts (.lnk / .url) use favicon.ico, while installed PWAs
+// use manifest icons — without this they diverge (teal P vs primebooks logo).
+// Re-running this script regenerates BOTH so they never drift.
+{
+  const favSizes = [16, 24, 32, 48, 64, 128, 256];
+  const pngs = favSizes.map((s) => encodePng(s, s, drawIcon(s, false)));
+  const count = pngs.length;
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(count, 4);
+  let offset = 6 + count * 16;
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    const size = favSizes[i];
+    const png = pngs[i];
+    const entry = Buffer.alloc(16);
+    entry[0] = size === 256 ? 0 : size;
+    entry[1] = size === 256 ? 0 : size;
+    entry[2] = 0;
+    entry[3] = 0;
+    entry.writeUInt16LE(1, 4);
+    entry.writeUInt16LE(32, 6);
+    entry.writeUInt32LE(png.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    entries.push(entry);
+    offset += png.length;
+  }
+  const ico = Buffer.concat([header, ...entries, ...pngs]);
+  writeFileSync(path.join(publicDir, 'favicon.ico'), ico);
+  console.log(`wrote favicon.ico (${count} sizes: ${favSizes.join(', ')})`);
+}
