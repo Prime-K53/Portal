@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { KeyRound, Loader2, Lock, Mail, Shield, UserPlus, X } from 'lucide-react';
+import { KeyRound, Loader2, Lock, Mail, Shield, X } from 'lucide-react';
 import { useHashRoute } from '../../router/useHashRoute';
 import { ROUTES } from '../../router/routes';
 import { authErrorMessage, useCustomerAuth } from './CustomerAuthContext';
@@ -242,48 +242,22 @@ export function CustomerLogin() {
         </>
       )}
 
-      {/* Auxiliary navigation — secondary account actions */}
+      {/* Auxiliary navigation — referral-only registration */}
       <div className="mt-6 border-t border-slate-100 pt-5 space-y-4">
-        <div className="relative flex items-center justify-center" aria-hidden="true">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-100" />
-          </div>
-          <span className="relative bg-white px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            Need an account?
+        <button
+          type="button"
+          onClick={() => navigate(ROUTES.activate)}
+          className="group flex w-full items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3.5 text-left transition hover:border-amber-300 hover:bg-amber-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/10 focus-visible:border-amber-500/60"
+          aria-label="Activate your account with invite code"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-amber-200 shadow-sm transition group-hover:bg-amber-500 group-hover:border-amber-500">
+            <KeyRound className="h-4 w-4 text-amber-600 transition group-hover:text-white" />
           </span>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => navigate(ROUTES.register)}
-            className="group flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-left transition hover:border-blue-300 hover:bg-blue-50/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:border-blue-500/60"
-            aria-label="Create a new account"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm transition group-hover:border-blue-200 group-hover:bg-blue-600">
-              <UserPlus className="h-4 w-4 text-slate-600 transition group-hover:text-white" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-bold leading-none text-slate-900">Create an account</span>
-              <span className="mt-1 block text-xs font-medium leading-relaxed text-slate-500">New here? Start in 2 minutes</span>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate(ROUTES.activate)}
-            className="group flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3.5 text-left transition hover:border-amber-300 hover:bg-amber-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/10 focus-visible:border-amber-500/60"
-            aria-label="Activate your account with invite code"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-amber-200 shadow-sm transition group-hover:bg-amber-500 group-hover:border-amber-500">
-              <KeyRound className="h-4 w-4 text-amber-600 transition group-hover:text-white" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-bold leading-none text-slate-900">Activate your account</span>
-              <span className="mt-1 block text-xs font-medium leading-relaxed text-slate-500">First time here? Use invite code</span>
-            </span>
-          </button>
-        </div>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold leading-none text-slate-900">Activate your account</span>
+            <span className="mt-1 block text-xs font-medium leading-relaxed text-slate-500">First time here? Use your invite code</span>
+          </span>
+        </button>
 
         <div className="flex justify-center">
           <button
