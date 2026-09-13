@@ -75,6 +75,58 @@ export interface AuthRegisterInput {
   referredByCode?: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Customer Registration Requests (approval-gated public intake)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// A registration REQUEST is an application for review — it is NOT an account,
+// NOT a portal user, and NOT a session. The ERP creates exactly one PENDING
+// request (CREG-YYYY-######) and issues no tokens. Credentials are set later
+// through the invitation/activation flow after administrator approval.
+
+/** Account-type options offered on the public registration request form. */
+export type RegistrationRequestTier = 'Individual' | 'School Account' | 'Institution' | 'Government';
+
+/**
+ * Public registration-request submission. Carries ONLY review information —
+ * NEVER password material, tokens, customer ids, or tenant fields (the ERP
+ * strips forbidden keys at the boundary and the portal must not send them).
+ */
+export interface RegistrationRequestInput {
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string;
+  tier?: RegistrationRequestTier;
+  /** Referral code captured from the registration referral URL, if any. */
+  referredByCode?: string;
+}
+
+/** Lifecycle of a customer registration request (ERP-controlled). */
+export type RegistrationRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+/**
+ * POST /api/portal/registration-requests — 201 response. Identity + status
+ * ONLY: no tokens, users, customer ids, or credential material.
+ */
+export interface RegistrationRequestResponse {
+  requestNumber: string;
+  status: RegistrationRequestStatus;
+  submittedAt: string;
+  message?: string;
+}
+
+/**
+ * GET /api/portal/registration-requests/:requestNumber?email=... and the
+ * POST .../cancel response. Minimal public DTO — status only, no PII beyond
+ * the request number.
+ */
+export interface RegistrationRequestStatusResponse {
+  requestNumber: string;
+  status: RegistrationRequestStatus;
+  submittedAt: string | null;
+}
+
 /**
  * Authenticated session envelope. Holds the JWT access token and the identity
  * of the authenticated Portal user. Refresh tokens are NEVER exposed to

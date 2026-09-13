@@ -101,3 +101,88 @@ export function getRewardStatusBadge(status: string): { label: string; bg: strin
       return { label, bg: 'bg-slate-100 text-slate-600 border-slate-200' };
   }
 }
+
+// ── Registration referral capture ────────────────────────────────────────────
+//
+// The Portal uses hash routing (`#/register`), but shared referral links use
+// the path form (`/register?ref=CODE`, built by ReferralCodeCard). The legacy
+// parser read ONLY `window.location.search`, so the in-app hash form
+// (`#/register?ref=CODE`) silently lost the code. This parser reads BOTH, so
+// neither URL form drops the referral. The hash query wins when both are
+// present because it reflects the in-app navigation state.
+
+/** sessionStorage key for a captured-but-not-yet-submitted referral code. */
+export const PENDING_REFERRAL_STORAGE_KEY = 'portal_pending_ref';
+
+function normalizeReferralCode(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim().toUpperCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Pure referral-code parser (no DOM access — unit-testable in Node).
+ *
+ * @param search `window.location.search` (e.g. `?ref=ABC` from `/register?ref=ABC`)
+ * @param hash   `window.location.hash`   (e.g. `#/register?ref=ABC`)
+ * @returns the normalized code, or null when absent/blank.
+ */
+export function parseReferralCodeFromLocations(search: string, hash: string): string | null {
+  const hashQueryIndex = (hash ?? '').indexOf('?');
+  if (hashQueryIndex >= 0) {
+    try {
+      const fromHash = normalizeReferralCode(
+        new URLSearchParams(hash.slice(hashQueryIndex + 1)).get('ref')
+      );
+      if (fromHash) return fromHash;
+    } catch {
+      // Malformed hash query — fall through to `search`.
+    }
+  }
+  try {
+    const query = (search ?? '').startsWith('?') ? search.slice(1) : (search ?? '');
+    return normalizeReferralCode(new URLSearchParams(query).get('ref'));
+  } catch {
+    return null;
+  }
+}
+
+/** DOM wrapper — reads the live `window.location` (hash-router aware). */
+export function readRegistrationReferralCode(): string | null {
+  try {
+    return parseReferralCodeFromLocations(window.location.search, window.location.hash);
+  } catch {
+    return null;
+  }
+}
+
+/** Returns the temporarily stored referral code, if any. */
+export function loadPendingReferralCode(): string | null {
+  try {
+    return sessionStorage.getItem(PENDING_REFERRAL_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Temporarily stores a captured referral code. Pass null to remove it.
+ * MUST be cleared ONLY after the backend has accepted the registration
+ * request — never on validation failure, network failure, or form abandon.
+ */
+export function persistPendingReferralCode(code: string | null): void {
+  try {
+    if (code) {
+      sessionStorage.setItem(PENDING_REFERRAL_STORAGE_KEY, code);
+    } else {
+      sessionStorage.removeItem(PENDING_REFERRAL_STORAGE_KEY);
+    }
+  } catch {
+    // sessionStorage unavailable — ignore
+  }
+}
+
+/** Clears the temporarily stored referral code after successful submission. */
+export function clearPendingReferralCode(): void {
+  persistPendingReferralCode(null);
+}

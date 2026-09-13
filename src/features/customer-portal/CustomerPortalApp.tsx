@@ -54,6 +54,7 @@ import { CustomerAuthProvider, useCustomerAuth } from './components/auth/Custome
 import { CustomerForgotPassword } from './components/auth/CustomerForgotPassword';
 import { CustomerLogin } from './components/auth/CustomerLogin';
 import { CustomerRegister } from './components/auth/CustomerRegister';
+import { CustomerRegistrationPending } from './components/auth/CustomerRegistrationPending';
 import { BrandSplash } from './components/auth/BrandSplash';
 import { onSplashChange, setSplashVisible } from './components/auth/splashState';
 
@@ -105,6 +106,26 @@ function CustomerPortalShell({
 }: CustomerPortalAppProps) {
   const auth = useCustomerAuth();
   const { path, navigate } = useHashRoute();
+
+  // ── Legacy path-form entry (`/register?ref=CODE`) ─────────────────────────
+  //
+  // Shared referral links use the path form built by ReferralCodeCard, but the
+  // Portal routes by hash. Without this redirect a shared link lands on the
+  // login screen and the referral code is never captured. Mirror `/register`
+  // (+ its query string, which carries `ref`) into the equivalent hash route
+  // exactly once on boot. Existing links keep working; the in-app canonical
+  // form remains `#/register?ref=CODE`.
+  useEffect(() => {
+    try {
+      const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
+      if (pathname === '/register' && !window.location.hash) {
+        navigate(`/register${window.location.search}`);
+      }
+    } catch {
+      // Location unavailable (non-browser render) — ignore.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Routing (computed before data hooks so the per-tab enabled flags
   //    below can reference the active tab on the very first render). ────
@@ -516,6 +537,8 @@ function CustomerPortalShell({
         return <CustomerForgotPassword />;
       case ROUTES.register:
         return <CustomerRegister />;
+      case ROUTES.registerPending:
+        return <CustomerRegistrationPending />;
       default:
         return <CustomerLogin />;
     }

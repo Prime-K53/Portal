@@ -1,20 +1,41 @@
 /**
- * Prime PORTAL — Self-Service Customer Registration
+ * Prime PORTAL — Customer Registration Request
  *
- * Self-service registration for new customers. Optional referral code via
- * ?ref=CODE query parameter. The referral code is validated server-side.
- * On success the ERP returns a full session and the customer is signed in.
+ * Public request-submission form for new customers. A successful submission
+ * creates ONLY a PENDING Customer Registration Request (CREG-YYYY-######)
+ * via POST /api/portal/registration-requests — it NEVER creates an ERP
+ * customer, portal user, password hash, JWT, refresh token, or session, and
+ * it NEVER signs the applicant in. The applicant stays anonymous until an
+ * ERP administrator approves the request.
+ *
+ * No password is collected here: credentials are set later through the
+ * secure invitation/activation flow after approval. No credential material
+ * is sent, stored, or logged at any point.
+ *
+ * Optional referral code via the `ref` parameter. The Portal uses hash
+ * routing (`#/register?ref=CODE`) while shared links use the path form
+ * (`/register?ref=CODE`) — both are parsed (see utils/referral.ts). The
+ * pending referral is cleared ONLY after the backend accepts the request.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link2, Loader2, ShieldCheck, UserPlus } from 'lucide-react';
 import { useHashRoute } from '../../router/useHashRoute';
 import { ROUTES } from '../../router/routes';
-import { useCustomerAuth } from './CustomerAuthContext';
 import { AuthShell } from './AuthShell';
-import { AuthRegisterInput } from '../../types';
-
-const REFERRAL_STORAGE_KEY = 'portal_pending_ref';
+import {
+  RegistrationRequestError,
+  submitRegistrationRequest,
+  writePendingRegistration,
+} from '../../services/registrationRequestService';
+import {
+  clearPendingReferralCode,
+  loadPendingReferralCode,
+  persistPendingReferralCode,
+  readRegistrationReferralCode,
+} from '../../utils/referral';
+import { generateIdempotencyKey } from '../../utils/idempotency';
+import type { RegistrationRequestInput, RegistrationRequestTier } from '../../types';
 
 const inputClass =
   'w-full h-11 px-4 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/60 transition';
@@ -25,34 +46,23 @@ const selectClass =
 const buttonClass =
   'w-full h-11 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] text-white text-sm font-bold shadow-lg shadow-blue-900/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 transition-all';
 
-function readReferralCode(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  const ref = params.get('ref');
-  return ref && ref.trim().length > 0 ? ref.trim().toUpperCase() : null;
+interface Notice {
+  message: string;
+  existingRequestNumber?: string | null;
 }
 
-function persistReferralCode(code: string | null): void {
-  try {
-    if (code) {
-      sessionStorage.setItem(REFERRAL_STORAGE_KEY, code);
-    } else {
-      sessionStorage.removeItem(REFERRAL_STORAGE_KEY);
-    }
-  } catch {
-    // sessionStorage unavailable — ignore
-  }
-}
-
-function loadPersistedReferralCode(): string | null {
-  try {
-    return sessionStorage.getItem(REFERRAL_STORAGE_KEY);
-  } catch {
-    return null;
-  }
+function fingerprintOf(payload: RegistrationRequestInput): string {
+  return JSON.stringify([
+    payload.companyName.trim().toLowerCase(),
+    payload.contactName.trim().toLowerCase(),
+    payload.email.trim().toLowerCase(),
+    (payload.phone ?? '').trim(),
+    payload.tier ?? '',
+    payload.referredByCode ?? '',
+  ]);
 }
 
 export function CustomerRegister() {
-  const { registerWithApi } = useCustomerAuth();
   const { navigate } = useHashRoute();
 
   const [form, setForm] = useState({
@@ -60,39 +70,35 @@ export function CustomerRegister() {
     contactName: '',
     email: '',
     phone: '',
-    password: '',
-    confirmPassword: '',
-    tier: '' as AuthRegisterInput['tier'] | '',
+    tier: '' as RegistrationRequestTier | '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
-  const mountedRef = useRef(false);
+  /**
+   * ONE Idempotency-Key per logical submission attempt. Reused for retries
+   * of the SAME attempt (same applicant details) so a network timeout can
+   * never create a duplicate request. Rotated only when the applicant edits
+   * identifying details — a changed email/phone/company is a NEW attempt,
+   * and reusing the old key would replay the previous applicant's row.
+   */
+  const idempotencyRef = useRef<{ key: string; fingerprint: string } | null>(null);
 
-  /* ── Load referral code from URL or sessionStorage ── */
+  /* ── Load referral code from URL (hash- or path-form) or sessionStorage ── */
   useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
-
-    const urlCode = readReferralCode();
+    const urlCode = readRegistrationReferralCode();
     if (urlCode) {
       setReferralCode(urlCode);
-      persistReferralCode(urlCode);
+      persistPendingReferralCode(urlCode);
     } else {
-      const stored = loadPersistedReferralCode();
+      const stored = loadPendingReferralCode();
       if (stored) setReferralCode(stored);
     }
+    // NOTE: no unmount cleanup — the pending referral must survive
+    // validation failures, network failures, and form abandonment. It is
+    // cleared ONLY after the backend accepts the registration request.
   }, []);
-
-  /* ── Clean up on unmount ── */
-  useEffect(() => {
-    return () => {
-      if (!submitting) {
-        persistReferralCode(null);
-      }
-    };
-  }, [submitting]);
 
   const setField = (field: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -103,12 +109,14 @@ export function CustomerRegister() {
       delete next[field];
       return next;
     });
-    setGlobalError(null);
+    setNotice(null);
   };
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!form.companyName.trim()) errs.companyName = 'Business name is required';
+    if (!form.companyName.trim() || form.companyName.trim().length < 2) {
+      errs.companyName = 'Business name must be at least 2 characters';
+    }
     if (!form.contactName.trim() || form.contactName.trim().length < 2) {
       errs.contactName = 'Contact name must be at least 2 characters';
     }
@@ -116,14 +124,6 @@ export function CustomerRegister() {
       errs.email = 'Email address is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       errs.email = 'Please enter a valid email address';
-    }
-    if (!form.password) {
-      errs.password = 'Password is required';
-    } else if (form.password.length < 6) {
-      errs.password = 'Password must be at least 6 characters';
-    }
-    if (form.password !== form.confirmPassword) {
-      errs.confirmPassword = 'Passwords do not match';
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -133,41 +133,100 @@ export function CustomerRegister() {
     e.preventDefault();
     if (!validate()) return;
 
-    setGlobalError(null);
+    setNotice(null);
     setSubmitting(true);
 
-    const payload: AuthRegisterInput = {
+    const payload: RegistrationRequestInput = {
       companyName: form.companyName.trim(),
-      contactName: form.contactName.trim() || undefined,
+      contactName: form.contactName.trim(),
       email: form.email.trim().toLowerCase(),
       phone: form.phone.trim() || undefined,
-      password: form.password,
-      tier: form.tier as AuthRegisterInput['tier'] || undefined,
+      tier: form.tier || undefined,
       ...(referralCode ? { referredByCode: referralCode } : {}),
     };
 
+    const fingerprint = fingerprintOf(payload);
+    if (!idempotencyRef.current || idempotencyRef.current.fingerprint !== fingerprint) {
+      idempotencyRef.current = { key: generateIdempotencyKey(), fingerprint };
+    }
+
     try {
-      await registerWithApi(payload);
-      persistReferralCode(null);
-      navigate(ROUTES.dashboard);
+      const response = await submitRegistrationRequest(payload, idempotencyRef.current.key);
+      // The backend accepted the request — the referral is now resolved and
+      // stored server-side. Only NOW may the temporary referral be cleared.
+      // Persist the safe pending minimum (request number + email + status)
+      // so the confirmation screen survives a browser refresh.
+      clearPendingReferralCode();
+      idempotencyRef.current = null;
+      writePendingRegistration({
+        requestNumber: response.requestNumber,
+        email: payload.email,
+        status: response.status,
+        submittedAt: response.submittedAt,
+      });
+      // The applicant remains anonymous: no session, no tokens, no dashboard.
+      navigate(ROUTES.registerPending);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.toLowerCase().includes('unavailable')) {
-        setGlobalError(
-          'Self-service registration is not currently available. Please contact PrimeERP support to activate your account.'
-        );
-      } else if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('exists')) {
-        setGlobalError('An account with this email address already exists.');
-      } else if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('code')) {
-        setGlobalError('The referral code is invalid or has expired.');
-      } else if (msg.toLowerCase().includes('self-referral')) {
-        setGlobalError('You cannot use your own referral code.');
+      if (err instanceof RegistrationRequestError) {
+        switch (err.kind) {
+          case 'duplicate-pending':
+            setNotice({
+              message:
+                'A registration request with these details is already pending review. ' +
+                'There is no need to submit again.',
+              existingRequestNumber: err.existingRequestNumber,
+            });
+            break;
+          case 'duplicate-customer':
+            setNotice({
+              message: 'An account with these details already exists. Please sign in instead.',
+            });
+            break;
+          case 'invalid-referral':
+            // Keep the code visible (do NOT clear it) so the applicant can
+            // correct it or remove it and resubmit.
+            setNotice({ message: err.message });
+            break;
+          case 'validation': {
+            const msg = err.message.toLowerCase();
+            if (msg.includes('company')) {
+              setErrors({ companyName: err.message });
+            } else if (msg.includes('contact')) {
+              setErrors({ contactName: err.message });
+            } else if (msg.includes('email')) {
+              setErrors({ email: err.message });
+            } else {
+              setNotice({ message: err.message });
+            }
+            break;
+          }
+          case 'rate-limited':
+          case 'network':
+            // Retrying is safe: the same Idempotency-Key is reused, so the
+            // backend replays the stored request instead of duplicating it.
+            setNotice({ message: err.message });
+            break;
+          default:
+            setNotice({ message: 'Registration request failed. Please try again or contact support.' });
+            break;
+        }
       } else {
-        setGlobalError('Registration failed. Please try again or contact support.');
+        setNotice({ message: 'Registration request failed. Please try again or contact support.' });
       }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const viewExistingRequest = () => {
+    if (!notice?.existingRequestNumber) return;
+    writePendingRegistration({
+      requestNumber: notice.existingRequestNumber,
+      email: form.email.trim().toLowerCase(),
+      status: 'pending',
+      submittedAt: null,
+    });
+    navigate(ROUTES.registerPending);
   };
 
   return (
@@ -187,14 +246,16 @@ export function CustomerRegister() {
 
       {/* Heading */}
       <div className="mt-6 space-y-1">
-        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Create Account</h2>
+        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Request an Account</h2>
         {referralCode ? (
           <p className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 shrink-0" />
-            You're signing up through a Prime referral.
+            You&apos;re requesting through a Prime referral.
           </p>
         ) : (
-          <p className="text-sm text-slate-500">Join Prime Printing for school stationery &amp; printing.</p>
+          <p className="text-sm text-slate-500">
+            Submit a registration request — our team will review it and contact you once approved.
+          </p>
         )}
       </div>
 
@@ -234,7 +295,7 @@ export function CustomerRegister() {
         {/* Contact name */}
         <div>
           <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600" htmlFor="reg-contact">
-            Contact Name
+            Contact Name <span className="text-red-500">*</span>
           </label>
           <input
             id="reg-contact"
@@ -246,6 +307,7 @@ export function CustomerRegister() {
             onChange={setField('contactName')}
             disabled={submitting}
           />
+          {errors.contactName && <p className="mt-1 text-xs text-red-500">{errors.contactName}</p>}
         </div>
 
         {/* Email */}
@@ -305,46 +367,22 @@ export function CustomerRegister() {
           </div>
         </div>
 
-        {/* Password */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600" htmlFor="reg-password">
-            Password <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="reg-password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="Minimum 6 characters"
-            className={inputClass}
-            value={form.password}
-            onChange={setField('password')}
-            disabled={submitting}
-          />
-          {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
-        </div>
+        {/* No password is collected: credentials are set after administrator
+            approval through the secure invitation/activation flow. */}
 
-        {/* Confirm password */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600" htmlFor="reg-confirm">
-            Confirm Password <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="reg-confirm"
-            type="password"
-            autoComplete="new-password"
-            placeholder="Repeat your password"
-            className={inputClass}
-            value={form.confirmPassword}
-            onChange={setField('confirmPassword')}
-            disabled={submitting}
-          />
-          {errors.confirmPassword && <p className="mt-1 text-xs text-red-500">{errors.confirmPassword}</p>}
-        </div>
-
-        {/* Global error */}
-        {globalError && (
-          <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-            <p className="text-sm text-red-600 font-medium">{globalError}</p>
+        {/* Notice */}
+        {notice && (
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+            <p className="text-sm text-amber-700 font-medium">{notice.message}</p>
+            {notice.existingRequestNumber && (
+              <button
+                type="button"
+                onClick={viewExistingRequest}
+                className="mt-2 text-sm font-bold text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                View pending request {notice.existingRequestNumber}
+              </button>
+            )}
           </div>
         )}
 
@@ -353,12 +391,17 @@ export function CustomerRegister() {
           {submitting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Creating account...
+              Submitting request...
             </>
           ) : (
-            'Create Account'
+            'Submit Request'
           )}
         </button>
+
+        <p className="text-xs leading-relaxed text-slate-400">
+          No password is needed yet. Your request will be reviewed by our team, and you&apos;ll
+          receive sign-in instructions once your account is approved.
+        </p>
       </form>
 
       {/* Footer links */}

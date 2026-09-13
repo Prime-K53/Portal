@@ -78,6 +78,13 @@ export interface AuthService {
   getCurrentUser(): Promise<PortalUser | null>;
   getSession(): AuthSession | null;
   isAuthenticated(): boolean;
+  /**
+   * @deprecated Legacy active-account registration (POST /portal/auth/register).
+   * The public Create Account flow now submits approval-gated registration
+   * REQUESTS via services/registrationRequestService.ts and must NOT call
+   * this. Kept functional only because the ERP backend still exposes the
+   * endpoint during the migration. No UI registration caller may use it.
+   */
   register(input: AuthRegisterInput): Promise<AuthSession>;
   requestPasswordReset(email: string): Promise<void>;
   resetPassword(email: string, code: string, password: string): Promise<void>;
@@ -442,6 +449,9 @@ export class ErpAuthService implements AuthService {
   }
 
   async register(input: AuthRegisterInput): Promise<AuthSession> {
+    // @deprecated — see the AuthService interface note. Legacy endpoint kept
+    // functional for backend compatibility; the public Create Account flow no
+    // longer calls this (registration requests do not establish a session).
     const response = await this.client.post<ErpLoginPayload>(
       '/portal/auth/register',
       {
