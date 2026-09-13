@@ -129,6 +129,11 @@ export function CustomerRegister() {
     return Object.keys(errs).length === 0;
   };
 
+  const removeReferralCode = () => {
+    setReferralCode(null);
+    clearPendingReferralCode();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -267,6 +272,14 @@ export function CustomerRegister() {
             Referral Code:{' '}
             <span className="font-mono tracking-widest">{referralCode}</span>
           </span>
+          <button
+            type="button"
+            onClick={removeReferralCode}
+            className="ml-auto shrink-0 rounded-lg bg-white border border-emerald-300 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 transition"
+            aria-label="Remove referral code"
+          >
+            Remove
+          </button>
         </div>
       )}
 

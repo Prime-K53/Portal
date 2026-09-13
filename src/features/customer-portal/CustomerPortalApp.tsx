@@ -66,6 +66,7 @@ import { Sidebar } from './components/Sidebar';
 import { PwaInstallChip } from './components/PwaInstallChip';
 import { DevModeBanner } from './components/DevModeBanner';
 import { DarkModeProvider } from './context/DarkModeContext';
+import { DocumentVerify } from './views/DocumentVerify';
 
 // Modals
 import { CartDrawer } from './components/modals/CartDrawer';
@@ -903,6 +904,12 @@ function CustomerPortalShell({
       <PwaInstallChip suppressed={cartCount > 0} />
     </div>
   );
+
+  const isVerificationPath = /^\/(verify\/invoice|verify\/(receipt|quotation|sales-order|purchase-order|delivery-note|supplier-payment|statement))/.test(path.split('?')[0]);
+
+  if (isVerificationPath) {
+    return <DocumentVerify />;
+  }
 
   return (
     <>
