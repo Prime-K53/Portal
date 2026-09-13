@@ -12,6 +12,10 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
+import {
+  computeFitToWidthScale,
+  shouldApplyFitScale,
+} from '../utils/officialDocument';
 
 /**
  * Official document PDF preview — renders the PDF page-by-page into <canvas>
@@ -43,7 +47,9 @@ interface OfficialDocumentPreviewProps {
 }
 
 interface PageMetrics {
+  /** UNSCALED (scale=1) page width — the fit effect divides by this. */
   width: number;
+  /** UNSCALED (scale=1) page height. */
   height: number;
 }
 
@@ -107,7 +113,13 @@ const PageCanvas: React.FC<PageCanvasProps> = ({ pdfDocument, pageNumber, scale,
         await task.promise;
         if (cancelled) return;
 
-        onMetrics({ width: viewport.width, height: viewport.height });
+        // Report the UNSCALED page size (getViewport is pure math — no
+        // re-render). The fit-to-width effect divides the container width by
+        // this base width; reporting the scaled width here would compute
+        // `target / (base × scale)` and flip-flop between two zoom levels
+        // forever (the small-device preview "vibration").
+        const baseViewport = page.getViewport({ scale: 1 });
+        onMetrics({ width: baseViewport.width, height: baseViewport.height });
       } catch (err) {
         if (cancelled) return;
         const e = err as Error & { name?: string };
@@ -211,13 +223,16 @@ export const OfficialDocumentPreview: React.FC<OfficialDocumentPreviewProps> = (
   }, [blob]);
 
   // ── Track the container width so we can compute the fit-to-width scale ──
+  // Rounded to whole pixels with no-op suppression: subpixel ResizeObserver
+  // jitter (and scrollbar-appear/disappear toggling on narrow screens) must
+  // not feed back into the scale computation.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       for (const e of entries) {
-        const w = e.contentRect.width;
-        setViewportWidth(w);
+        const w = Math.round(e.contentRect.width);
+        setViewportWidth((prev) => (Math.abs(w - prev) < 1 ? prev : w));
       }
     });
     ro.observe(el);
@@ -225,11 +240,15 @@ export const OfficialDocumentPreview: React.FC<OfficialDocumentPreviewProps> = (
   }, []);
 
   // ── Compute scale in "width" fit mode ────────────────────────────────
+  // `pageMetrics` carries the UNSCALED page width, so this is a fixed point:
+  // recomputing after applying yields the same scale and the functional
+  // update below bails out — one correction, then stable. The epsilon guard
+  // additionally swallows float noise so the canvas is never re-mounted for
+  // an invisible change.
   useEffect(() => {
     if (fitMode !== 'width' || !pageMetrics || viewportWidth <= 0) return;
-    const target = viewportWidth - 16; // padding
-    const s = Math.max(0.4, Math.min(3, target / pageMetrics.width));
-    setScale(s);
+    const next = computeFitToWidthScale(viewportWidth, pageMetrics.width);
+    setScale((prev) => (shouldApplyFitScale(prev, next) ? next : prev));
   }, [fitMode, pageMetrics, viewportWidth]);
 
   // ── Touch gestures: pinch-to-zoom + swipe-to-page ────────────────────
@@ -475,9 +494,15 @@ export const OfficialDocumentPreview: React.FC<OfficialDocumentPreviewProps> = (
       )}
 
       {/* ── Page rendering surface ──────────────────────────────────── */}
+      {/*
+        scrollbar-gutter:stable reserves the vertical-scrollbar gutter even
+        when the page fits, so scrollbar appear/disappear toggling on narrow
+        screens cannot change the content width and feed back into the
+        fit-to-width computation (overlay-scrollbar devices are unaffected).
+      */}
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-auto bg-slate-200/60 px-2 py-3 sm:py-4 overscroll-contain"
+        className="flex-1 min-h-0 overflow-auto bg-slate-200/60 px-2 py-3 sm:py-4 overscroll-contain [scrollbar-gutter:stable]"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}

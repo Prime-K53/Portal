@@ -4,11 +4,16 @@
  * and error classification — the browser blob flow is exercised in staging.
  */
 import {
+  FIT_SCALE_EPSILON,
+  FIT_SCALE_MAX,
+  FIT_SCALE_MIN,
+  computeFitToWidthScale,
   findPaymentForStatementEntry,
   mapFetchError,
   officialDocumentPath,
   parseContentDispositionFilename,
   resolveStatementPeriod,
+  shouldApplyFitScale,
   statementDocumentPath,
 } from '../src/features/customer-portal/utils/officialDocument.ts';
 
@@ -89,6 +94,35 @@ check('quoted spaces', parseContentDispositionFilename('attachment; filename="In
 check('utf8 extended', parseContentDispositionFilename("attachment; filename*=UTF-8''INV%20%C3%A9.pdf", 'f.pdf'), 'INV é.pdf');
 check('missing header → fallback', parseContentDispositionFilename(null, 'invoice-id.pdf'), 'invoice-id.pdf');
 check('empty header → fallback', parseContentDispositionFilename('', 'invoice-id.pdf'), 'invoice-id.pdf');
+
+// Preview fit-to-width scale — the small-device "vibration" regression.
+// The preview reports UNSCALED page width, so `target / base` must be a
+// fixed point: applying it and recomputing yields the same scale.
+const PHONE_CONTAINER = 344; // ~360px phone minus gutter
+const A4_BASE_WIDTH = 595; // pdfjs getViewport({ scale: 1 }) for A4
+const phoneScale = computeFitToWidthScale(PHONE_CONTAINER, A4_BASE_WIDTH);
+check('phone fit scale', Math.round(phoneScale * 1000) / 1000, Math.round(((PHONE_CONTAINER - 16) / A4_BASE_WIDTH) * 1000) / 1000);
+check(
+  'fit scale is a fixed point (recompute after apply is a no-op)',
+  shouldApplyFitScale(phoneScale, computeFitToWidthScale(PHONE_CONTAINER, A4_BASE_WIDTH)),
+  false
+);
+// The old bug reported the SCALED width: next = target / (base * scale)
+// flip-flops forever (s, C/s, s, C/s…). With unscaled input the two-cycle
+// collapses to one value after a single correction from any start scale.
+for (const start of [1, 0.4, 3, 2.2]) {
+  const corrected = computeFitToWidthScale(PHONE_CONTAINER, A4_BASE_WIDTH);
+  check(
+    `converges in one step from ${start}`,
+    shouldApplyFitScale(corrected, computeFitToWidthScale(PHONE_CONTAINER, A4_BASE_WIDTH)),
+    false
+  );
+}
+check('wide container clamps at max', computeFitToWidthScale(3000, A4_BASE_WIDTH), FIT_SCALE_MAX);
+check('tiny container clamps at min', computeFitToWidthScale(10, A4_BASE_WIDTH), FIT_SCALE_MIN);
+check('zero base width falls back to 1 (no divide-by-zero)', computeFitToWidthScale(344, 0), 1);
+check('epsilon swallows float noise', shouldApplyFitScale(0.551, 0.551 + FIT_SCALE_EPSILON / 2), false);
+check('epsilon passes real changes', shouldApplyFitScale(0.551, 0.56), true);
 
 if (failures > 0) {
   console.error(`${failures} check(s) failed`);

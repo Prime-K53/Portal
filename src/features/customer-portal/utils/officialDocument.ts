@@ -293,3 +293,45 @@ export async function downloadOfficialDocument(
   const { blob, filename } = await fetchOfficialDocument(target, id);
   triggerBrowserDownload(blob, filename);
 }
+
+// ── Preview fit-to-width scale (pure helpers) ────────────────────────────────
+//
+// The preview reports UNSCALED (scale=1) page dimensions and derives the
+// fit scale as `target / baseWidth`. That is a true fixed point: recomputing
+// after applying it yields the same value, so the preview settles instead of
+// oscillating between two zoom percentages (the small-device "vibration").
+//
+// These helpers are pure so the convergence contract is unit-testable.
+
+/** Fit-scale clamp bounds (match the preview's historical 0.4–3 range). */
+export const FIT_SCALE_MIN = 0.4;
+export const FIT_SCALE_MAX = 3;
+/** Scale changes at or below this are display noise — ignore them. */
+export const FIT_SCALE_EPSILON = 0.001;
+
+/**
+ * Fit-to-width scale for an UNSCALED page width inside a container.
+ * `horizontalPadding` is the total left+right padding of the scroll surface.
+ */
+export function computeFitToWidthScale(
+  containerWidth: number,
+  basePageWidth: number,
+  horizontalPadding = 16
+): number {
+  if (!Number.isFinite(containerWidth) || !Number.isFinite(basePageWidth) || basePageWidth <= 0) {
+    return 1;
+  }
+  const target = containerWidth - horizontalPadding;
+  if (target <= 0) return FIT_SCALE_MIN;
+  return Math.max(FIT_SCALE_MIN, Math.min(FIT_SCALE_MAX, target / basePageWidth));
+}
+
+/** True when the new fit scale differs enough from the current one to apply. */
+export function shouldApplyFitScale(
+  currentScale: number,
+  nextScale: number,
+  epsilon = FIT_SCALE_EPSILON
+): boolean {
+  if (!Number.isFinite(currentScale) || !Number.isFinite(nextScale)) return true;
+  return Math.abs(nextScale - currentScale) > epsilon;
+}
