@@ -221,58 +221,8 @@ const VERIFY_CSS = `
   100% { transform: translateX(110%); opacity: 0; }
 }
 
-/* header mark — animated brand logo */
-.vp-mark { text-align: center; margin-bottom: 24px; position: relative; z-index: 1; }
-.vp-logo-wrap { position: relative; display: flex; justify-content: center; margin: 0 auto 8px; }
-.vp-logo-glow {
-  position: absolute; left: 50%; top: 50%; width: 230px; height: 90px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(ellipse at center, rgba(20,92,84,0.16), rgba(169,130,47,0.10) 55%, transparent 72%);
-  filter: blur(10px); pointer-events: none;
-  animation: vp-glow-pulse 3.6s ease-in-out infinite;
-}
-@keyframes vp-glow-pulse { 0%,100% { opacity: 0.75; transform: translate(-50%,-50%) scale(1);} 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.06);} }
-.vp-logo {
-  position: relative;
-  height: 88px; width: auto; max-width: 260px; object-fit: contain;
-  filter: drop-shadow(0 8px 18px rgba(32,38,30,0.22));
-  animation: vp-logo-enter 0.8s cubic-bezier(0.34,1.56,0.64,1) both, vp-logo-float 5s ease-in-out 0.9s infinite;
-}
-@keyframes vp-logo-enter { from { opacity: 0; transform: scale(0.82) translateY(10px); } to { opacity: 1; transform: none; } }
-@keyframes vp-logo-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-.vp-glyph-wrap { position: relative; width: 58px; height: 58px; margin: 0 auto 12px; }
-.vp-glyph-halo {
-  position: absolute; inset: -9px; border-radius: 50%;
-  background: conic-gradient(from 0deg, rgba(20,92,84,0), rgba(20,92,84,0.45), rgba(169,130,47,0.5), rgba(20,92,84,0));
-  animation: vp-spin 7s linear infinite;
-  filter: blur(0.4px);
-  opacity: 0.9;
-}
-.vp-glyph-halo::after {
-  content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--card);
-}
-@keyframes vp-spin { to { transform: rotate(360deg); } }
-.vp-glyph {
-  position: absolute; inset: 0;
-  border: 1.5px solid var(--teal);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 22px; font-weight: 600; color: var(--teal);
-  background: radial-gradient(circle at 30% 25%, #ffffff 0%, #f4efe0 55%, #e9e1ca 100%);
-  box-shadow: 0 0 0 5px rgba(20,92,84,0.08), 0 6px 18px -8px rgba(20,92,84,0.5);
-  animation: vp-glyph-breathe 3.4s ease-in-out infinite, vp-glyph-enter 0.8s cubic-bezier(0.34,1.56,0.64,1) both;
-  overflow: hidden;
-}
-.vp-glyph::after {
-  content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.9) 48%, transparent 62%);
-  transform: translateX(-90%);
-  animation: vp-glyph-sweep 4.2s ease-in-out 0.9s infinite;
-}
-@keyframes vp-glyph-enter { from { opacity: 0; transform: scale(0.5) translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes vp-glyph-breathe { 0%,100% { box-shadow: 0 0 0 5px rgba(20,92,84,0.08), 0 6px 18px -8px rgba(20,92,84,0.5); transform: translateY(0);} 50% { box-shadow: 0 0 0 9px rgba(20,92,84,0.05), 0 10px 24px -8px rgba(20,92,84,0.55); transform: translateY(-1.5px);} }
-@keyframes vp-glyph-sweep { 0% { transform: translateX(-90%); opacity: 0;} 18% { opacity: 1;} 45%,100% { transform: translateX(90%); opacity: 0;} }
+/* header mark */
+.vp-mark { text-align: center; margin-bottom: 24px; position: relative; z-index: 1; animation: vp-fade-up 0.6s ease 0.1s both; }
 .vp-mark .vp-name { font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 15px; letter-spacing: 0.04em; color: var(--teal-deep); }
 .vp-mark .vp-sub { font-size: 12px; color: var(--ink-soft); margin-top: 3px; letter-spacing: 0.01em; }
 .vp-live { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal-deep); background: rgba(20,92,84,0.08); border: 1px solid rgba(20,92,84,0.22); padding: 4px 10px; border-radius: 999px; }
@@ -329,22 +279,6 @@ const VERIFY_CSS = `
 .vp-status[data-tone="void"] { background: repeating-linear-gradient(-45deg, rgba(32,38,30,0.08), rgba(32,38,30,0.08) 6px, transparent 6px, transparent 12px); border-color: rgba(32,38,30,0.35); }
 .vp-status[data-tone="void"] .vp-val { color: #4a4f49; }
 
-.vp-actions { display: flex; gap: 10px; margin-top: 26px; position: relative; z-index: 1; animation: vp-fade-up 0.55s ease 1s both; }
-.vp-btn { flex: 1; text-align: center; padding: 12px 14px; font-size: 13.5px; font-weight: 600; border-radius: 4px; cursor: pointer; border: 1px solid transparent; font-family: 'Inter', sans-serif; text-decoration: none; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease; }
-.vp-btn:active { transform: translateY(1px); }
-.vp-btn.vp-primary { background: var(--teal); color: #F7F4EA; box-shadow: 0 8px 18px -10px rgba(20,92,84,0.7); }
-.vp-btn.vp-primary:hover { background: var(--teal-deep); transform: translateY(-1px); box-shadow: 0 12px 22px -10px rgba(20,92,84,0.7); }
-.vp-btn.vp-ghost { background: transparent; border-color: var(--line); color: var(--ink); }
-.vp-btn.vp-ghost:hover { border-color: var(--ink-soft); transform: translateY(-1px); }
-
-.vp-foot { margin-top: 28px; display: flex; align-items: flex-start; gap: 14px; position: relative; z-index: 1; animation: vp-fade-up 0.55s ease 1.05s both; }
-.vp-qr { flex: none; width: 54px; height: 54px; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 5px; }
-.vp-foot-text { font-size: 11.5px; line-height: 1.55; color: var(--ink-soft); }
-.vp-foot-text a { color: var(--teal-deep); text-decoration: none; border-bottom: 1px solid var(--line); font-weight: 600; }
-.vp-foot-text a:hover { border-color: var(--teal-deep); }
-.vp-meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
-.vp-chip { font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; background: var(--paper-deep); border: 1px solid var(--line); color: var(--ink-soft); border-radius: 999px; padding: 2px 9px; font-variant-numeric: tabular-nums; }
-
 .vp-under { text-align: center; margin-top: 18px; font-size: 11.5px; color: #8a8b82; letter-spacing: 0.01em; }
 .vp-under b { color: var(--teal-deep); font-weight: 600; }
 
@@ -359,20 +293,19 @@ const VERIFY_CSS = `
   .vp-card { padding: 32px 22px 26px; }
   .vp-stamp { width: 70px; height: 70px; }
   .vp-stamp-text .vp-h1 { font-size: 20px; }
-  .vp-actions { flex-direction: column; }
 }
 @media print {
   .vp-scope { background: #fff; padding: 0; display: block; }
-  .vp-scope::before, .vp-orb, .vp-shine, .vp-actions, .vp-perf { display: none !important; }
+  .vp-scope::before, .vp-orb, .vp-shine, .vp-perf { display: none !important; }
   .vp-stub { max-width: none; animation: none; }
   .vp-card { border: 1px solid #ddd; box-shadow: none; }
   .vp-card::before, .vp-card::after { display: none; }
-  .vp-glyph-halo, .vp-stamp-ring, .vp-logo-glow { display: none; }
+  .vp-stamp-ring { display: none; }
   *, *::before, *::after { animation: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-  .vp-shine, .vp-glyph-halo, .vp-stamp-ring { display: none; }
+  .vp-shine, .vp-stamp-ring { display: none; }
 }
 `;
 
@@ -421,29 +354,6 @@ function StampSeal({ tone = 'teal', symbol = 'check' }: { tone?: 'teal' | 'red' 
   );
 }
 
-function QrMark() {
-  const cells = useMemo(() => {
-    // Deterministic decorative QR-like pattern (not scannable — visual trust cue only)
-    const seed = [1,0,1,1,0,1,0,0,1,0,1,1,1,0,0,1,0,1,1,0,1,0,0,1,1];
-    return Array.from({ length: 81 }, (_, i) => {
-      const x = i % 9; const y = Math.floor(i / 9);
-      const inFinder = (x < 3 && y < 3) || (x > 5 && y < 3) || (x < 3 && y > 5);
-      if (inFinder) {
-        const lx = x < 3 ? x : x - 6; const ly = y < 3 ? y : y - 6;
-        return lx === 0 || lx === 2 || ly === 0 || ly === 2 || (lx === 1 && ly === 1) ? 1 : 0;
-      }
-      return seed[(i * 7 + 3) % seed.length];
-    });
-  }, []);
-  return (
-    <svg viewBox="0 0 9 9" className="vp-qr" aria-hidden="true" style={{ width: '100%', height: '100%' }}>
-      {cells.map((v, i) => (
-        <rect key={i} x={i % 9} y={Math.floor(i / 9)} width="0.92" height="0.92" rx="0.12" fill={v ? '#20261E' : 'transparent'} />
-      ))}
-    </svg>
-  );
-}
-
 export const DocumentVerify: React.FC = () => {
   const { path } = useHashRoute();
   const { type, number, token } = parseVerificationPath(path);
@@ -485,14 +395,11 @@ export const DocumentVerify: React.FC = () => {
 
   const typeTitle = TYPE_TITLES[type || ''] || 'document';
   const typeLabel = typeTitle.replace(/^./, (c) => c.toUpperCase());
-  const [logoOk, setLogoOk] = useState(true);
-  const logoSrc = `${import.meta.env.BASE_URL}prime-printing-logo.png`;
   const checkedOn = useMemo(
     () =>
       new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
     []
   );
-  const tokenFrag = token ? `${token.slice(0, 6)}…${token.slice(-4)}` : '—';
 
   const shell = (body: React.ReactNode) => (
     <div className="vp-scope">
@@ -518,40 +425,9 @@ export const DocumentVerify: React.FC = () => {
 
   const mark = (liveLabel: string) => (
     <div className="vp-mark">
-      {logoOk ? (
-        <div className="vp-logo-wrap">
-          <div className="vp-logo-glow" aria-hidden="true" />
-          <img
-            src={logoSrc}
-            alt="Prime Printing logo"
-            className="vp-logo"
-            onError={() => setLogoOk(false)}
-          />
-        </div>
-      ) : (
-        <div className="vp-glyph-wrap" aria-hidden="true">
-          <div className="vp-glyph-halo" />
-          <div className="vp-glyph">P</div>
-        </div>
-      )}
       <div className="vp-name">PRIME PRINTING</div>
       <div className="vp-sub">Document verification</div>
       <div><span className="vp-live"><i />{liveLabel}</span></div>
-    </div>
-  );
-
-  const foot = (docNo: string) => (
-    <div className="vp-foot">
-      <div className="vp-qr" aria-hidden="true"><QrMark /></div>
-      <div className="vp-foot-text">
-        Verified against Prime Printing records. Fraud check — match the document number, date and totals with your copy.
-        {' '}<a href="#/login">Customer portal sign-in</a>
-        <div className="vp-meta">
-          <span className="vp-chip">Checked {checkedOn}</span>
-          {docNo ? <span className="vp-chip">{docNo}</span> : null}
-          <span className="vp-chip">Ref {tokenFrag}</span>
-        </div>
-      </div>
     </div>
   );
 
@@ -605,11 +481,6 @@ export const DocumentVerify: React.FC = () => {
           Please check the QR code or link with the business that issued the document. Expired links, re-typed
           numbers and screenshots of old copies are the most common causes.
         </p>
-        <div className="vp-actions">
-          <a className="vp-btn vp-primary" href="#/login">Open customer portal</a>
-          <button className="vp-btn vp-ghost" type="button" onClick={() => window.location.reload()}>Try again</button>
-        </div>
-        {foot(number || '')}
       </div>
     );
   }
@@ -649,11 +520,6 @@ export const DocumentVerify: React.FC = () => {
           <span className="vp-lab">Document status</span>
           <span className="vp-val">{upperStatus || 'VOID'}</span>
         </div>
-        <div className="vp-actions">
-          <a className="vp-btn vp-primary" href="#/login">Open customer portal</a>
-          <button className="vp-btn vp-ghost" type="button" onClick={() => window.print()}>Print record</button>
-        </div>
-        {foot(String(preview[0]?.[1] ?? number))}
       </>
     );
   }
@@ -696,13 +562,6 @@ export const DocumentVerify: React.FC = () => {
         <span className="vp-lab">Payment status</span>
         <span className="vp-val">{(status || '—').toUpperCase()}</span>
       </div>
-
-      <div className="vp-actions">
-        <button className="vp-btn vp-primary" type="button" onClick={() => window.print()}>Print verification</button>
-        <a className="vp-btn vp-ghost" href="#/login">Customer sign-in</a>
-      </div>
-
-      {foot(String(body[0]?.[1] ?? number))}
     </>
   );
 };
