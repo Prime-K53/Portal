@@ -56,6 +56,10 @@ const SKIP_KEYS = new Set([
   'verified', 'documentType', 'companyName', ...NUMBER_KEYS, ...DATE_KEYS,
   'customerName', 'supplierName', 'status',
   'statementPeriodStart', 'statementPeriodEnd',
+  // Hidden by design on the verification ticket (see request 2026-09-14):
+  // currency is implied by MWK formatting, tax is folded into totals.
+  'currency', 'currencyCode', 'currencySymbol',
+  'tax', 'taxAmount', 'taxTotal', 'taxRate', 'taxPercentage', 'taxPercent',
 ]);
 
 function fieldRows(data: VerificationData): Array<[string, string]> {
@@ -72,6 +76,10 @@ function fieldRows(data: VerificationData): Array<[string, string]> {
   rows.push([party, String(partyValue)]);
   for (const [key, value] of Object.entries(data)) {
     if (SKIP_KEYS.has(key) || value === undefined || value === null || value === '') continue;
+    // Belt-and-braces: never show currency / tax rows even if the API
+    // uses a variant key name (e.g. taxTotal, vatAmount).
+    if (/^tax/i.test(key) || key.toLowerCase() === 'currency') continue;
+    if (/^vat/i.test(key)) continue;
     const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
     const shown = /amount|total|balance|subtotal|^tax$/i.test(key) && typeof value === 'number'
       ? fmtMoney(String(data.currency || 'MWK'), value)
@@ -213,9 +221,26 @@ const VERIFY_CSS = `
   100% { transform: translateX(110%); opacity: 0; }
 }
 
-/* header mark — animated */
+/* header mark — animated brand logo */
 .vp-mark { text-align: center; margin-bottom: 24px; position: relative; z-index: 1; }
-.vp-glyph-wrap { position: relative; width: 66px; height: 66px; margin: 0 auto 12px; }
+.vp-logo-wrap { position: relative; display: flex; justify-content: center; margin: 0 auto 8px; }
+.vp-logo-glow {
+  position: absolute; left: 50%; top: 50%; width: 230px; height: 90px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center, rgba(20,92,84,0.16), rgba(169,130,47,0.10) 55%, transparent 72%);
+  filter: blur(10px); pointer-events: none;
+  animation: vp-glow-pulse 3.6s ease-in-out infinite;
+}
+@keyframes vp-glow-pulse { 0%,100% { opacity: 0.75; transform: translate(-50%,-50%) scale(1);} 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.06);} }
+.vp-logo {
+  position: relative;
+  height: 88px; width: auto; max-width: 260px; object-fit: contain;
+  filter: drop-shadow(0 8px 18px rgba(32,38,30,0.22));
+  animation: vp-logo-enter 0.8s cubic-bezier(0.34,1.56,0.64,1) both, vp-logo-float 5s ease-in-out 0.9s infinite;
+}
+@keyframes vp-logo-enter { from { opacity: 0; transform: scale(0.82) translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes vp-logo-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.vp-glyph-wrap { position: relative; width: 58px; height: 58px; margin: 0 auto 12px; }
 .vp-glyph-halo {
   position: absolute; inset: -9px; border-radius: 50%;
   background: conic-gradient(from 0deg, rgba(20,92,84,0), rgba(20,92,84,0.45), rgba(169,130,47,0.5), rgba(20,92,84,0));
@@ -233,7 +258,7 @@ const VERIFY_CSS = `
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: 'Fraunces', Georgia, serif;
-  font-size: 24px; font-weight: 600; color: var(--teal);
+  font-size: 22px; font-weight: 600; color: var(--teal);
   background: radial-gradient(circle at 30% 25%, #ffffff 0%, #f4efe0 55%, #e9e1ca 100%);
   box-shadow: 0 0 0 5px rgba(20,92,84,0.08), 0 6px 18px -8px rgba(20,92,84,0.5);
   animation: vp-glyph-breathe 3.4s ease-in-out infinite, vp-glyph-enter 0.8s cubic-bezier(0.34,1.56,0.64,1) both;
@@ -342,7 +367,7 @@ const VERIFY_CSS = `
   .vp-stub { max-width: none; animation: none; }
   .vp-card { border: 1px solid #ddd; box-shadow: none; }
   .vp-card::before, .vp-card::after { display: none; }
-  .vp-glyph-halo, .vp-stamp-ring { display: none; }
+  .vp-glyph-halo, .vp-stamp-ring, .vp-logo-glow { display: none; }
   *, *::before, *::after { animation: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -460,6 +485,8 @@ export const DocumentVerify: React.FC = () => {
 
   const typeTitle = TYPE_TITLES[type || ''] || 'document';
   const typeLabel = typeTitle.replace(/^./, (c) => c.toUpperCase());
+  const [logoOk, setLogoOk] = useState(true);
+  const logoSrc = `${import.meta.env.BASE_URL}prime-printing-logo.png`;
   const checkedOn = useMemo(
     () =>
       new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
@@ -491,10 +518,22 @@ export const DocumentVerify: React.FC = () => {
 
   const mark = (liveLabel: string) => (
     <div className="vp-mark">
-      <div className="vp-glyph-wrap" aria-hidden="true">
-        <div className="vp-glyph-halo" />
-        <div className="vp-glyph">P</div>
-      </div>
+      {logoOk ? (
+        <div className="vp-logo-wrap">
+          <div className="vp-logo-glow" aria-hidden="true" />
+          <img
+            src={logoSrc}
+            alt="Prime Printing logo"
+            className="vp-logo"
+            onError={() => setLogoOk(false)}
+          />
+        </div>
+      ) : (
+        <div className="vp-glyph-wrap" aria-hidden="true">
+          <div className="vp-glyph-halo" />
+          <div className="vp-glyph">P</div>
+        </div>
+      )}
       <div className="vp-name">PRIME PRINTING</div>
       <div className="vp-sub">Document verification</div>
       <div><span className="vp-live"><i />{liveLabel}</span></div>
