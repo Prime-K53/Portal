@@ -176,9 +176,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-slate-700">Line items are not available for this invoice.</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                {effectiveInvoice.status === 'unpaid' || effectiveInvoice.status === 'overdue'
-                  ? 'Items are released after payment is recorded. Download the official PDF for full details.'
-                  : 'The ERP has not returned line item details for this invoice. Download the official PDF for full details.'}
+                The ERP has not returned line item details for this invoice. Download the official PDF for full details.
               </p>
             </div>
             {officialDocument.document && (

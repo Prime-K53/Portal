@@ -59,6 +59,8 @@ import type {
 } from '../types';
 import type {
   ErpCatalogItem,
+  ErpInvoiceDetail,
+  ErpInvoiceLineItem,
   ErpInvoiceSummary,
   ErpLoyalty,
   ErpNotification,
@@ -184,7 +186,10 @@ export interface PortalService {
 // ── ERP → Sasa adapters (exact shapes from the Phase 3 contract §7) ─────────
 
 function normalizeInvoiceStatus(status: string | undefined): InvoiceStatus {
-  const normalized = (status ?? '').toLowerCase();
+  // ERP statuses arrive capitalized, spaced, or hyphenated
+  // ("Unpaid", "Partially paid", "partially-paid", "Partial", "Paid", ...).
+  // Normalize to the Portal's snake_case union before matching.
+  const normalized = (status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   if (
     normalized === 'unpaid' ||
     normalized === 'partially_paid' ||
@@ -250,6 +255,87 @@ function normalizeDeliveryStatus(status: string | undefined): DeliveryNotificati
     default:
       return 'processing';
   }
+}
+
+/**
+ * Coerce one invoice line-item source (`line_items` or `items`) into an array.
+ *
+ * Each source may be an array, a JSON-encoded array string (legacy rows), or
+ * absent/null. Malformed JSON or non-array payloads yield [] — never throw —
+ * so a single bad source cannot crash the detail view; the caller decides the
+ * empty state. No `any` casts: the JSON parse result is narrowed to an array.
+ */
+function parseInvoiceLineArray(value: ErpInvoiceDetail['line_items']): ErpInvoiceLineItem[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return [];
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? (parsed as ErpInvoiceLineItem[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Resolve the detail line items from the ERP response WITHOUT duplicating.
+ *
+ * Canonical contract: prefer `line_items`. Compatibility: fall back to `items`
+ * ONLY when the canonical source is absent or empty. Never concatenate — when
+ * the corrected API returns both arrays they carry the SAME lines.
+ *
+ * This fixes the unpaid-empty bug: the previous if/else chain preferred
+ * `items` even when it was an empty array, so `items: []` shadowed a populated
+ * `line_items` and unpaid invoices rendered no item list.
+ */
+function resolveInvoiceLineItems(raw: ErpInvoiceDetail): ErpInvoiceLineItem[] {
+  const canonical = parseInvoiceLineArray(raw.line_items);
+  if (canonical.length > 0) return canonical;
+  const compat = parseInvoiceLineArray(raw.items);
+  if (compat.length > 0) return compat;
+  return canonical.length > 0 ? canonical : compat;
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function mapInvoiceLineItem(item: ErpInvoiceLineItem, idx: number): InvoiceItem {
+  // Authoritative line item description resolution — checks historical
+  // line description first, then item/product master names, ignoring
+  // empty/whitespace strings.
+  const candidate = [
+    item.description,
+    item.desc,
+    item.item_description,
+    item.itemDescription,
+    item.item_name,
+    item.itemName,
+    item.name,
+    item.productName,
+    item.product_name,
+    item.title,
+    item.label,
+  ].find((v) => typeof v === 'string' && v.trim().length > 0);
+  const quantity = toFiniteNumber(item.quantity ?? item.qty ?? 0);
+  const unitPrice = toFiniteNumber(item.unitPrice ?? item.unit_price ?? item.price ?? 0);
+  const explicitTotal = item.total ?? item.lineTotal ?? item.line_total ?? item.subtotal;
+  const total =
+    explicitTotal === undefined || explicitTotal === null || explicitTotal === ''
+      ? quantity * unitPrice
+      : toFiniteNumber(explicitTotal, quantity * unitPrice);
+  const rawId = item.id;
+  return {
+    id: rawId === undefined || rawId === null || String(rawId).trim() === '' ? `ii_${idx}` : String(rawId),
+    description: String(candidate ?? ''),
+    quantity,
+    unitPrice,
+    total,
+  };
 }
 
 function mapInvoice(summary: ErpInvoiceSummary): Invoice {
@@ -783,45 +869,18 @@ export class ErpPortalService implements PortalService {
   }
 
   async getInvoiceDetail(invoiceId: string): Promise<Invoice> {
-    const raw = await this.client.get<Record<string, unknown>>(`/portal/invoices/${invoiceId}`);
-    let itemsRaw: Array<Record<string, unknown>> = [];
-    if (Array.isArray(raw.items)) {
-      itemsRaw = raw.items as Array<Record<string, unknown>>;
-    } else if (typeof raw.items === 'string') {
-      try { itemsRaw = JSON.parse(raw.items); } catch (_) { itemsRaw = []; }
-    } else if (Array.isArray(raw.line_items)) {
-      itemsRaw = raw.line_items as Array<Record<string, unknown>>;
-    } else if (typeof raw.line_items === 'string') {
-      try { itemsRaw = JSON.parse(raw.line_items); } catch (_) { itemsRaw = []; }
-    }
-
-    const items: InvoiceItem[] = itemsRaw.map((item, idx) => {
-      // Authoritative line item description resolution — checks historical
-      // line description first, then item/product master names, ignoring
-      // empty/whitespace strings.
-      const candidate = [
-        item.description,
-        item.desc,
-        item.item_description,
-        item.itemDescription,
-        item.item_name,
-        item.itemName,
-        item.name,
-        item.productName,
-        item.product_name,
-        item.title,
-        item.label,
-      ].find((v) => typeof v === 'string' && v.trim().length > 0);
-      return {
-        id: `ii_${idx}`,
-        description: String(candidate ?? ''),
-        quantity: Number(item.quantity ?? item.qty ?? 0),
-        unitPrice: Number(item.unitPrice ?? item.unit_price ?? item.price ?? 0),
-        total: Number(item.total ?? item.lineTotal ?? item.line_total ?? item.subtotal ?? 0),
-      };
-    });
-    const totalAmount = Number(raw.total_amount ?? raw.totalAmount ?? 0);
-    const paidAmount = Number(raw.paid_amount ?? raw.paidAmount ?? 0);
+    // Customer authorization is enforced server-side: the ERP resolves the
+    // invoice by id AND the JWT customer (404 on foreign ids). The Portal
+    // never sends a customer_id and never bypasses auth — it only maps the
+    // ERP-authoritative payload below.
+    const raw = await this.client.get<ErpInvoiceDetail>(`/portal/invoices/${invoiceId}`);
+    // Canonical `line_items` first, `items` compat fallback, never both
+    // concatenated (they carry the same lines when both are present).
+    const itemsRaw = resolveInvoiceLineItems(raw);
+    // Preserve ERP order: map 1:1 in received order, one row per line.
+    const items: InvoiceItem[] = itemsRaw.map(mapInvoiceLineItem);
+    const totalAmount = toFiniteNumber(raw.total_amount ?? raw.totalAmount ?? 0);
+    const paidAmount = toFiniteNumber(raw.paid_amount ?? raw.paidAmount ?? 0);
     return {
       id: invoiceId,
       invoiceNumber: String(raw.invoice_number ?? raw.invoiceNumber ?? invoiceId),
@@ -830,7 +889,7 @@ export class ErpPortalService implements PortalService {
       amount: totalAmount,
       amountPaid: paidAmount,
       amountRemaining: Math.max(0, totalAmount - paidAmount),
-      status: normalizeInvoiceStatus(String(raw.status ?? '')),
+      status: normalizeInvoiceStatus(raw.status ?? ''),
       items,
       notes: typeof raw.notes === 'string' ? raw.notes : undefined,
       pdfUrl: undefined, // no server-side PDF endpoint (§16 ERP gap list)

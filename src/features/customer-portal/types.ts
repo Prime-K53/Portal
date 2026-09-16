@@ -791,6 +791,66 @@ export interface ErpInvoiceSummary {
   created_at: string;
 }
 
+/**
+ * Single invoice line as returned by GET /portal/invoices/:id.
+ *
+ * The corrected ERP detail response exposes normalized lines through BOTH
+ * `line_items` (canonical) and `items` (compatibility). Individual lines use
+ * snake_case pricing keys (`item_name`, `unit_price`, `line_total`) with the
+ * legacy camelCase/plain variants (`itemName`, `name`, `description`, `price`,
+ * `lineTotal`, `total`, `qty`) still possible on older rows.
+ */
+export interface ErpInvoiceLineItem {
+  id?: string | number | null;
+  description?: string | null;
+  desc?: string | null;
+  item_description?: string | null;
+  itemDescription?: string | null;
+  item_name?: string | null;
+  itemName?: string | null;
+  name?: string | null;
+  productName?: string | null;
+  product_name?: string | null;
+  title?: string | null;
+  label?: string | null;
+  quantity?: number | string | null;
+  qty?: number | string | null;
+  unitPrice?: number | string | null;
+  unit_price?: number | string | null;
+  price?: number | string | null;
+  total?: number | string | null;
+  lineTotal?: number | string | null;
+  line_total?: number | string | null;
+  subtotal?: number | string | null;
+}
+
+/**
+ * GET /portal/invoices/:id detail payload (flat, customer-scoped by JWT).
+ *
+ * Canonical line-item source is `line_items`; `items` is kept for
+ * compatibility. Each may arrive as an array or as a JSON-encoded string.
+ * The Portal MUST prefer a non-empty canonical `line_items` array, fall back
+ * to `items` only when the canonical source is absent/empty, and never
+ * concatenate both (they carry the same lines — concatenating duplicates).
+ */
+export interface ErpInvoiceDetail {
+  id?: string;
+  invoice_number?: string | null;
+  invoiceNumber?: string | null;
+  status?: string | null;
+  total_amount?: number | string | null;
+  totalAmount?: number | string | null;
+  paid_amount?: number | string | null;
+  paidAmount?: number | string | null;
+  due_date?: string | null;
+  dueDate?: string | null;
+  created_at?: string | null;
+  issueDate?: string | null;
+  notes?: string | null;
+  line_items?: ErpInvoiceLineItem[] | string | null;
+  items?: ErpInvoiceLineItem[] | string | null;
+}
+
 // ── Orders ───────────────────────────────────────────────────────────────────
 
 /** GET /api/portal/orders record (list + detail share this shape). */
