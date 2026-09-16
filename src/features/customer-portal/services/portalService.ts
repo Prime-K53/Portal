@@ -323,7 +323,7 @@ function mapInvoiceLineItem(item: ErpInvoiceLineItem, idx: number): InvoiceItem 
   ].find((v) => typeof v === 'string' && v.trim().length > 0);
   const quantity = toFiniteNumber(item.quantity ?? item.qty ?? 0);
   const unitPrice = toFiniteNumber(item.unitPrice ?? item.unit_price ?? item.price ?? 0);
-  const explicitTotal = item.total ?? item.lineTotal ?? item.line_total ?? item.subtotal;
+  const explicitTotal = item.total ?? item.lineTotal ?? item.lineTotalNet ?? item.line_total ?? item.subtotal;
   const total =
     explicitTotal === undefined || explicitTotal === null || explicitTotal === ''
       ? quantity * unitPrice
@@ -873,7 +873,12 @@ export class ErpPortalService implements PortalService {
     // invoice by id AND the JWT customer (404 on foreign ids). The Portal
     // never sends a customer_id and never bypasses auth — it only maps the
     // ERP-authoritative payload below.
-    const raw = await this.client.get<ErpInvoiceDetail>(`/portal/invoices/${invoiceId}`);
+    // Invoice IDs can contain path separators (e.g. `INV-P726/021`) — encode
+    // the segment so the ERP `/:id` route receives a single id (mirrors
+    // `officialDocumentPath`, which already encodes). Unencoded, the `/`
+    // splits the path, the detail route 404s, and the modal silently falls
+    // back to the list summary (`items: []`).
+    const raw = await this.client.get<ErpInvoiceDetail>(`/portal/invoices/${encodeURIComponent(invoiceId)}`);
     // Canonical `line_items` first, `items` compat fallback, never both
     // concatenated (they carry the same lines when both are present).
     const itemsRaw = resolveInvoiceLineItems(raw);

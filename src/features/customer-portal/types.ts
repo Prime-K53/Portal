@@ -798,7 +798,7 @@ export interface ErpInvoiceSummary {
  * `line_items` (canonical) and `items` (compatibility). Individual lines use
  * snake_case pricing keys (`item_name`, `unit_price`, `line_total`) with the
  * legacy camelCase/plain variants (`itemName`, `name`, `description`, `price`,
- * `lineTotal`, `total`, `qty`) still possible on older rows.
+ * `lineTotal`, `lineTotalNet`, `total`, `qty`) still possible on older rows.
  */
 export interface ErpInvoiceLineItem {
   id?: string | number | null;
@@ -820,6 +820,7 @@ export interface ErpInvoiceLineItem {
   price?: number | string | null;
   total?: number | string | null;
   lineTotal?: number | string | null;
+  lineTotalNet?: number | string | null;
   line_total?: number | string | null;
   subtotal?: number | string | null;
 }

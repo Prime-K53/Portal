@@ -11,7 +11,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { ErpPortalService } from '../src/features/customer-portal/services/portalService';
 import { ApiError, type ApiClient } from '../src/features/customer-portal/services/apiClient';
-import type { ErpInvoiceDetail } from '../src/features/customer-portal/types';
+import type { ErpInvoiceDetail, Invoice } from '../src/features/customer-portal/types';
+import { canRequestPayment } from '../src/features/customer-portal/utils/paymentRequest';
 
 interface RecordedCall {
   method: string;
@@ -254,5 +255,115 @@ describe('Invoice detail line items (corrected ERP contract)', () => {
       assert.equal((err as ApiError).status, 403);
       return true;
     });
+  });
+});
+
+describe('INV-P726/021 slash-ID regression (production forensic: CUST-0002, Unpaid, 1 Chalk line)', () => {
+  // Verified production Supabase shape: data.items = [{ Chalk (box), quantity 10,
+  // price 4000, lineTotalNet 40000 }], normalized by the backend to line_items = [1].
+  const CHALK_LINE = { name: 'Chalk (box)', quantity: 10, price: 4000, lineTotalNet: 40000 };
+
+  function chalkPayload(
+    status = 'Unpaid',
+    paid_amount = 0,
+    total_amount = 40000
+  ): ErpInvoiceDetail {
+    return {
+      status,
+      total_amount,
+      paid_amount,
+      line_items: [{ ...CHALK_LINE }],
+      items: [{ ...CHALK_LINE }],
+    } as ErpInvoiceDetail;
+  }
+
+  function summaryInvoice(): Invoice {
+    // GET /portal/invoices list shape: headers only, items always [].
+    return {
+      id: 'INV-P726/021',
+      invoiceNumber: 'INV-P726/021',
+      issueDate: '2026-01-01',
+      dueDate: '2026-02-01',
+      amount: 40000,
+      amountPaid: 0,
+      amountRemaining: 40000,
+      status: 'unpaid',
+      items: [],
+    };
+  }
+
+  test('slash invoice ID is URL-encoded so the ERP :id route receives a single id', async () => {
+    const calls: RecordedCall[] = [];
+    const service = new ErpPortalService(createDetailClient(chalkPayload(), calls));
+    const inv = await service.getInvoiceDetail('INV-P726/021');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].path, '/portal/invoices/INV-P726%2F021');
+    // The returned object keeps the raw ID so cache keys match the list summary.
+    assert.equal(inv.id, 'INV-P726/021');
+    assert.equal(inv.items.length, 1);
+  });
+
+  test('INV-P726/021 Chalk payload maps to exactly one line (unpaid, canonical wins, no dup)', async () => {
+    const service = new ErpPortalService(createDetailClient(chalkPayload()));
+    const inv = await service.getInvoiceDetail('INV-P726/021');
+    assert.equal(inv.status, 'unpaid');
+    assert.equal(inv.items.length, 1);
+    assert.equal(inv.items[0].description, 'Chalk (box)');
+    assert.equal(inv.items[0].quantity, 10);
+    assert.equal(inv.items[0].unitPrice, 4000);
+    assert.equal(inv.items[0].total, 40000);
+  });
+
+  test('INV-P726/021 renders under unpaid, partial, and paid statuses', async () => {
+    for (const [status, paid] of [['Unpaid', 0], ['partially_paid', 10000], ['Paid', 40000]] as const) {
+      const service = new ErpPortalService(createDetailClient(chalkPayload(status, paid)));
+      const inv = await service.getInvoiceDetail('INV-P726/021');
+      assert.equal(inv.items.length, 1, `status ${status} must still render the Chalk line`);
+      assert.equal(inv.items[0].description, 'Chalk (box)');
+    }
+  });
+
+  test('lineTotalNet is authoritative (discounted line keeps the ERP total, not qty*price)', async () => {
+    const discounted = { name: 'Chalk (box)', quantity: 10, price: 4000, lineTotalNet: 35000 };
+    const payload: ErpInvoiceDetail = {
+      status: 'Unpaid',
+      total_amount: 35000,
+      paid_amount: 0,
+      line_items: [discounted],
+      items: [discounted],
+    } as ErpInvoiceDetail;
+    const service = new ErpPortalService(createDetailClient(payload));
+    const inv = await service.getInvoiceDetail('INV-P726/021');
+    assert.equal(inv.items.length, 1);
+    assert.equal(inv.items[0].unitPrice, 4000);
+    assert.equal(inv.items[0].total, 35000);
+  });
+
+  test('detail replaces list summary: summary [] + detail [1] → effective has 1; failed detail keeps summary', async () => {
+    const summary = summaryInvoice();
+    const service = new ErpPortalService(createDetailClient(chalkPayload()));
+    const detail = await service.getInvoiceDetail('INV-P726/021');
+    // Mirrors InvoiceDetailModal: const effectiveInvoice = detail ?? invoice.
+    const effectiveOnSuccess: Invoice = detail ?? summary;
+    assert.equal(effectiveOnSuccess.items.length, 1);
+    assert.equal(effectiveOnSuccess.id, 'INV-P726/021');
+    assert.equal(effectiveOnSuccess.items[0].description, 'Chalk (box)');
+    const failedDetail: Invoice | null = null;
+    const effectiveOnFailure: Invoice = failedDetail ?? summary;
+    assert.equal(effectiveOnFailure.items.length, 0);
+    assert.equal(effectiveOnFailure.id, 'INV-P726/021');
+  });
+
+  test('INV-P726/021 totals passthrough unchanged and payment actions unchanged', async () => {
+    const service = new ErpPortalService(createDetailClient(chalkPayload('Unpaid', 0, 40000)));
+    const unpaid = await service.getInvoiceDetail('INV-P726/021');
+    assert.equal(unpaid.amount, 40000);
+    assert.equal(unpaid.amountPaid, 0);
+    assert.equal(unpaid.amountRemaining, 40000);
+    assert.equal(canRequestPayment(unpaid), true);
+    const paidService = new ErpPortalService(createDetailClient(chalkPayload('Paid', 40000, 40000)));
+    const paid = await paidService.getInvoiceDetail('INV-P726/021');
+    assert.equal(paid.amountRemaining, 0);
+    assert.equal(canRequestPayment(paid), false);
   });
 });
