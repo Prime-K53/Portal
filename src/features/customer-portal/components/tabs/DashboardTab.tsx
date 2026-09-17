@@ -202,13 +202,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     });
   });
 
-  if (deliveries.length > 0) {
-    const latest = deliveries[0];
+  // Live shipment slide — only for in-transit shipments. Once an order is
+  // delivered (status === 'delivered') it must no longer appear on the banner
+  // carousel (ERP contract: POD-sealed status `Delivered` drops the banner).
+  const activeDeliveries = deliveries.filter((d) => d.status !== 'delivered');
+  if (activeDeliveries.length > 0) {
+    const latest = activeDeliveries[0];
     bannerSlides.push({
       id: 'slide_delivery',
       badge: 'LIVE SHIPMENT UPDATE',
       badgeBg: 'bg-sky-400 text-slate-950',
-      title: `Order ${latest.orderId} is ${latest.status === 'delivered' ? 'Delivered' : 'in Transit'}`,
+      title: `Order ${latest.orderId} is in Transit`,
       subtitle: `Tracking #: ${latest.trackingNumber}`,
       extra: latest.estimatedArrival
         ? `Est. Arrival: ${latest.estimatedArrival}${latest.driverName ? ` • Driver: ${latest.driverName}` : ''}`
@@ -234,6 +238,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     }, 4500);
     return () => clearInterval(timer);
   }, [bannerSlides.length, isCarouselPaused]);
+
+  // Clamp the carousel index when slides disappear (e.g. a shipment is
+  // delivered and its LIVE SHIPMENT UPDATE slide is removed).
+  useEffect(() => {
+    setCurrentSlide((prev) => Math.min(prev, Math.max(0, bannerSlides.length - 1)));
+  }, [bannerSlides.length]);
 
   const activeSlide = bannerSlides[Math.min(currentSlide, Math.max(0, bannerSlides.length - 1))];
 
