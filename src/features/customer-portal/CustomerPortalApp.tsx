@@ -1,6 +1,47 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router/useHashRoute';
 import { RouteGuard } from './router/RouteGuard';
+
+function useOnlineStatus(): boolean {
+  const [online, setOnline] = useState(() => {
+    try {
+      return typeof navigator === 'undefined' ? true : navigator.onLine !== false;
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    try {
+      window.addEventListener('online', onOnline);
+      window.addEventListener('offline', onOffline);
+    } catch {
+      // ignore
+    }
+    return () => {
+      try {
+        window.removeEventListener('online', onOnline);
+        window.removeEventListener('offline', onOffline);
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+  return online;
+}
+
+function OfflineBanner(): React.ReactElement | null {
+  const online = useOnlineStatus();
+  if (online) return null;
+  return (
+    <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 pt-4" role="alert" aria-live="assertive">
+      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold">
+        You are offline. Browsing cached data works, but orders, payments, referrals and tickets will fail until you reconnect.
+      </div>
+    </div>
+  );
+}
 import {
   useAdsData,
   useCatalogData,
@@ -133,32 +174,35 @@ function CustomerPortalShell({
   const defaultPath = pathForTab(initialTab);
   const activeTab: TabType = tabFromPath(path) ?? tabFromPath(defaultPath) ?? 'dashboard';
 
+  // ── Statement filter state (declared before queries so the range feeds the
+  //    ERP request — previously the filter never refetched). ──────────────
+  const today = new Date();
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+  const todayISO = today.toISOString().split('T')[0];
+  const [statementDateFilter, setStatementDateFilter] = useState<'all' | '30days' | 'this_month' | 'custom'>('all');
+  const [statementStartDate, setStatementStartDate] = useState(firstOfMonth);
+  const [statementEndDate, setStatementEndDate] = useState(todayISO);
+
+  const effectiveStatementRange = (() => {
+    if (statementDateFilter === 'all') return { start: undefined as string | undefined, end: undefined as string | undefined, invalid: false };
+    if (statementDateFilter === '30days') {
+      const end = todayISO;
+      const start = new Date(Date.now() - 29 * 86400000).toISOString().split('T')[0];
+      return { start, end, invalid: false };
+    }
+    if (statementDateFilter === 'this_month') return { start: firstOfMonth, end: todayISO, invalid: false };
+    if (!statementStartDate || !statementEndDate) return { start: undefined as string | undefined, end: undefined as string | undefined, invalid: true };
+    if (statementStartDate > statementEndDate) return { start: undefined as string | undefined, end: undefined as string | undefined, invalid: true };
+    return { start: statementStartDate, end: statementEndDate, invalid: false };
+  })();
+  const isStatementRangeInvalid = effectiveStatementRange.invalid;
+
   // ── Portal data (all reads flow through the PortalService boundary) ───────
   //
   // Query gating — the ERP /api/portal/* endpoints return HTTP 429 when a
-  // single JWT fires many requests in a short window. To prevent a busy
-  // dashboard from triggering 20+ concurrent GETs against the same customer
-  // session, ONLY the active tab's list queries subscribe to the SSE
-  // invalidation bus. The other hooks are silenced via `enabled=false`.
-  //
-  // Always-on (every tab): the customer profile, unread notification count,
-  // notifications drawer data, and company contact info — these are needed
-  // by the header, the bell badge, and the Support tab respectively.
-  //
-  // Dashboard-required: invoices, orders, order requests, deliveries,
-  // statements, catalog, ads. The DashboardTab renders KPIs (Outstanding
-  // Balance, Total Paid, Active Orders, Recent Deliveries, Account Snapshot)
-  // that depend on these queries, so they MUST be loaded whenever the
-  // dashboard could be visited. Treating them as always-on costs us 6
-  // extra fetches per session — acceptable given they refresh on every SSE
-  // event anyway.
-  //
-  // Per-tab gated (only fetched when that tab is active): quote-related,
-  // referral-related, payment-request, statements-detail, support articles
-  // + tickets. Switching to one of these tabs will trigger a fresh fetch;
-  // leaving the tab silences them.
-  //
-  // Tests: tests/conditionalQueryFetching.test.ts pins this contract.
+  // single JWT fires many requests in a short window. Only the active tab's
+  // queries + header essentials are enabled. Dashboard KPIs need their sets,
+  // so each list is enabled on dashboard + its own tab — not on every tab.
 
   // Always-on (header, bell, cross-tab UI).
   const customerQuery = useCustomerData(initialProfileData);
@@ -166,14 +210,21 @@ function CustomerPortalShell({
   const unreadQuery = useUnreadNotificationCount();
   const companyContactQuery = useCompanyContactData();
 
-  // Dashboard-required (Dashboard tab reads from these for KPIs + lists).
-  const invoicesQuery = useInvoicesData();
-  const deliveriesQuery = useDeliveriesData();
-  const ordersQuery = useOrdersData();
-  const orderRequestsQuery = useOrderRequestsData();
-  const catalogQuery = useCatalogData();
-  const statementsQuery = useStatementsData();
-  const adsQuery = useAdsData();
+  // Gated by tab to avoid the 11-request boot storm (ERP 429s on concurrent
+  // JWT GETs). Dashboard KPIs need these, so each is enabled on dashboard +
+  // its own tab — not on every tab.
+  const isDashboard = activeTab === 'dashboard';
+  const invoicesQuery = useInvoicesData(isDashboard || activeTab === 'invoices');
+  const deliveriesQuery = useDeliveriesData(isDashboard || activeTab === 'deliveries');
+  const ordersQuery = useOrdersData(isDashboard || activeTab === 'orders');
+  const orderRequestsQuery = useOrderRequestsData(isDashboard || activeTab === 'orders');
+  const catalogQuery = useCatalogData(isDashboard || activeTab === 'orders');
+  const adsQuery = useAdsData(isDashboard);
+  const statementsQuery = useStatementsData(
+    effectiveStatementRange.start,
+    effectiveStatementRange.end,
+    (isDashboard || activeTab === 'statements') && !isStatementRangeInvalid
+  );
 
   // Per-tab gated (only fetched when their tab is the active tab).
   const quotationsQuery = useQuotationsData(activeTab === 'quotes');
@@ -240,15 +291,10 @@ function CustomerPortalShell({
   }, [showBrandSplash]);
 
   const isSplashVisible = showBrandSplash || loginSplashActive;
-  const today = new Date();
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-  const todayISO = today.toISOString().split('T')[0];
-  const [statementDateFilter, setStatementDateFilter] = useState<'all' | '30days' | 'this_month' | 'custom'>('all');
-  const [statementStartDate, setStatementStartDate] = useState(firstOfMonth);
-  const [statementEndDate, setStatementEndDate] = useState(todayISO);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionCorrelationId, setActionCorrelationId] = useState<string | null>(null);
 
   // ── Routing (activeTab already computed above for query gating) ────────
 
@@ -298,10 +344,18 @@ function CustomerPortalShell({
   // ── Action helpers ────────────────────────────────────────────────────────
   const runAction = async <T,>(action: () => Promise<T>): Promise<T> => {
     setActionError(null);
+    setActionCorrelationId(null);
     try {
       return await action();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'The operation could not be completed.');
+      const message = err instanceof Error ? err.message : 'The operation could not be completed.';
+      // Preserve server correlation ID so support can trace the failure.
+      const correlationId =
+        err instanceof Error && 'correlationId' in err
+          ? String((err as unknown as { correlationId: unknown }).correlationId ?? '')
+          : null;
+      setActionError(correlationId ? `${message} (Ref: ${correlationId})` : message);
+      setActionCorrelationId(correlationId || null);
       throw err;
     }
   };
@@ -575,15 +629,21 @@ function CustomerPortalShell({
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
+        {/* Offline banner — mutations queue nothing, so say so explicitly. */}
+        <OfflineBanner />
+
         {/* Action Error Banner (real API failures are never hidden).
             Lives outside the tab conditional so it surfaces on every tab. */}
         {actionError && (
-          <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 pt-4">
+          <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 pt-4" role="alert" aria-live="assertive">
             <div className="flex items-start justify-between gap-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium">
               <span className="leading-relaxed">{actionError}</span>
               <button
                 type="button"
-                onClick={() => setActionError(null)}
+                onClick={() => {
+                  setActionError(null);
+                  setActionCorrelationId(null);
+                }}
                 className="text-rose-400 hover:text-rose-600 font-black shrink-0"
                 aria-label="Dismiss error"
               >
@@ -594,25 +654,25 @@ function CustomerPortalShell({
         )}
 
         {/* Main Content View */}
-        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-8 max-w-7xl w-full mx-auto min-w-0">
+        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-8 max-w-7xl w-full mx-auto min-w-0" id="main-content">
           {activeTab === 'dashboard' && (
             <PortalDataBoundary
-              isLoading={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, quoteRequestsQuery, statementsQuery, adsQuery]).isLoading}
-              error={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, quotationsQuery, quoteRequestsQuery, statementsQuery, adsQuery]).error}
+              isLoading={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, orderRequestsQuery, statementsQuery, adsQuery]).isLoading}
+              error={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, orderRequestsQuery, statementsQuery, adsQuery]).error}
               onRetry={() => {
                 customerQuery.refetch();
                 invoicesQuery.refetch();
                 deliveriesQuery.refetch();
                 ordersQuery.refetch();
-                quotationsQuery.refetch();
-                quoteRequestsQuery.refetch();
+                orderRequestsQuery.refetch();
                 statementsQuery.refetch();
                 adsQuery.refetch();
               }}
               skeleton={<DashboardSkeleton />}
             >
+              {profile ? (
               <DashboardTab
-                profile={profile ?? ({} as AccountProfile)}
+                profile={profile}
                 invoices={invoices}
                 orders={orders}
                 deliveries={deliveries}
@@ -626,6 +686,11 @@ function CustomerPortalShell({
                   handleNavigateTab('invoices');
                 }}
               />
+              ) : (
+                <div className="p-6 text-center text-sm text-slate-500" role="alert">
+                  Profile failed to load. {customerQuery.error instanceof Error ? customerQuery.error.message : 'Please retry.'}
+                </div>
+              )}
             </PortalDataBoundary>
           )}
 
@@ -711,6 +776,11 @@ function CustomerPortalShell({
           )}
 
           {activeTab === 'statements' && (
+            isStatementRangeInvalid ? (
+              <div className="p-6 text-center text-sm text-rose-600 bg-white rounded-2xl border border-rose-200" role="alert">
+                Invalid date range — start date must be on or before end date.
+              </div>
+            ) : (
             <PortalDataBoundary
               isLoading={combineQueryStates([customerQuery, statementsQuery]).isLoading}
               error={combineQueryStates([customerQuery, statementsQuery]).error}
@@ -735,6 +805,7 @@ function CustomerPortalShell({
                 onSelectEntryDetail={(entry) => setSelectedStatementEntryDetail(entry)}
               />
             </PortalDataBoundary>
+            )
           )}
 
           {activeTab === 'referrals' && (

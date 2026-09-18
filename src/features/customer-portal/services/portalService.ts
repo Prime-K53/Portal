@@ -864,8 +864,8 @@ export class ErpPortalService implements PortalService {
 
   async getInvoices(): Promise<Invoice[]> {
     const data = await this.client.get<ErpInvoiceSummary[] | { invoices: ErpInvoiceSummary[] }>('/portal/invoices');
-    const list = Array.isArray(data) ? data : data.invoices;
-    return list.map(mapInvoice);
+    const list = Array.isArray(data) ? data : data?.invoices;
+    return (list ?? []).map(mapInvoice);
   }
 
   async getInvoiceDetail(invoiceId: string): Promise<Invoice> {
@@ -903,8 +903,8 @@ export class ErpPortalService implements PortalService {
 
   async getPayments(): Promise<Payment[]> {
     const data = await this.client.get<ErpPaymentRecord[] | { payments: ErpPaymentRecord[] }>('/portal/payments');
-    const list = Array.isArray(data) ? data : data.payments;
-    return list.map(mapPayment);
+    const list = Array.isArray(data) ? data : data?.payments;
+    return (list ?? []).map(mapPayment);
   }
 
   async submitPayment(payload: ErpPaymentRequest): Promise<ErpPaymentResult> {
@@ -932,7 +932,7 @@ export class ErpPortalService implements PortalService {
   }
 
   async getPaymentRequest(paymentRequestId: string): Promise<PaymentRequest> {
-    const record = await this.client.get<ErpPaymentRequestRecord>(`/portal/payment-requests/${paymentRequestId}`);
+    const record = await this.client.get<ErpPaymentRequestRecord>(`/portal/payment-requests/${encodeURIComponent(paymentRequestId)}`);
     return mapPaymentRequest(record);
   }
 
@@ -950,13 +950,13 @@ export class ErpPortalService implements PortalService {
 
   async getOrders(): Promise<Order[]> {
     const data = await this.client.get<ErpOrder[] | { orders: ErpOrder[] }>('/portal/orders');
-    const list = Array.isArray(data) ? data : data.orders;
-    return list.map(mapOrder);
+    const list = Array.isArray(data) ? data : data?.orders;
+    return (list ?? []).map(mapOrder);
   }
 
   /** Fetches one official Sales Order by id. Used by reorder as a fallback when POST /orders/:id/reorder is unavailable. */
   async getOrderById(orderId: string): Promise<Order> {
-    const data = await this.client.get<ErpOrder>(`/portal/orders/${orderId}`);
+    const data = await this.client.get<ErpOrder>(`/portal/orders/${encodeURIComponent(orderId)}`);
     return mapOrder(data);
   }
 
@@ -966,7 +966,7 @@ export class ErpPortalService implements PortalService {
    */
   async getOrderRequests(): Promise<OrderRequest[]> {
     const data = await this.client.get<ErpRequest[] | { requests: ErpRequest[] }>('/portal/requests');
-    const list = Array.isArray(data) ? data : data.requests;
+    const list = Array.isArray(data) ? data : data?.requests;
     return (list ?? [])
       .filter((request) => (request.requestType ?? request.request_type) === 'order')
       .map(mapRequestToOrderRequest);
@@ -978,7 +978,7 @@ export class ErpPortalService implements PortalService {
    * their own request (404 when it does not belong to them).
    */
   async getOrderRequestById(requestId: string): Promise<OrderRequest> {
-    const record = await this.client.get<ErpRequest>(`/portal/requests/${requestId}`);
+    const record = await this.client.get<ErpRequest>(`/portal/requests/${encodeURIComponent(requestId)}`);
     return mapRequestToOrderRequest(record);
   }
 
@@ -1036,19 +1036,16 @@ export class ErpPortalService implements PortalService {
    * request.
    */
   async cancelOrderRequest(requestId: string): Promise<OrderRequest> {
-    const result = await this.client.post<{ id: string; status: string }>(`/portal/requests/${requestId}/cancel`);
+    const result = await this.client.post<{ id: string; status: string }>(`/portal/requests/${encodeURIComponent(requestId)}/cancel`);
     try {
       return await this.getOrderRequestById(result.id);
-    } catch {
-      return {
-        id: result.id,
-        requestNumber: '',
-        date: '',
-        items: [],
-        subtotal: 0,
-        total: 0,
-        status: normalizeRequestStatus(result.status),
-      };
+    } catch (readError) {
+      // Never fabricate a blank success — surface the cancel result honestly
+      // with the read failure attached so the UI can show "cancelled, refresh
+      // to see details" instead of an empty record.
+      throw new Error(
+        `Order request ${result.id} was cancelled (status: ${result.status}), but the updated record could not be re-read. Please refresh.`
+      );
     }
   }
 
@@ -1060,13 +1057,19 @@ export class ErpPortalService implements PortalService {
    * GET /api/portal/requests/:id for its full ERP-authoritative record; the
    * minimal reorder response is returned only when that read fails.
    */
-  async reorderOrder(orderId: string): Promise<OrderRequest> {
+  async reorderOrder(orderId: string, idempotencyKey?: string): Promise<OrderRequest> {
     let result: ErpReorderResult;
     try {
-      result = await this.client.post<ErpReorderResult>(`/portal/orders/${orderId}/reorder`);
+      result = await this.client.post<ErpReorderResult>(
+        `/portal/orders/${encodeURIComponent(orderId)}/reorder`,
+        {},
+        idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined
+      );
     } catch (reorderError) {
       const order = await this.getOrderById(orderId);
-      const idempotencyKey = `reorder-fallback-${orderId}-${Date.now()}`;
+      // Caller-supplied key wins (stable across retries). Only generate when
+      // absent — never Date.now() per retry, which defeats idempotency.
+      const stableKey = idempotencyKey ?? `reorder-fallback-${orderId}`;
       return this.createOrder(
         {
           items: order.items.map((item) => ({
@@ -1081,15 +1084,17 @@ export class ErpPortalService implements PortalService {
           paymentTerms: order.paymentMethod,
           totalAmount: order.totalAmount,
         },
-        idempotencyKey
+        stableKey
       );
     }
     try {
       return await this.getOrderRequestById(result.id);
     } catch {
+      // Minimal ERP response is authoritative for id/status — but mark items
+      // as unknown (don't render blank success as complete).
       return {
         id: result.id,
-        requestNumber: result.requestNumber,
+        requestNumber: result.requestNumber ?? result.id,
         date: new Date().toISOString(),
         items: [],
         subtotal: 0,
@@ -1104,22 +1109,22 @@ export class ErpPortalService implements PortalService {
 
   async getQuotations(): Promise<Quotation[]> {
     const data = await this.client.get<ErpQuotation[] | { quotations: ErpQuotation[] }>('/portal/quotations');
-    const list = Array.isArray(data) ? data : data.quotations;
-    return list.map(mapQuotation);
+    const list = Array.isArray(data) ? data : data?.quotations;
+    return (list ?? []).map(mapQuotation);
   }
 
   async acceptQuotation(quotationId: string): Promise<void> {
-    await this.client.post<{ id: string; status: string }>(`/portal/quotations/${quotationId}/accept`);
+    await this.client.post<{ id: string; status: string }>(`/portal/quotations/${encodeURIComponent(quotationId)}/accept`);
   }
 
   async rejectQuotation(quotationId: string, reason?: string): Promise<void> {
-    await this.client.post<{ id: string; status: string }>(`/portal/quotations/${quotationId}/reject`, {
+    await this.client.post<{ id: string; status: string }>(`/portal/quotations/${encodeURIComponent(quotationId)}/reject`, {
       reason: reason || undefined,
     });
   }
 
   async requestQuotationRevision(quotationId: string, comments?: string): Promise<void> {
-    await this.client.post<{ id: string; status: string }>(`/portal/quotations/${quotationId}/revision`, {
+    await this.client.post<{ id: string; status: string }>(`/portal/quotations/${encodeURIComponent(quotationId)}/revision`, {
       comments: comments || undefined,
     });
   }
@@ -1128,9 +1133,14 @@ export class ErpPortalService implements PortalService {
 
   async getQuoteRequests(): Promise<QuoteRequest[]> {
     const data = await this.client.get<ErpRequest[] | { requests: ErpRequest[] }>('/portal/requests');
-    const list = Array.isArray(data) ? data : data.requests;
-    return list
-      .filter((request) => (request.requestType ?? request.request_type) !== 'order')
+    const list = Array.isArray(data) ? data : data?.requests;
+    return (list ?? [])
+      .filter((request) => {
+        const type = (request.requestType ?? request.request_type) as string | undefined;
+        // Only known quote types count as quotes — unknown types must not be
+        // misclassified (old code treated everything non-order as a quote).
+        return type === 'quotation' || type === 'quote' || type === 'rfq';
+      })
       .map(mapRequestToQuoteRequest);
   }
 
@@ -1160,8 +1170,8 @@ export class ErpPortalService implements PortalService {
 
   async getDeliveries(): Promise<DeliveryNotification[]> {
     const data = await this.client.get<ErpShipment[] | { shipments: ErpShipment[] }>('/portal/shipments');
-    const list = Array.isArray(data) ? data : data.shipments;
-    return list.map(mapShipment);
+    const list = Array.isArray(data) ? data : data?.shipments;
+    return (list ?? []).map(mapShipment);
   }
 
   // ── Statements ────────────────────────────────────────────────────────────
@@ -1185,12 +1195,12 @@ export class ErpPortalService implements PortalService {
     const data = await this.client.get<
       { referrals: ErpReferral[]; total?: number; page?: number; pageSize?: number; totalPages?: number } | ErpReferral[]
     >('/portal/referrals');
-    const list = Array.isArray(data) ? data : data.referrals ?? [];
-    return list.map(mapErpReferral);
+    const list = Array.isArray(data) ? data : data?.referrals ?? [];
+    return (list ?? []).map(mapErpReferral);
   }
 
   async getReferral(referralId: string): Promise<PortalReferral> {
-    const data = await this.client.get<ErpReferral>(`/portal/referrals/${referralId}`);
+    const data = await this.client.get<ErpReferral>(`/portal/referrals/${encodeURIComponent(referralId)}`);
     return mapErpReferral(data);
   }
 
@@ -1201,9 +1211,9 @@ export class ErpPortalService implements PortalService {
    */
   async getReferralTimeline(referralId: string): Promise<ReferralTimelineEntry[]> {
     const data = await this.client.get<ErpReferralTimelineEntry[] | { timeline: ErpReferralTimelineEntry[] }>(
-      `/portal/referrals/${referralId}/timeline`
+      `/portal/referrals/${encodeURIComponent(referralId)}/timeline`
     );
-    const list = Array.isArray(data) ? data : data.timeline ?? [];
+    const list = Array.isArray(data) ? data : data?.timeline ?? [];
     return (list ?? []).map(mapErpTimelineEntry);
   }
 
@@ -1236,7 +1246,7 @@ export class ErpPortalService implements PortalService {
     const data = await this.client.get<
       { rewards: ErpReferralReward[]; total?: number; page?: number; pageSize?: number; totalPages?: number } | ErpReferralReward[]
     >('/portal/referrals/rewards');
-    const list = Array.isArray(data) ? data : data.rewards ?? [];
+    const list = Array.isArray(data) ? data : data?.rewards ?? [];
     return (list ?? []).map(mapErpReward);
   }
 
@@ -1284,25 +1294,29 @@ export class ErpPortalService implements PortalService {
 
   async getCatalog(): Promise<Product[]> {
     const data = await this.client.get<ErpCatalogItem[] | { catalog: ErpCatalogItem[] }>('/portal/catalog');
-    const list = Array.isArray(data) ? data : data.catalog;
-    return list.map(mapCatalogItem);
+    const list = Array.isArray(data) ? data : data?.catalog;
+    return (list ?? []).map(mapCatalogItem);
   }
 
   // ── Notifications ─────────────────────────────────────────────────────────
 
   async getNotifications(): Promise<PortalNotification[]> {
     const data = await this.client.get<ErpNotification[] | { notifications: ErpNotification[] }>('/portal/notifications');
-    const list = Array.isArray(data) ? data : data.notifications;
-    return list.map(mapNotification);
+    const list = Array.isArray(data) ? data : data?.notifications;
+    return (list ?? []).map(mapNotification);
   }
 
   async getUnreadNotificationCount(): Promise<number> {
     const data = await this.client.get<{ count: number }>('/portal/notifications/unread-count');
-    return data.count ?? 0;
+    return data?.count ?? 0;
   }
 
   async markNotificationsRead(ids: string[]): Promise<void> {
-    await Promise.all(ids.map((id) => this.client.put<{ success: boolean }>(`/portal/notifications/${id}/read`, {})));
+    // Sequential (not Promise.all) so a partial failure is explicit and
+    // encoded IDs cannot split the path.
+    for (const id of ids) {
+      await this.client.put<{ success: boolean }>(`/portal/notifications/${encodeURIComponent(id)}/read`, {});
+    }
   }
 
   async markAllNotificationsRead(): Promise<void> {
@@ -1324,31 +1338,17 @@ export class ErpPortalService implements PortalService {
 
   async getAds(): Promise<PortalAd[]> {
     const data = await this.client.get<ErpPortalAd[] | { ads?: ErpPortalAd[] }>('/portal/ads');
-    const list = Array.isArray(data) ? data : (data.ads ?? []);
+    const list = Array.isArray(data) ? data : (data?.ads ?? []);
     
-    // Filter out deleted ads - check for common deletion indicators
-    const activeAds = list.filter(ad => {
-      // Check if ad has been explicitly marked as deleted
-      if (ad.deleted === true) return false;
-      
-      // Check if ad has been tombstoned (common soft-delete pattern)
-      if (ad.tombstone === true) return false;
-      
-      // Check if ad has been archived
-      if (ad.archived === true) return false;
-      
-      // Check if ad has ended in the past (if endsAt is present)
-      if (ad.endsAt) {
-        const endDate = new Date(ad.endsAt);
-        const now = new Date();
-        if (endDate < now) return false;
-      }
-      
-      // Check if title contains common deletion indicators
-      if (ad.title && ad.title.toLowerCase().includes('deleted')) return false;
-      if (ad.title && ad.title.toLowerCase().includes('removed')) return false;
-      if (ad.title && ad.title.toLowerCase().includes('archived')) return false;
-      
+    // Server is authoritative for active/date filtering. Client only drops
+    // explicit soft-delete flags — never title-substring censorship (which
+    // hid legit promos like "Archived Collection Sale").
+    const activeAds = (list ?? []).filter(ad => {
+      if (!ad) return false;
+      if ((ad as { deleted?: boolean }).deleted === true) return false;
+      if ((ad as { tombstone?: boolean }).tombstone === true) return false;
+      if ((ad as { isDeleted?: boolean }).isDeleted === true) return false;
+      if ((ad as { status?: string }).status === 'deleted') return false;
       return true;
     });
     
@@ -1358,12 +1358,13 @@ export class ErpPortalService implements PortalService {
   // ── Support / Help Desk ────────────────────────────────────────────────────
 
   async getSupportTickets(): Promise<SupportTicket[]> {
-    const data = await this.client.get<ErpSupportTicket[]>('/portal/support/tickets');
-    return data.map(mapSupportTicket);
+    const data = await this.client.get<ErpSupportTicket[] | { tickets: ErpSupportTicket[] }>('/portal/support/tickets');
+    const list = Array.isArray(data) ? data : data?.tickets;
+    return (list ?? []).map(mapSupportTicket);
   }
 
   async getSupportTicket(ticketId: string): Promise<SupportTicket> {
-    const data = await this.client.get<ErpSupportTicket>(`/portal/support/tickets/${ticketId}`);
+    const data = await this.client.get<ErpSupportTicket>(`/portal/support/tickets/${encodeURIComponent(ticketId)}`);
     return mapSupportTicket(data);
   }
 
@@ -1378,27 +1379,28 @@ export class ErpPortalService implements PortalService {
         formData.append('attachments', file);
       }
     }
-    const data = await this.client.post<ErpSupportTicket>('/portal/support/tickets', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    // No manual Content-Type — apiClient strips it for FormData so the
+    // browser sets the multipart boundary.
+    const data = await this.client.post<ErpSupportTicket>('/portal/support/tickets', formData);
     return mapSupportTicket(data);
   }
 
   async addSupportMessage(ticketId: string, content: string): Promise<SupportMessage> {
     const data = await this.client.post<ErpSupportMessage>(
-      `/portal/support/tickets/${ticketId}/messages`,
+      `/portal/support/tickets/${encodeURIComponent(ticketId)}/messages`,
       { content }
     );
     return mapSupportMessage(data);
   }
 
   async getSupportArticles(): Promise<SupportArticle[]> {
-    const data = await this.client.get<ErpSupportArticle[]>('/portal/support/articles');
-    return data.map(mapSupportArticle);
+    const data = await this.client.get<ErpSupportArticle[] | { articles: ErpSupportArticle[] }>('/portal/support/articles');
+    const list = Array.isArray(data) ? data : (data as { articles?: ErpSupportArticle[] })?.articles;
+    return (list ?? []).map(mapSupportArticle);
   }
 
   async getSupportArticle(slug: string): Promise<SupportArticle> {
-    const data = await this.client.get<ErpSupportArticle>(`/portal/support/articles/${slug}`);
+    const data = await this.client.get<ErpSupportArticle>(`/portal/support/articles/${encodeURIComponent(slug)}`);
     return mapSupportArticle(data);
   }
 

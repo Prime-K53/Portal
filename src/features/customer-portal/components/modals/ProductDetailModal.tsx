@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -36,6 +36,20 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   // variant can never be silently defaulted into the cart.
   const [selectedVariantId, setSelectedVariantId] = useState('');
 
+  // Reset qty + variant when a different product is opened (previously B
+  // inherited A's qty). Clear pending auto-close timers on unmount/close.
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    setQty(product?.minOrderQty || 1);
+    setSelectedVariantId('');
+    setAdded(false);
+  }, [product?.id]);
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
   if (!isOpen || !product) return null;
 
   const selectedVariant = product.variants?.find((v) => v.id === selectedVariantId);
@@ -52,7 +66,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     };
     onAddToCart(effectiveProduct, qty);
     setAdded(true);
-    window.setTimeout(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
       setAdded(false);
       onClose();
     }, 1200);

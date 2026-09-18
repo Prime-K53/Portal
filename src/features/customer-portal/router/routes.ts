@@ -62,7 +62,7 @@ export function pathForTab(tab: TabType): PortalRoute {
 }
 
 export function tabFromPath(path: string): TabType | null {
-  const normalized = path.split('?')[0].replace(/\/+$/, '') || '/';
+  const normalized = path.split('?')[0].split('#')[0].replace(/\/+$/, '').toLowerCase() || '/';
   return ROUTE_TABS[normalized] ?? null;
 }
 
@@ -75,9 +75,22 @@ const PUBLIC_ROUTES: readonly string[] = [
   ROUTES.registerPending,
 ];
 
+/** Auth screens that an authenticated user should leave (login flows). Pending receipt stays viewable. */
+const AUTH_ONLY_ROUTES: readonly string[] = [
+  ROUTES.login,
+  ROUTES.activate,
+  ROUTES.forgotPassword,
+  ROUTES.register,
+];
+
 export function isPublicRoute(path: string): boolean {
-  const normalized = path.split('?')[0].replace(/\/+$/, '') || '/';
-  return PUBLIC_ROUTES.includes(normalized);
+  const normalized = path.split('?')[0].split('#')[0].replace(/\/+$/, '').toLowerCase() || '/';
+  return (PUBLIC_ROUTES as readonly string[]).includes(normalized);
+}
+
+export function isAuthOnlyRoute(path: string): boolean {
+  const normalized = path.split('?')[0].split('#')[0].replace(/\/+$/, '').toLowerCase() || '/';
+  return (AUTH_ONLY_ROUTES as readonly string[]).includes(normalized);
 }
 
 /** Every route the Portal can render (used for redirect decisions). */

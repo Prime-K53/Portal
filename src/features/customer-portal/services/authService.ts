@@ -138,14 +138,37 @@ function isTwoFactorChallenge(response: ErpLoginResponse): response is ErpTwoFac
   );
 }
 
+function assertStrongPassword(password: string): void {
+  if (password.length < 8) {
+    throw new AuthError('Password must be at least 8 characters.', 'INVALID_CREDENTIALS');
+  }
+}
+
+/** True when a JWT access token is expired (with 60s clock skew tolerance). */
+function isAccessTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false; // opaque token — cannot verify, assume valid
+    const payloadJson = JSON.parse(
+      typeof atob === 'function'
+        ? atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
+        : Buffer.from(parts[1], 'base64').toString('utf8')
+    ) as { exp?: number };
+    if (typeof payloadJson.exp !== 'number') return false;
+    return payloadJson.exp * 1000 <= Date.now() - 60000;
+  } catch {
+    return false;
+  }
+}
+
 export class ErpAuthService implements AuthService {
   private readonly client: ApiClient;
   /** Pending credentials held in memory between the login step and the 2FA step. */
-  private pendingCredentials: { email: string; password: string } | null = null;
+  private pendingCredentials: { email: string; password: string; expiresAt: number } | null = null;
   /** Single-flight refresh lock — concurrent 401s share ONE rotation call. */
   private refreshInFlight: Promise<AuthSession | null> | null = null;
   /** Proactive refresh timer (ERP client refreshes at 25 minutes). */
-  private refreshTimer: number | null = null;
+  private refreshTimer: number | ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
   /**
    * Set exactly once when recovery concludes the session is unrecoverable.
@@ -153,6 +176,7 @@ export class ErpAuthService implements AuthService {
    * this reason instead of sending headerless/secondary requests.
    */
   private sessionTermination: { reason: string } | null = null;
+  private broadcast: BroadcastChannel | null = null;
 
   constructor(baseUrl: string) {
     this.client = createApiClient({
@@ -175,6 +199,7 @@ export class ErpAuthService implements AuthService {
             })
           : null,
     });
+    this.initCrossTabSync();
   }
 
   /**
@@ -186,7 +211,74 @@ export class ErpAuthService implements AuthService {
     if (this.sessionTermination) return;
     this.sessionTermination = { reason };
     this.clearSession();
+    this.broadcastState('session-expired');
     dispatchSessionExpired();
+  }
+
+  /** Cross-tab session sync: logout in one tab logs out all tabs; refresh in one updates others. */
+  private initCrossTabSync(): void {
+    try {
+      // Browser-only: Node test runners provide a global BroadcastChannel that
+      // would keep the event loop alive and hang `tsx --test`.
+      if (typeof window === 'undefined') return;
+      if (typeof BroadcastChannel === 'undefined') return;
+      this.broadcast = new BroadcastChannel('portal_session');
+      this.broadcast.onmessage = (event) => {
+        const type = (event?.data as { type?: string })?.type;
+        if (type === 'session-expired' || type === 'logout') {
+          if (!this.sessionTermination) {
+            this.sessionTermination = { reason: STALE_SESSION_MESSAGE };
+          }
+          this.clearSessionLocal();
+          dispatchSessionExpired();
+        } else if (type === 'session-updated') {
+          // Another tab rotated tokens — clear termination so this tab retries
+          // with the fresh envelope instead of failing fast.
+          this.sessionTermination = null;
+        }
+      };
+    } catch {
+      this.broadcast = null;
+    }
+    try {
+      if (typeof window !== 'undefined') {
+        window.addEventListener('storage', (e) => {
+          if (e.key === 'portal_session_terminated' && e.newValue) {
+            if (!this.sessionTermination) {
+              this.sessionTermination = { reason: STALE_SESSION_MESSAGE };
+            }
+            this.clearSessionLocal();
+            dispatchSessionExpired();
+          }
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private broadcastState(type: 'session-expired' | 'logout' | 'session-updated'): void {
+    try {
+      this.broadcast?.postMessage({ type });
+    } catch {
+      // ignore
+    }
+    try {
+      if (typeof localStorage !== 'undefined' && (type === 'session-expired' || type === 'logout')) {
+        localStorage.setItem('portal_session_terminated', String(Date.now()));
+      }
+      if (typeof localStorage !== 'undefined' && type === 'session-updated') {
+        localStorage.removeItem('portal_session_terminated');
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private clearSessionLocal(): void {
+    this.pendingCredentials = null;
+    this.clearProactiveTimer();
+    tokenStore.clearEnvelope();
   }
 
   /** Shared API client — the single refresh pipeline for the whole Portal. */
@@ -210,7 +302,8 @@ export class ErpAuthService implements AuthService {
 
     if (isTwoFactorChallenge(response)) {
       // Do NOT assume a token exists here — the ERP issues no tokens on a challenge.
-      this.pendingCredentials = { email, password: credentials.password };
+      // Credentials live max 5 minutes in memory, then auto-expire.
+      this.pendingCredentials = { email, password: credentials.password, expiresAt: Date.now() + 5 * 60 * 1000 };
       return { type: 'two_factor', user: response.user };
     }
 
@@ -219,7 +312,8 @@ export class ErpAuthService implements AuthService {
 
   async verifyTwoFactor(code: string): Promise<AuthSession> {
     const pending = this.pendingCredentials;
-    if (!pending) {
+    if (!pending || Date.now() > pending.expiresAt) {
+      this.pendingCredentials = null;
       throw new AuthError('Two-factor verification requires a pending login. Please sign in again.', 'INVALID_CREDENTIALS');
     }
     const trimmed = code.trim();
@@ -244,6 +338,11 @@ export class ErpAuthService implements AuthService {
   private establishSession(payload: ErpLoginPayload): AuthSession {
     // A successful login/activation supersedes any prior termination state.
     this.sessionTermination = null;
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('portal_session_terminated');
+    } catch {
+      // ignore
+    }
     const user = toPortalUser(payload.user);
     const session: AuthSession = {
       accessToken: payload.access_token,
@@ -257,6 +356,7 @@ export class ErpAuthService implements AuthService {
       user: payload.user,
     };
     tokenStore.writeEnvelope(envelope);
+    this.broadcastState('session-updated');
     this.armProactiveRefresh();
     return session;
   }
@@ -279,7 +379,26 @@ export class ErpAuthService implements AuthService {
   private async performRefresh(): Promise<AuthSession | null> {
     if (this.disposed) return null;
     const refreshToken = tokenStore.getRefreshToken();
+    // No refresh token = nothing to rotate. Return null WITHOUT terminating
+    // here — the apiClient's onAuthFailure will terminate after classifying
+    // the original 401. This keeps single responsibility: missing token is an
+    // auth failure, not a transient.
     if (!refreshToken) return null;
+
+    // Cross-tab single-flight via localStorage mutex (one-time refresh tokens
+    // must not be consumed concurrently by two tabs). Best-effort: if lock
+    // held by another tab, wait briefly then re-read the envelope (the other
+    // tab may have already rotated).
+    const lockAcquired = await this.acquireRefreshLock();
+    if (!lockAcquired) {
+      await new Promise((r) => setTimeout(r, 800));
+      const afterWait = tokenStore.getAccessToken();
+      if (afterWait) {
+        const session = this.getSession();
+        if (session) return session;
+      }
+      // Fall through to normal refresh if still no session.
+    }
 
     try {
       const response = await this.client.post<ErpRefreshResponse>(
@@ -308,6 +427,7 @@ export class ErpAuthService implements AuthService {
       };
       tokenStore.writeEnvelope(envelope);
       this.sessionTermination = null;
+      this.broadcastState('session-updated');
       this.armProactiveRefresh();
 
       const session: AuthSession = {
@@ -318,10 +438,11 @@ export class ErpAuthService implements AuthService {
       return session;
     } catch (error) {
       // Only terminate the session when the ERP explicitly rejects the refresh
-      // token (4xx). Network errors, timeouts and 500s are transient — the
+      // token (4xx). Network errors, timeouts and 5xx are transient — the
       // session in sessionStorage may still be valid. Terminating on a
       // transient error destroys a valid session and triggers a "session
-      // expired" storm in the UI.
+      // expired" storm in the UI. Transient failures THROW so the apiClient
+      // knows NOT to call onAuthFailure.
       const authRejected =
         error instanceof ApiError &&
         error.status !== null &&
@@ -329,8 +450,41 @@ export class ErpAuthService implements AuthService {
         error.status < 500;
       if (authRejected) {
         this.terminateSession(STALE_SESSION_MESSAGE);
+        return null;
       }
-      return null;
+      if (error instanceof ApiError) throw error;
+      throw new ApiError('Session refresh failed due to a network problem.', {
+        code: 'NETWORK_ERROR',
+        details: error,
+      });
+    } finally {
+      this.releaseRefreshLock();
+    }
+  }
+
+  private async acquireRefreshLock(): Promise<boolean> {
+    try {
+      if (typeof localStorage === 'undefined') return true;
+      const key = 'portal_refresh_lock';
+      const now = Date.now();
+      const existing = localStorage.getItem(key);
+      if (existing) {
+        const ts = Number(existing);
+        // Lock younger than 10s = held by another tab.
+        if (Number.isFinite(ts) && now - ts < 10000) return false;
+      }
+      localStorage.setItem(key, String(now));
+      return true;
+    } catch {
+      return true;
+    }
+  }
+
+  private releaseRefreshLock(): void {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('portal_refresh_lock');
+    } catch {
+      // ignore
     }
   }
 
@@ -339,19 +493,26 @@ export class ErpAuthService implements AuthService {
   async logout(): Promise<void> {
     const refreshToken = tokenStore.getRefreshToken();
     const accessToken = tokenStore.getAccessToken();
-    // Fire-and-forget session revocation (matches the ERP client behavior).
+    // Best-effort revocation with bounded timeout — revocation failure is
+    // surfaced in console but never blocks local logout.
     if (refreshToken && accessToken) {
       try {
         await this.client.post<{ message: string }>(
           '/portal/auth/logout',
           { refresh_token: refreshToken },
-          { skipAuth: false }
+          { skipAuth: false, timeoutMs: 8000, maxRetries: 0 }
         );
-      } catch {
-        // Local logout proceeds even when the ERP is unreachable.
+      } catch (err) {
+        try {
+          console.warn('[prime-portal] Logout revocation failed (local session still cleared).', err);
+        } catch {
+          // ignore
+        }
       }
     }
+    this.sessionTermination = { reason: STALE_SESSION_MESSAGE };
     this.clearSession();
+    this.broadcastState('logout');
   }
 
   private clearSession(): void {
@@ -365,6 +526,10 @@ export class ErpAuthService implements AuthService {
   getSession(): AuthSession | null {
     const envelope = tokenStore.readEnvelope();
     if (!envelope?.user?.customer_id) return null;
+    if (!envelope.access_token) return null;
+    // Expiry check: prefer JWT exp claim, fall back to written-at + 30m.
+    // A stale token must never flash the portal shell.
+    if (isAccessTokenExpired(envelope.access_token)) return null;
     return {
       accessToken: envelope.access_token,
       user: toPortalUser(envelope.user),
@@ -373,6 +538,7 @@ export class ErpAuthService implements AuthService {
   }
 
   isAuthenticated(): boolean {
+    if (this.sessionTermination) return false;
     return this.getSession() !== null;
   }
 
@@ -384,16 +550,37 @@ export class ErpAuthService implements AuthService {
 
   private armProactiveRefresh(): void {
     this.clearProactiveTimer();
+    if (this.disposed) return;
+    try {
+      if (typeof window === 'undefined' || typeof window.setTimeout !== 'function') return;
+    } catch {
+      return;
+    }
     // The ERP live client refreshes 25 minutes after login/refresh
-    // (access tokens live ~30 minutes).
+    // (access tokens live ~30 minutes). Also schedule a jittered retry check
+    // so a reload at minute 29 still refreshes via expiry check on boot.
     this.refreshTimer = window.setTimeout(() => {
-      void this.refreshSession();
+      void this.refreshSession().catch(() => undefined);
     }, 25 * 60 * 1000);
+    // Avoid keeping Node processes alive in tests.
+    try {
+      (this.refreshTimer as unknown as { unref?: () => void }).unref?.();
+    } catch {
+      // ignore
+    }
   }
 
   private clearProactiveTimer(): void {
     if (this.refreshTimer !== null) {
-      window.clearTimeout(this.refreshTimer);
+      try {
+        if (typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+          window.clearTimeout(this.refreshTimer);
+        } else {
+          clearTimeout(this.refreshTimer);
+        }
+      } catch {
+        // ignore
+      }
       this.refreshTimer = null;
     }
   }
@@ -401,28 +588,41 @@ export class ErpAuthService implements AuthService {
   // ── Password / account flows ──────────────────────────────────────────────
 
   async requestPasswordReset(email: string): Promise<void> {
-    if (!email.trim()) {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) {
       throw new AuthError('Please enter your email address.', 'INVALID_CREDENTIALS');
     }
     await this.client.post<{ message: string }>(
       '/portal/auth/forgot-password',
-      { email: email.trim() },
+      { email: normalized },
       { skipAuth: true }
     );
   }
 
   async resetPassword(email: string, code: string, password: string): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedCode = code.trim();
+    if (!normalizedEmail || !normalizedCode || !password) {
+      throw new AuthError('Please fill in email, code and a new password.', 'INVALID_CREDENTIALS');
+    }
+    assertStrongPassword(password);
     await this.client.post<{ message: string }>(
       '/portal/auth/reset-password',
-      { email, code, password },
+      { email: normalizedEmail, code: normalizedCode, password },
       { skipAuth: true }
     );
   }
 
   async activate(customerId: string, code: string, password: string): Promise<AuthSession> {
+    const normalizedId = customerId.trim();
+    const normalizedCode = code.trim();
+    if (!normalizedId || !normalizedCode || !password) {
+      throw new AuthError('Please fill in all activation fields.', 'INVALID_CREDENTIALS');
+    }
+    assertStrongPassword(password);
     const response = await this.client.post<ErpLoginPayload>(
       '/portal/auth/activate',
-      { customer_id: customerId, code, password },
+      { customer_id: normalizedId, code: normalizedCode, password },
       { skipAuth: true }
     );
     return this.establishSession(response);
@@ -431,15 +631,14 @@ export class ErpAuthService implements AuthService {
   /**
    * Authenticated password change — ERP `PUT /portal/profile/password`
    * `{ currentPassword, newPassword }` (Bearer; 30 req/hour rate limit).
-   * The ERP answers 400 `Current password is incorrect` and enforces the
-   * same min-6-char rule as every other password field.
    */
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     if (!currentPassword || !newPassword) {
       throw new AuthError('Please fill in both your current and new password.', 'INVALID_CREDENTIALS');
     }
-    if (newPassword.length < 6) {
-      throw new AuthError('New password must be at least 6 characters.', 'INVALID_CREDENTIALS');
+    assertStrongPassword(newPassword);
+    if (currentPassword === newPassword) {
+      throw new AuthError('New password must be different from the current one.', 'INVALID_CREDENTIALS');
     }
     await this.client.put<{ message: string }>(
       '/portal/profile/password',
@@ -448,24 +647,14 @@ export class ErpAuthService implements AuthService {
     );
   }
 
-  async register(input: AuthRegisterInput): Promise<AuthSession> {
-    // @deprecated — see the AuthService interface note. Legacy endpoint kept
-    // functional for backend compatibility; the public Create Account flow no
-    // longer calls this (registration requests do not establish a session).
-    const response = await this.client.post<ErpLoginPayload>(
-      '/portal/auth/register',
-      {
-        companyName: input.companyName,
-        contactName: input.contactName ?? '',
-        email: input.email,
-        password: input.password,
-        phone: input.phone ?? '',
-        tier: input.tier ?? '',
-        referredByCode: input.referredByCode ?? '',
-      },
-      { skipAuth: true }
+  async register(_input: AuthRegisterInput): Promise<AuthSession> {
+    // Disabled: public registration is approval-gated via
+    // registrationRequestService. The legacy POST /portal/auth/register
+    // endpoint must not establish sessions from the Portal UI.
+    throw new AuthError(
+      'Direct registration is disabled. Please use Create Account — your request will be reviewed.',
+      'INVALID_CREDENTIALS'
     );
-    return this.establishSession(response);
   }
 }
 
@@ -477,6 +666,16 @@ export function erpApiBaseUrl(): string {
 
 /** Selects the active auth implementation from the environment configuration. */
 export function createAuthService(): AuthService {
+  const isProd = (() => {
+    try {
+      return Boolean((import.meta as unknown as { env?: { PROD?: boolean } }).env?.PROD);
+    } catch {
+      return false;
+    }
+  })();
+  if (isProd && (env.enableMockApi || env.enableMockAuth)) {
+    throw new Error('Mock auth/api is forbidden in production builds.');
+  }
   if (!env.useRealBackend && env.enableMockAuth) {
     return new MockAuthService();
   }

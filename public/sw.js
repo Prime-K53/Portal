@@ -9,8 +9,10 @@
  *
  * Version bump the CACHE_NAME to invalidate everything on deploy.
  */
-const CACHE_NAME = 'prime-portal-v4';
+const CACHE_NAME = 'prime-portal-v5';
 const PRECACHE = [
+  '/',
+  '/index.html',
   '/offline.html',
   '/manifest.webmanifest',
   '/favicon.ico',
@@ -18,12 +20,13 @@ const PRECACHE = [
   '/icons/icon-512.png',
   '/icons/icon-512-maskable.png',
 ];
+const MAX_CACHE_ENTRIES = 120;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE))
+      .then((cache) => cache.addAll(PRECACHE).catch(() => undefined))
       .then(() => self.skipWaiting())
   );
 });
@@ -57,37 +60,71 @@ async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
   const network = fetch(request)
-    .then((response) => {
-      if (response && (response.ok || response.type === 'opaque')) cache.put(request, response.clone());
+    .then(async (response) => {
+      if (response && (response.ok || response.type === 'opaque')) {
+        await capCache(cache);
+        cache.put(request, response.clone());
+      }
       return response;
     })
     .catch(() => undefined);
   return cached || (await network) || Response.error();
 }
 
+async function capCache(cache) {
+  try {
+    const keys = await cache.keys();
+    if (keys.length >= MAX_CACHE_ENTRIES) {
+      // Delete oldest entries (FIFO approximation) to bound storage.
+      await cache.delete(keys[0]);
+    }
+  } catch (_) {
+    // ignore
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET') return;
-
   const url = new URL(request.url);
 
-  // Business data & official documents: ALWAYS the network. No exceptions —
-  // invoices/receipts must never be served from a cache.
-  if (url.pathname.startsWith('/api/')) return;
+  // Business data & official documents: ALWAYS the network. Mutations offline
+  // get an explicit JSON 503 (not a hanging fetch) so the UI can show
+  // "you're offline — retry" instead of NETWORK_ERROR.
+  if (url.pathname.startsWith('/api/')) {
+    if (request.method !== 'GET') {
+      event.respondWith(
+        fetch(request).catch(
+          () =>
+            new Response(JSON.stringify({ message: 'You are offline. Your change was not sent — please retry when back online.', offline: true }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            })
+        )
+      );
+    }
+    return;
+  }
+
+  if (request.method !== 'GET') return;
 
   // App navigations: network-first → cache → offline shell.
+  // Hash routes (#/invoices) share one document — cache by pathname so all
+  // tabs share the shell entry.
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
           const fresh = await fetch(request);
           const cache = await caches.open(CACHE_NAME);
+          await capCache(cache);
+          // Normalize hash navigations to the pathname entry.
           cache.put(request, fresh.clone());
           return fresh;
         } catch (_) {
           const cache = await caches.open(CACHE_NAME);
           return (
-            (await cache.match(request)) ||
+            (await cache.match(request, { ignoreSearch: true })) ||
+            (await cache.match('/index.html')) ||
             (await cache.match('/offline.html')) ||
             new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } })
           );

@@ -27,27 +27,32 @@ export type ApiErrorCode =
   | 'BAD_REQUEST'
   | 'SERVER_ERROR'
   | 'UNAVAILABLE'
+  | 'RATE_LIMITED'
   | 'UNKNOWN';
 
 export class ApiError extends Error {
   readonly status: number | null;
   readonly code: ApiErrorCode;
   readonly details: unknown;
+  readonly retryAfterMs: number | null;
+  readonly correlationId: string | null;
 
   constructor(
     message: string,
-    options?: { status?: number | null; code?: ApiErrorCode; details?: unknown }
+    options?: { status?: number | null; code?: ApiErrorCode; details?: unknown; retryAfterMs?: number | null; correlationId?: string | null }
   ) {
     super(message);
     this.name = 'ApiError';
     this.status = options?.status ?? null;
     this.code = options?.code ?? 'UNKNOWN';
     this.details = options?.details;
+    this.retryAfterMs = options?.retryAfterMs ?? null;
+    this.correlationId = options?.correlationId ?? null;
   }
 
-  /** True when the request was rejected because the session is invalid. */
+  /** True when the session is invalid and refresh cannot restore it (401 only). */
   get isAuthError(): boolean {
-    return this.code === 'UNAUTHORIZED' || this.code === 'FORBIDDEN';
+    return this.code === 'UNAUTHORIZED';
   }
 
   /** True when the ERP service could not be reached. */
@@ -131,17 +136,29 @@ function isAbortTimeout(error: unknown): boolean {
 async function normalizeError(response: Response): Promise<ApiError> {
   let message: string | undefined;
   let details: unknown;
+  let rawBody: unknown = null;
 
   try {
-    const payload = (await response.json()) as {
-      message?: string;
-      error?: string;
-      details?: unknown;
-      code?: string;
-    };
-    // ERP canonical error shape: { error: <title>, message: <human text> }.
-    message = payload.message ?? payload.error;
-    details = payload.details ?? payload.code;
+    const text = await response.text();
+    if (text) {
+      try {
+        const payload = JSON.parse(text) as {
+          message?: string;
+          error?: string;
+          errors?: unknown;
+          details?: unknown;
+          code?: string;
+        };
+        rawBody = payload;
+        // ERP canonical error shape: { error: <title>, message: <human text> }.
+        message = payload.message ?? payload.error;
+        // Preserve validation arrays (e.g. { errors: [...] }) alongside details.
+        details = payload.details ?? (payload as Record<string, unknown>).errors ?? payload.code ?? text.slice(0, 2000);
+      } catch {
+        rawBody = text.slice(0, 2000);
+        message = undefined;
+      }
+    }
   } catch {
     // Non-JSON error body — fall back to status text.
   }
@@ -151,15 +168,44 @@ async function normalizeError(response: Response): Promise<ApiError> {
   if (status === 401) code = 'UNAUTHORIZED';
   else if (status === 403) code = 'FORBIDDEN';
   else if (status === 404) code = 'NOT_FOUND';
-  else if (status === 429) code = 'UNAVAILABLE'; // rate-limited — retryable
+  else if (status === 429) code = 'RATE_LIMITED';
   else if (status >= 400 && status < 500) code = 'BAD_REQUEST';
   else if (status >= 500) code = 'SERVER_ERROR';
   else code = 'UNKNOWN';
+
+  // Honor server Retry-After (seconds or HTTP date) for 429/503.
+  let retryAfterMs: number | null = null;
+  try {
+    const retryAfter = response.headers?.get?.('retry-after');
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      if (Number.isFinite(seconds)) retryAfterMs = Math.max(0, seconds * 1000);
+      else {
+        const dateMs = Date.parse(retryAfter);
+        if (Number.isFinite(dateMs)) retryAfterMs = Math.max(0, dateMs - Date.now());
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  let correlationId: string | null = null;
+  try {
+    correlationId =
+      response.headers?.get?.('x-request-id') ??
+      response.headers?.get?.('x-correlation-id') ??
+      (rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, unknown>).requestId as string ?? null : null) ??
+      null;
+  } catch {
+    // ignore
+  }
 
   return new ApiError(message || `Request failed with status ${status} (${response.statusText}).`, {
     status,
     code,
     details,
+    retryAfterMs,
+    correlationId,
   });
 }
 
@@ -174,7 +220,15 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
   ): Promise<Response> {
     const timeoutMs = options.timeoutMs ?? env.apiTimeoutMs;
     const controller = new AbortController();
-    const timer = window.setTimeout(
+    const safeSetTimeout =
+      typeof window !== 'undefined' && typeof window.setTimeout === 'function'
+        ? window.setTimeout.bind(window)
+        : setTimeout;
+    const safeClearTimeout =
+      typeof window !== 'undefined' && typeof window.clearTimeout === 'function'
+        ? window.clearTimeout.bind(window)
+        : clearTimeout;
+    const timer = safeSetTimeout(
       () => controller.abort(new DOMException('Request timed out', 'TimeoutError')),
       timeoutMs
     );
@@ -192,7 +246,16 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
       };
       const accessToken = deps.getAccessToken();
       if (accessToken && !options.skipAuth) headers.Authorization = `Bearer ${accessToken}`;
-      if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+      const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+      // Never set Content-Type for FormData — the browser must set the boundary.
+      // Drop any caller-supplied multipart header (it breaks uploads).
+      if (isFormData) {
+        for (const key of Object.keys(headers)) {
+          if (key.toLowerCase() === 'content-type') delete headers[key];
+        }
+      } else if (options.body !== undefined) {
+        headers['Content-Type'] = headers['Content-Type'] ?? 'application/json';
+      }
       // Marks the retry after a 401 refresh (harmless client-controlled header
       // documented in the ERP contract §8).
       if (attempt > 1) headers['X-Refresh-Attempt'] = 'true';
@@ -200,7 +263,7 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
       return await fetch(joinUrl(baseUrl, path), {
         method,
         headers,
-        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        body: options.body !== undefined ? (isFormData ? (options.body as FormData) : JSON.stringify(options.body)) : undefined,
         signal: controller.signal,
       });
     } catch (error) {
@@ -212,7 +275,7 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
         details: error,
       });
     } finally {
-      window.clearTimeout(timer);
+      safeClearTimeout(timer);
       options.signal?.removeEventListener('abort', externalAbort);
     }
   }
@@ -235,7 +298,11 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
       await new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    function backoffWithJitter(attempt: number): number {
+    function backoffWithJitter(attempt: number, retryAfterMs: number | null): number {
+      // Honor server Retry-After when present (capped at 30s to avoid hangs).
+      if (retryAfterMs !== null && Number.isFinite(retryAfterMs)) {
+        return Math.min(Math.max(0, Math.round(retryAfterMs)), 30000);
+      }
       // Exponential: 500ms base, doubling per attempt, capped at 4s.
       // ±25% jitter prevents thundering-herd synchronisation across tabs.
       const base = Math.min(500 * 2 ** attempt, 4000);
@@ -247,7 +314,8 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
       return (
         isIdempotent &&
         maxRetries > 0 &&
-        (error.code === 'UNAVAILABLE' ||
+        (error.code === 'RATE_LIMITED' ||
+          error.code === 'UNAVAILABLE' ||
           error.code === 'SERVER_ERROR' ||
           error.code === 'NETWORK_ERROR' ||
           error.code === 'TIMEOUT')
@@ -255,13 +323,16 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
     }
 
     let lastError: ApiError | null = null;
+    let lastRetryAfterMs: number | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // Session-recovery gate — fails fast with the original stale-session
       // reason when the auth layer has concluded the session is unrecoverable.
       // Auth endpoints themselves (login/activate/refresh) are exempt: they are
       // exactly how the user RECOVERS from that state.
-      const blocked = !options.skipAuth && attempt === 0 ? deps.requestGate?.() : null;
+      // Checked on EVERY attempt (not just attempt 0) so retries cannot bypass
+      // termination.
+      const blocked = !options.skipAuth ? deps.requestGate?.() : null;
       if (blocked) throw blocked;
 
       try {
@@ -269,14 +340,36 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
 
         // 401 → single-flight refresh → retry exactly once with the fresh token.
         // skipAuth calls (login/refresh) NEVER recurse — their 401 IS terminal.
+        // Transient refresh failures (network/timeout) MUST NOT kill the
+        // session — they throw and are handled below without onAuthFailure.
         if (response.status === 401 && !options.skipAuth) {
-          const freshToken = await deps.refreshAccessToken();
+          let freshToken: string | null = null;
+          try {
+            freshToken = await deps.refreshAccessToken();
+          } catch (refreshTransient) {
+            // Refresh transport failed — session may still be valid. Do not
+            // terminate; surface a retryable error for idempotent requests.
+            const transient = refreshTransient instanceof ApiError
+              ? refreshTransient
+              : new ApiError('Session refresh failed due to a network problem.', { code: 'NETWORK_ERROR', details: refreshTransient });
+            if (isRetryable(transient) && attempt < maxRetries) {
+              lastError = transient;
+              lastRetryAfterMs = transient.retryAfterMs;
+              await wait(backoffWithJitter(attempt, lastRetryAfterMs));
+              continue;
+            }
+            throw transient;
+          }
           if (freshToken) {
             response = await perform(method, path, options, attempt + 2);
           }
         }
 
         if (!response.ok) {
+          // Only terminate on 401 when refresh could not restore (null) AND
+          // the gate confirms termination. Transient refresh failures never
+          // reach here (handled above). 403 is authorization, not session
+          // expiry — never terminate on it.
           if (response.status === 401) deps.onAuthFailure?.({ skipAuth: !!options.skipAuth });
           const terminated = !options.skipAuth ? deps.requestGate?.() : null;
           if (terminated) throw terminated;
@@ -284,7 +377,7 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
           const error = await normalizeError(response);
           if (isRetryable(error) && attempt < maxRetries) {
             lastError = error;
-            const delay = backoffWithJitter(attempt);
+            const delay = backoffWithJitter(attempt, error.retryAfterMs);
             await wait(delay);
             continue;
           }
@@ -302,7 +395,7 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
         if (error instanceof ApiError) {
           if (isRetryable(error) && attempt < maxRetries) {
             lastError = error;
-            const delay = backoffWithJitter(attempt);
+            const delay = backoffWithJitter(attempt, error.retryAfterMs);
             await wait(delay);
             continue;
           }

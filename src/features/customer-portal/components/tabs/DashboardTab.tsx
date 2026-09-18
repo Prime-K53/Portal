@@ -165,6 +165,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   const outstandingTotal = unpaidInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
   const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
+  // Paid invoices total comes from invoice records — never from ledger credits.
+  const paidInvoicesTotal = paidInvoices.reduce((sum, i) => sum + i.amount, 0);
 
   // Active orders (non-terminal)
   const activeOrders = orders.filter(
@@ -349,11 +351,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           }}
           role="region"
           aria-roledescription="carousel"
-          aria-live="polite"
           aria-label="Announcements and account updates"
           tabIndex={bannerSlides.length > 1 ? 0 : -1}
           className="relative aspect-[5/2] sm:aspect-[3/1] rounded-2xl bg-white p-[2px] shadow-md shadow-slate-900/5 ring-1 ring-slate-200/70 transition-all duration-500 group w-full"
-         >
+          >
           <div className="relative overflow-hidden rounded-[calc(1rem-2px)] w-full h-full bg-slate-900">
           <div
             key={activeSlide?.id ?? 'slide'}
@@ -414,17 +415,25 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <>
               <button
                 onClick={goPrev}
-                className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white text-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg shadow-black/20 hover:scale-105"
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white text-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus:opacity-100 transition-all shadow-lg shadow-black/20 hover:scale-105 min-w-[36px] min-h-[36px]"
                 aria-label="Previous slide"
               >
                 <ChevronRight className="w-4 h-4 rotate-180" />
               </button>
               <button
                 onClick={goNext}
-                className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white text-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg shadow-black/20 hover:scale-105"
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white text-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus:opacity-100 transition-all shadow-lg shadow-black/20 hover:scale-105 min-w-[36px] min-h-[36px]"
                 aria-label="Next slide"
               >
                 <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsCarouselPaused((p) => !p)}
+                className="absolute bottom-3 right-3 z-20 px-2.5 py-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white text-[10px] font-bold backdrop-blur-md"
+                aria-label={isCarouselPaused ? 'Resume automatic slide rotation' : 'Pause automatic slide rotation'}
+                aria-pressed={isCarouselPaused}
+              >
+                {isCarouselPaused ? 'Play' : 'Pause'}
               </button>
             </>
           )}
@@ -478,6 +487,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <button
               type="button"
               onClick={() => onNavigateInvoices?.('unpaid')}
+              aria-label={`Outstanding balance ${formatCurrencyCompact(outstandingTotal)}. View unpaid invoices.`}
               className="flex-1 min-w-0 text-left active:scale-[0.98] transition-transform"
             >
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
@@ -504,10 +514,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <button
               type="button"
               onClick={() => onNavigateTab('statements')}
+              aria-label={`Total paid ${formatCurrencyCompact(totalPayment)} in ledger credits. View statements.`}
               className="flex-1 min-w-0 text-left active:scale-[0.98] transition-transform"
             >
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                Total Paid
+                Ledger Credits
               </p>
               <p className="text-[clamp(1rem,4.2vw,1.5rem)] font-black text-emerald-600 leading-tight currency-display">
                 {formatCurrencyCompact(totalPayment)}
@@ -560,7 +571,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {[
               { label: 'Outstanding', count: unpaidInvoices.length, amount: outstandingTotal, dot: 'bg-amber-500', amountClass: 'text-slate-900' },
               { label: 'Overdue', count: overdueInvoices.length, amount: overdueInvoices.reduce((s, i) => s + i.amountRemaining, 0), dot: 'bg-rose-500', amountClass: 'text-rose-600' },
-              { label: 'Paid', count: paidInvoices.length, amount: totalPayment, dot: 'bg-emerald-500', amountClass: 'text-emerald-600' },
+              { label: 'Paid', count: paidInvoices.length, amount: paidInvoicesTotal, dot: 'bg-emerald-500', amountClass: 'text-emerald-600' },
               { label: 'Draft', count: draftInvoices.length, amount: draftInvoices.reduce((s, i) => s + i.amountRemaining, 0), dot: 'bg-slate-300', amountClass: 'text-slate-500' },
             ].map(({ label, count, amount, dot, amountClass }) => (
               <div key={label} className="flex items-center justify-between py-1 gap-2 min-w-0">
@@ -700,6 +711,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     key={st.id}
                     type="button"
                     onClick={() => onNavigateTab('statements')}
+                    aria-label={`${st.description}, ${st.type}, ${formatCurrency(amount)}`}
                     className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 active:scale-[0.99] transition-all group min-h-[44px]"
                   >
                     <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${iconBg}`}>
@@ -724,7 +736,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : 'bg-slate-100 text-slate-600 border border-slate-200'
                       }`}>
-                        {isPositive ? 'Paid' : 'Pending'}
+                        {st.type}
                       </span>
                     </div>
                   </button>
@@ -756,7 +768,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
             <div className="flex items-center justify-between py-2.5 gap-3 min-w-0">
               <span className="text-xs text-slate-500 font-medium shrink-0">Payment Terms</span>
-              <span className="text-xs font-bold text-slate-900">30 days</span>
+              <span className="text-xs font-bold text-slate-500" title="Not provided by ERP">—</span>
             </div>
             {profile.tier && (
               <div className="flex items-center justify-between py-2.5 gap-3 min-w-0">
@@ -768,7 +780,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             )}
             <div className="flex items-center justify-between py-2.5 gap-3 min-w-0">
               <span className="text-xs font-bold text-slate-900">Member Since</span>
-              <span className="text-xs font-bold text-slate-900">—</span>
+              <span className="text-xs font-bold text-slate-500" title="Not provided by ERP">—</span>
             </div>
           </div>
         </div>

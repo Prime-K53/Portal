@@ -3,8 +3,10 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import {registerServiceWorker} from './pwa/pwa';
 import {initSentry} from './sentry';
+import { assertEnvAtBoot } from './features/customer-portal/config/env';
 import './index.css';
 
+assertEnvAtBoot();
 initSentry();
 
 createRoot(document.getElementById('root')!).render(

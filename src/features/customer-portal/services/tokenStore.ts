@@ -36,9 +36,39 @@ function readEnvelope(): PortalSessionEnvelope | null {
     const raw = window.sessionStorage.getItem(sessionKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PortalSessionEnvelope;
-    if (!parsed || typeof parsed.access_token !== 'string' || !parsed.access_token) return null;
+    if (!parsed || typeof parsed.access_token !== 'string' || !parsed.access_token) {
+      // Corrupt envelope — clear zombie state instead of lingering as
+      // "authenticated until 401".
+      try {
+        window.sessionStorage.removeItem(sessionKey);
+      } catch {
+        // ignore
+      }
+      return null;
+    }
+    if (typeof parsed.refresh_token !== 'string' || !parsed.refresh_token) {
+      try {
+        window.sessionStorage.removeItem(sessionKey);
+      } catch {
+        // ignore
+      }
+      return null;
+    }
+    if (!parsed.user || typeof parsed.user.customer_id !== 'string' || !parsed.user.customer_id) {
+      try {
+        window.sessionStorage.removeItem(sessionKey);
+      } catch {
+        // ignore
+      }
+      return null;
+    }
     return parsed;
   } catch {
+    try {
+      window.sessionStorage.removeItem(sessionKey);
+    } catch {
+      // ignore
+    }
     return null;
   }
 }

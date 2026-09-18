@@ -22,11 +22,45 @@ export function isServiceWorkerSupported(): boolean {
 /** Registers /sw.js in production builds. Safe to call multiple times. */
 export function registerServiceWorker(): void {
   if (!import.meta.env.PROD || !isServiceWorkerSupported()) return;
+  const base = import.meta.env.BASE_URL || '/';
+  const swUrl = base.endsWith('/') ? `${base}sw.js` : `${base}/sw.js`;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
-      // Non-fatal: the app keeps working as a normal web page.
-      console.warn('[PWA] Service worker registration failed:', err);
-    });
+    navigator.serviceWorker
+      .register(swUrl, { scope: base })
+      .then((reg) => {
+        // Activate updates promptly instead of serving stale vN until all tabs close.
+        try {
+          reg.addEventListener('updatefound', () => {
+            const worker = reg.installing;
+            worker?.addEventListener('statechange', () => {
+              if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                try {
+                  worker.postMessage('SKIP_WAITING');
+                } catch {
+                  // ignore
+                }
+              }
+            });
+          });
+        } catch {
+          // ignore
+        }
+      })
+      .catch((err) => {
+        // Non-fatal: the app keeps working as a normal web page.
+        console.warn('[PWA] Service worker registration failed:', err);
+      });
+    // Reload once when the new worker takes over.
+    try {
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloaded) return;
+        reloaded = true;
+        window.location.reload();
+      });
+    } catch {
+      // ignore
+    }
   });
 }
 
@@ -73,8 +107,18 @@ export function watchInstallCapability(handlers: {
   onInstalled: () => void;
   onStandaloneChange?: (standalone: boolean) => void;
 }): () => void {
+  // Reuse the early-captured prompt so a pre-mount event is never lost and
+  // never double-fired (previously two listeners raced).
+  try {
+    if (capturedInstallPrompt) {
+      queueMicrotask(() => handlers.onAvailable(capturedInstallPrompt as BeforeInstallPromptEvent));
+    }
+  } catch {
+    // ignore
+  }
   const onBeforeInstall = (e: Event) => {
     e.preventDefault(); // keep our own UI in control of the prompt
+    capturedInstallPrompt = e as BeforeInstallPromptEvent;
     handlers.onAvailable(e as BeforeInstallPromptEvent);
   };
   const onInstalled = () => handlers.onInstalled();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Copy, Link2, Loader2, MessageCircle, Share2 } from 'lucide-react';
 import { AccountProfile } from '../../types';
 
@@ -6,40 +6,85 @@ interface ReferralCodeCardProps {
   profile: AccountProfile;
 }
 
-function buildReferralUrl(referralCode: string): string {
-  const base = window.location.origin;
-  return `${base}/register?ref=${encodeURIComponent(referralCode)}`;
+export function buildReferralUrl(referralCode: string): string {
+  // Hash-router aware: app routes by hash (#/register?ref=). Path-form
+  // /register?ref= is mirrored to hash on boot, but share the canonical
+  // hash form so subpath hosting + static hosts always resolve.
+  try {
+    const { origin, pathname } = window.location;
+    const basePath = pathname.replace(/\/+$/, '').replace(/\/register$/, '') || '';
+    return `${origin}${basePath}/#/register?ref=${encodeURIComponent(referralCode)}`;
+  } catch {
+    return `#/register?ref=${encodeURIComponent(referralCode)}`;
+  }
 }
 
 export function ReferralCodeCard({ profile }: ReferralCodeCardProps) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [whatsAppCopied, setWhatsAppCopied] = useState(false);
+  const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+    };
+  }, []);
 
   const referralCode = profile.referralCode ?? null;
   const shareMessage = profile.referralShareMessage ?? "I use Prime Printing for school stationery and printing. Register using my referral link to get a discount on your first order!";
 
   const referralUrl = referralCode ? buildReferralUrl(referralCode) : null;
 
+  const later = (fn: () => void, ms: number) => {
+    timersRef.current.push(setTimeout(fn, ms));
+  };
+
+  const copyText = async (text: string): Promise<boolean> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fallback for insecure contexts / denied permissions.
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch {
+        return false;
+      }
+    }
+  };
+
   const handleCopyCode = async () => {
     if (!referralCode) return;
-    try {
-      await navigator.clipboard.writeText(referralCode);
+    setCopyError(null);
+    const ok = await copyText(referralCode);
+    if (ok) {
       setCopied(referralCode);
-      setTimeout(() => setCopied(null), 2000);
-    } catch {
-      setCopied(referralCode);
+      later(() => setCopied(null), 2000);
+    } else {
+      setCopyError('Copy failed — long-press to copy manually.');
     }
   };
 
   const handleCopyLink = async () => {
     if (!referralUrl) return;
-    try {
-      await navigator.clipboard.writeText(referralUrl);
+    setLinkError(null);
+    const ok = await copyText(referralUrl);
+    if (ok) {
       setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    } catch {
-      setLinkCopied(true);
+      later(() => setLinkCopied(false), 2000);
+    } else {
+      setLinkError('Copy failed — long-press to copy manually.');
     }
   };
 
@@ -49,7 +94,7 @@ export function ReferralCodeCard({ profile }: ReferralCodeCardProps) {
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
     setWhatsAppCopied(true);
-    setTimeout(() => setWhatsAppCopied(false), 2000);
+    later(() => setWhatsAppCopied(false), 2000);
   };
 
   const handleShareNative = async () => {
@@ -105,7 +150,8 @@ export function ReferralCodeCard({ profile }: ReferralCodeCardProps) {
                 </span>
                 <button
                   onClick={handleCopyCode}
-                  className="flex items-center gap-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition px-3 py-2 text-xs font-bold text-white shrink-0"
+                  aria-label={copied === referralCode ? 'Referral code copied' : 'Copy referral code'}
+                  className="flex items-center gap-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition px-3 py-2 text-xs font-bold text-white shrink-0 min-h-[40px]"
                 >
                   {copied === referralCode ? (
                     <>
@@ -121,6 +167,8 @@ export function ReferralCodeCard({ profile }: ReferralCodeCardProps) {
                 </button>
               </div>
             </div>
+            {copyError && <p className="text-[11px] text-rose-300 mt-1.5" role="alert">{copyError}</p>}
+            {linkError && <p className="text-[11px] text-rose-300 mt-1.5" role="alert">{linkError}</p>}
 
             <div className="grid grid-cols-3 gap-2">
               <button

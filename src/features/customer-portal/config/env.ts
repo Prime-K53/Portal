@@ -48,14 +48,43 @@ export interface AppEnv {
 
 const metaEnv = (import.meta.env ?? {}) as Record<string, string | undefined>;
 
+function parseBoolFlag(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'true' || normalized === '1';
+}
+
+function parseTimeoutMs(value: string | undefined): number {
+  const DEFAULT = 15000;
+  if (value === undefined || value === null || String(value).trim() === '') return DEFAULT;
+  const parsed = Number(String(value).trim());
+  if (!Number.isFinite(parsed) || parsed < 1000 || parsed > 120000) return DEFAULT;
+  return Math.round(parsed);
+}
+
+function warnOnUnrecognizedFlag(name: string, value: string | undefined): void {
+  if (value === undefined || value === '') return;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === 'true' || normalized === 'false' || normalized === '1' || normalized === '0') return;
+  try {
+    console.warn(`[prime-portal] ${name} has unrecognized value "${value}" — treating as false. Use 'true'/'false'.`);
+  } catch {
+    // ignore
+  }
+}
+
+warnOnUnrecognizedFlag('VITE_USE_REAL_BACKEND', metaEnv.VITE_USE_REAL_BACKEND);
+warnOnUnrecognizedFlag('VITE_ENABLE_MOCK_API', metaEnv.VITE_ENABLE_MOCK_API);
+warnOnUnrecognizedFlag('VITE_ENABLE_MOCK_AUTH', metaEnv.VITE_ENABLE_MOCK_AUTH);
+
 export const env: AppEnv = {
-  apiUrl: (metaEnv.VITE_API_URL ?? '').trim(),
-  apiTimeoutMs: Number(metaEnv.VITE_API_TIMEOUT_MS ?? 15000),
-  useRealBackend: metaEnv.VITE_USE_REAL_BACKEND === 'true',
-  enableMockApi: metaEnv.VITE_ENABLE_MOCK_API === 'true',
-  enableMockAuth: metaEnv.VITE_ENABLE_MOCK_AUTH === 'true',
+  apiUrl: (metaEnv.VITE_API_URL ?? '').trim().replace(/\/+$/, ''),
+  apiTimeoutMs: parseTimeoutMs(metaEnv.VITE_API_TIMEOUT_MS),
+  useRealBackend: parseBoolFlag(metaEnv.VITE_USE_REAL_BACKEND),
+  enableMockApi: parseBoolFlag(metaEnv.VITE_ENABLE_MOCK_API),
+  enableMockAuth: parseBoolFlag(metaEnv.VITE_ENABLE_MOCK_AUTH),
   sessionStorageKey: 'portal_session',
-  sentryDsn: metaEnv.VITE_SENTRY_DSN,
+  sentryDsn: metaEnv.VITE_SENTRY_DSN?.trim() || undefined,
 };
 
 /**
@@ -66,4 +95,62 @@ export const env: AppEnv = {
 export function isMockModeActive(): boolean {
   if (env.useRealBackend) return false;
   return env.enableMockApi || env.enableMockAuth;
+}
+
+/**
+ * Fail-fast environment validation. Returns human-readable issues.
+ * Call at boot (and in build validation) so misconfiguration surfaces
+ * immediately instead of as a storm of NOT_CONFIGURED / TIMEOUT errors.
+ */
+export function getEnvIssues(options: { isProd?: boolean } = {}): string[] {
+  const issues: string[] = [];
+  const isProd = options.isProd ?? ((): boolean => {
+    try {
+      return Boolean((import.meta as unknown as { env?: { PROD?: boolean } }).env?.PROD);
+    } catch {
+      return false;
+    }
+  })();
+
+  if (!env.apiUrl && env.useRealBackend) {
+    issues.push('VITE_API_URL is empty — all ERP requests will fail with NOT_CONFIGURED.');
+  }
+  if (env.apiUrl && !/^https?:\/\//i.test(env.apiUrl)) {
+    issues.push(`VITE_API_URL "${env.apiUrl}" must start with http(s)://.`);
+  }
+  if (isProd && /^http:\/\//i.test(env.apiUrl)) {
+    issues.push('VITE_API_URL uses http:// in production — use https://.');
+  }
+  if (isProd && !env.useRealBackend) {
+    issues.push('VITE_USE_REAL_BACKEND must be true in production.');
+  }
+  if (isProd && (env.enableMockApi || env.enableMockAuth)) {
+    issues.push('Mock flags (VITE_ENABLE_MOCK_API / VITE_ENABLE_MOCK_AUTH) must be false in production.');
+  }
+  if (!env.sentryDsn && isProd) {
+    issues.push('VITE_SENTRY_DSN is missing — production will run blind (no error tracking).');
+  }
+  return issues;
+}
+
+/** Logs env issues once at boot; throws in production when fatal. */
+export function assertEnvAtBoot(): void {
+  const issues = getEnvIssues();
+  if (issues.length === 0) return;
+  const isProd = (() => {
+    try {
+      return Boolean((import.meta as unknown as { env?: { PROD?: boolean } }).env?.PROD);
+    } catch {
+      return false;
+    }
+  })();
+  try {
+    console.warn(`[prime-portal] Environment issues:\n- ${issues.join('\n- ')}`);
+  } catch {
+    // ignore
+  }
+  const fatal = issues.some((i) => i.includes('must be true in production') || i.includes('must be false in production'));
+  if (isProd && fatal) {
+    throw new Error(`Invalid production environment: ${issues.join('; ')}`);
+  }
 }

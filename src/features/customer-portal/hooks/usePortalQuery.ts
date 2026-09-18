@@ -18,12 +18,43 @@ export interface PortalQueryResult<T> {
 /**
  * Global invalidation bus. Real-time events (ERP SSE §10) and cross-feature
  * mutations call invalidatePortalQueries() so every mounted feature hook
- * refetches from the ERP. Rare events — a full refetch is acceptable and keeps
- * the Portal consistent with the ERP of record.
+ * refetches from the ERP. Invalidations are coalesced within a short window
+ * so an SSE burst does not trigger a refetch storm (and 429s).
  */
 const invalidateListeners = new Set<() => void>();
+let lastInvalidateAt = 0;
+let pendingInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
 export function invalidatePortalQueries(): void {
-  invalidateListeners.forEach((listener) => listener());
+  const now = Date.now();
+  // Coalesce bursts: if called again within 250ms, debounce to one trigger.
+  if (now - lastInvalidateAt < 250) {
+    if (pendingInvalidateTimer) return;
+    pendingInvalidateTimer = setTimeout(() => {
+      pendingInvalidateTimer = null;
+      lastInvalidateAt = Date.now();
+      invalidateListeners.forEach((listener) => {
+        try {
+          listener();
+        } catch {
+          // One bad listener must not break the bus.
+        }
+      });
+    }, 250);
+    try {
+      (pendingInvalidateTimer as unknown as { unref?: () => void }).unref?.();
+    } catch {
+      // ignore
+    }
+    return;
+  }
+  lastInvalidateAt = now;
+  invalidateListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch {
+      // ignore
+    }
+  });
 }
 
 function usePortalInvalidations(): number {
@@ -57,16 +88,24 @@ export function usePortalQuery<T>(
   const prevEffectiveEnabledRef = useRef(effectiveEnabled);
   const prevVersionRef = useRef(version);
   const inFlightRef = useRef(false);
+  // Always call the latest fetcher — avoids stale closures without forcing
+  // callers to memoize (the old eslint-disable hid this bug).
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
 
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
   useEffect(() => {
     if (!effectiveEnabled) {
+      // Keep cached data when a tab is merely disabled (tab switch) so the UI
+      // doesn't flicker + refetch. Only wipe on full logout.
       setIsLoading(false);
-      setData(null);
-      setError(null);
-      setLastFetchedAt(null);
       inFlightRef.current = false;
+      if (!isAuthenticated) {
+        setData(null);
+        setError(null);
+        setLastFetchedAt(null);
+      }
       prevEffectiveEnabledRef.current = false;
       return;
     }
@@ -87,7 +126,10 @@ export function usePortalQuery<T>(
       return;
     }
 
-    if (inFlightRef.current && !isInvalidated && !isExplicitRefetch) {
+    // Never fire a duplicate while one is in flight — even on invalidation.
+    // The in-flight response already reflects near-current ERP state; a second
+    // concurrent fetch only risks 429s.
+    if (inFlightRef.current) {
       return;
     }
 
@@ -97,7 +139,7 @@ export function usePortalQuery<T>(
     setError(null);
 
     Promise.resolve()
-      .then(fetcher)
+      .then(() => fetcherRef.current())
       .then((result) => {
         if (active) {
           setData(result);
@@ -115,8 +157,7 @@ export function usePortalQuery<T>(
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, invalidationCount, effectiveEnabled, staleTimeMs, ...deps]);
+  }, [version, invalidationCount, effectiveEnabled, staleTimeMs, isAuthenticated, ...deps]);
 
   const effectiveLoading = isLoading || (effectiveEnabled && lastFetchedAt === null && data === null && error === null);
 

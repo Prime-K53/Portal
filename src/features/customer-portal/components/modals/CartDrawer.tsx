@@ -94,6 +94,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   };
 
   const handleCloseAndReset = () => {
+    // After a successful submission the cart belongs to the submitted request —
+    // clear it so "Continue Shopping" cannot re-submit a duplicate.
+    if (orderComplete) {
+      try {
+        onClearCart();
+      } catch {
+        // ignore
+      }
+    }
+    setRequestedDeliveryDate('');
     setOrderComplete(false);
     setIsSubmitting(false);
     setOrderError('');
@@ -238,20 +248,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <button
                         onClick={() => onUpdateQuantity(product.id, quantity - 1, variantId)}
                         disabled={quantity <= 1}
-                        className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-bold text-slate-700 flex items-center justify-center transition"
+                        aria-label={`Decrease quantity for ${product.name}`}
+                        className="w-8 h-8 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-bold text-slate-700 flex items-center justify-center transition min-w-[32px] min-h-[32px]"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="text-xs font-extrabold text-slate-900 w-4 text-center">{quantity}</span>
+                      <span className="text-xs font-extrabold text-slate-900 w-4 text-center" aria-live="polite">{quantity}</span>
                       <button
                         onClick={() => onUpdateQuantity(product.id, quantity + 1, variantId)}
-                        className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center transition"
+                        aria-label={`Increase quantity for ${product.name}`}
+                        className="w-8 h-8 rounded bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center transition min-w-[32px] min-h-[32px]"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
                       <button
                         onClick={() => onRemoveItem(product.id, variantId)}
-                        className="text-slate-400 hover:text-rose-600 p-1 transition ml-1"
+                        aria-label={`Remove ${product.name} from cart`}
+                        className="text-slate-400 hover:text-rose-600 p-1 transition ml-1 min-w-[32px] min-h-[32px] flex items-center justify-center"
                         title="Remove item"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -283,8 +296,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </p>
               </div>
 
+              {/* Requested delivery date (previously dead state — now in footer). */}
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-1.5">
+                <label htmlFor="cart-delivery-date" className="text-xs font-bold text-slate-700">
+                  Requested delivery date <span className="font-medium text-slate-400">(optional)</span>
+                </label>
+                <input
+                  id="cart-delivery-date"
+                  type="date"
+                  value={requestedDeliveryDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setRequestedDeliveryDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
               {orderError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium leading-relaxed flex items-start gap-2">
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium leading-relaxed flex items-start gap-2" role="alert">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{orderError}</span>
                 </div>

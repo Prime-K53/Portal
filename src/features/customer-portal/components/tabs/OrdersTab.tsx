@@ -126,7 +126,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
 
   const handleQtyInput = (productId: string, value: string, minQty: number = 1) => {
     const parsed = parseInt(value, 10);
-    const updated = isNaN(parsed) || parsed < 1 ? minQty : parsed;
+    const floor = Math.max(1, minQty);
+    const updated = isNaN(parsed) || parsed < floor ? floor : parsed;
     setProductQuantities((prev) => ({ ...prev, [productId]: updated }));
   };
 
@@ -367,21 +368,25 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
             {/* Search Input & Control Bar */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <div className="relative flex-1">
+                <label htmlFor="catalog-search" className="sr-only">Search catalog by product name, SKU, or description</label>
                 <input
+                  id="catalog-search"
                   type="text"
                   placeholder="Search catalog by product name, SKU, or description..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs"
                 />
-                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" aria-hidden="true" />
               </div>
 
               {/* Sort Dropdown & View Mode Switcher */}
               <div className="flex items-center gap-2 justify-between sm:justify-start">
                 {/* Sort Selector */}
                 <div className="relative flex-1 sm:flex-none">
+                  <label htmlFor="catalog-sort" className="sr-only">Sort products</label>
                   <select
+                    id="catalog-sort"
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as any)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-slate-900 appearance-none pr-8 cursor-pointer"
@@ -396,10 +401,12 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                 </div>
 
                 {/* View Switcher (List vs Table) */}
-                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0" role="group" aria-label="Catalog view mode">
                   <button
                     onClick={() => setViewMode('grid')}
                     title="List View"
+                    aria-label="List view"
+                    aria-pressed={viewMode === 'grid'}
                     className={`p-1.5 rounded-lg transition ${
                       viewMode === 'grid'
                         ? 'bg-slate-900 text-white shadow-2xs'
@@ -411,6 +418,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                   <button
                     onClick={() => setViewMode('table')}
                     title="Procurement Table View"
+                    aria-label="Table view"
+                    aria-pressed={viewMode === 'table'}
                     className={`p-1.5 rounded-lg transition ${
                       viewMode === 'table'
                         ? 'bg-slate-900 text-white shadow-2xs'
@@ -437,8 +446,10 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                   return (
                     <button
                       key={cat}
+                      type="button"
                       onClick={() => setSelectedCategory(cat)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5 ${
+                      aria-pressed={selectedCategory === cat}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5 min-h-[36px] ${
                         selectedCategory === cat
                           ? 'bg-slate-900 text-white shadow-2xs'
                           : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200/80'
@@ -458,7 +469,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
               </div>
 
               {/* In Stock Toggle */}
-              <label className="hidden sm:flex items-center gap-2 cursor-pointer shrink-0 select-none text-xs font-bold text-slate-700">
+              <label className="flex items-center gap-2 cursor-pointer shrink-0 select-none text-xs font-bold text-slate-700 min-h-[36px]">
                 <input
                   type="checkbox"
                   checked={inStockOnly}
@@ -529,8 +540,17 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                 return (
                   <div
                     key={product.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`View ${product.name}`}
                     onClick={() => onSelectProductDetail && onSelectProductDetail(getEffectiveProduct(product))}
-                    className={`relative rounded-2xl border cursor-pointer transition-all duration-200 overflow-hidden ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectProductDetail?.(getEffectiveProduct(product));
+                      }
+                    }}
+                    className={`relative rounded-2xl border cursor-pointer transition-all duration-200 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                       isSelected
                         ? 'border-indigo-500 ring-2 ring-indigo-300 bg-gradient-to-br from-indigo-50/50 to-white shadow-lg shadow-indigo-200/50'
                         : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-100/50'
@@ -559,7 +579,9 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                         </div>
                         <button
                           onClick={(e) => toggleBookmark(product.sku, e)}
-                          className={`p-1 rounded-lg transition-all duration-200 shrink-0 ${
+                          aria-label={isBookmarked ? `Remove ${product.name} from bookmarks` : `Bookmark ${product.name}`}
+                          aria-pressed={isBookmarked}
+                          className={`p-1 rounded-lg transition-all duration-200 shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center ${
                             isBookmarked
                               ? 'bg-amber-400 text-amber-950 shadow-md shadow-amber-200'
                               : 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'
@@ -640,8 +662,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                        <th className="p-3 min-w-[220px]">Product & SKU</th>
                         <th className="p-3 hidden md:table-cell">Category</th>
                         <th className="p-3">Unit Price</th>
-                        <th className="p-3 min-w-[140px] hidden md:table-cell">Order Quantity</th>
-                        <th className="p-3 text-right hidden md:table-cell">Subtotal</th>
+                        <th className="p-3 min-w-[140px]">Order Quantity</th>
+                        <th className="p-3 text-right">Subtotal</th>
                         <th className="p-3 text-center">Action</th>
                     </tr>
                   </thead>
@@ -674,18 +696,22 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                             <td className="p-3 table-body-cell">
                               <div>
                                 <div className="flex items-center gap-1.5">
-                                  <span
-                                     className="font-semibold text-slate-900 hover:text-indigo-600 cursor-pointer text-xs"
+                                  <button
+                                    type="button"
+                                     className="font-semibold text-slate-900 hover:text-indigo-600 cursor-pointer text-xs text-left"
                                     onClick={() => onSelectProductDetail && onSelectProductDetail(getEffectiveProduct(product))}
                                   >
                                     {product.name}
-                                  </span>
+                                  </button>
                                 </div>
                                  <div className="flex items-center gap-2 text-[11.5px] text-slate-500 font-mono mt-0.5">
                                    <span>SKU: {product.sku}</span>
                                    <button
+                                     type="button"
                                      onClick={(e) => toggleBookmark(product.sku, e)}
-                                     className="text-amber-500 hover:text-amber-600"
+                                     aria-label={isBookmarked ? `Remove ${product.name} from bookmarks` : `Bookmark ${product.name}`}
+                                     aria-pressed={isBookmarked}
+                                     className="text-amber-500 hover:text-amber-600 min-w-[32px] min-h-[32px] flex items-center justify-center"
                                    >
                                      <Bookmark className={`w-3 h-3 ${isBookmarked ? 'fill-amber-400' : ''}`} />
                                    </button>
@@ -714,12 +740,13 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                              </td>
 
                             {/* Quantity Stepper */}
-                           <td className="p-3 hidden md:table-cell">
+                           <td className="p-3">
                              <div className="flex items-center gap-1">
                                <button
-                                 onClick={() => handleQtyChange(product.id, -1, 1)}
-                                 disabled={qty <= 1}
-                                 className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-bold text-slate-700 flex items-center justify-center transition"
+                                 onClick={() => handleQtyChange(product.id, -1, product.minOrderQty || 1)}
+                                 disabled={qty <= (product.minOrderQty || 1)}
+                                 aria-label={`Decrease quantity for ${product.name}`}
+                                 className="w-8 h-8 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-bold text-slate-700 flex items-center justify-center transition min-w-[32px] min-h-[32px]"
                                >
                                  <Minus className="w-3 h-3" />
                                </button>
@@ -727,13 +754,16 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                                <input
                                  type="number"
                                  value={qty}
-                                 onChange={(e) => handleQtyInput(product.id, e.target.value, 1)}
+                                 min={product.minOrderQty || 1}
+                                 aria-label={`Quantity for ${product.name}, minimum ${product.minOrderQty || 1}`}
+                                 onChange={(e) => handleQtyInput(product.id, e.target.value, product.minOrderQty || 1)}
                                  className="w-12 text-center font-bold text-xs bg-slate-50 border border-slate-200 rounded py-0.5 text-slate-900 focus:outline-none focus:border-slate-900 finance-nums"
                                />
 
                                <button
-                                 onClick={() => handleQtyChange(product.id, 1, 1)}
-                                 className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center transition"
+                                 onClick={() => handleQtyChange(product.id, 1, product.minOrderQty || 1)}
+                                 aria-label={`Increase quantity for ${product.name}`}
+                                 className="w-8 h-8 rounded bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center transition min-w-[32px] min-h-[32px]"
                                >
                                  <Plus className="w-3 h-3" />
                                </button>
@@ -741,7 +771,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                            </td>
 
                            {/* Subtotal */}
-                           <td className="p-3 text-right table-body-cell font-medium finance-nums hidden md:table-cell">
+                           <td className="p-3 text-right table-body-cell font-medium finance-nums">
                              {formatCurrency(subtotal)}
                            </td>
 

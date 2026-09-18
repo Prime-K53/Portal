@@ -19,10 +19,40 @@ export interface HashRoute {
 }
 
 export function useHashRoute(): HashRoute {
-  const [path, setPath] = useState<string>(readHashPath);
+  const [path, setPath] = useState<string>(() => {
+    const initial = readHashPath();
+    // Boot with no hash → initialize to dashboard instead of flashing a guard redirect.
+    if (!initial || initial === '/') {
+      try {
+        window.location.hash = '/dashboard';
+      } catch {
+        // ignore
+      }
+      return '/dashboard';
+    }
+    return initial;
+  });
 
   useEffect(() => {
-    const onHashChange = () => setPath(readHashPath());
+    const onHashChange = () => {
+      setPath(readHashPath());
+      // Router UX: reset scroll + move focus to main for screen readers.
+      try {
+        window.scrollTo({ top: 0 });
+      } catch {
+        try {
+          window.scrollTo(0, 0);
+        } catch {
+          // ignore
+        }
+      }
+      try {
+        document.querySelector('main')?.setAttribute('tabindex', '-1');
+        (document.querySelector('main') as HTMLElement | null)?.focus?.({ preventScroll: true });
+      } catch {
+        // ignore
+      }
+    };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
