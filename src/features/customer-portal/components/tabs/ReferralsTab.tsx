@@ -405,8 +405,11 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
               return (
                 <li key={referral.id}>
                   <button
+                    type="button"
                     onClick={() => handleToggleTimeline(referral.id)}
-                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50/60"
+                    aria-expanded={isExpanded}
+                    aria-controls={`referral-timeline-${referral.id}`}
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50/60 min-h-[44px]"
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-slate-900 truncate">
@@ -427,7 +430,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t border-slate-100 bg-slate-50/40 px-4 py-3">
+                    <div id={`referral-timeline-${referral.id}`} className="border-t border-slate-100 bg-slate-50/40 px-4 py-3" role="region" aria-live="polite">
                       <div className="border-l-2 border-amber-200 pl-4 space-y-3">
                         {referral.notes && (
                           <p className="text-xs font-medium text-slate-600">
@@ -468,14 +471,14 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                             ))}
                           </ul>
                         )}
-                        {!timeline && (
-                          <p className="text-xs font-medium text-slate-400">Loading timeline…</p>
+                        {!timeline && !timelineError && (
+                          <p className="text-xs font-medium text-slate-400" role="status">Loading timeline…</p>
                         )}
                         {timeline && timeline.length === 0 && (
                           <p className="text-xs font-medium text-slate-400">No timeline events yet.</p>
                         )}
                         {timelineError && (
-                          <p className="flex items-center gap-1.5 text-xs font-bold text-rose-600">
+                          <p className="flex items-center gap-1.5 text-xs font-bold text-rose-600" role="alert">
                             <AlertTriangle className="h-3.5 w-3.5" /> {timelineError}
                           </p>
                         )}

@@ -225,8 +225,17 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
           .map((st) => (
           <div
             key={st.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`${st.type}: ${st.description}, balance ${st.balance}`}
             onClick={() => onSelectEntryDetail && onSelectEntryDetail(st)}
-            className="px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-all cursor-pointer group"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectEntryDetail?.(st);
+              }
+            }}
+            className="px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-all cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
           >
             <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-2">

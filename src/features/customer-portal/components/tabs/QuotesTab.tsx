@@ -188,13 +188,25 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
               return (
                 <div
                   key={q.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View ${q.isQuotation ? 'quotation' : 'request'} ${q.number}`}
                   onClick={() => {
                     const original = q.isQuotation
                       ? quotes.find((qt) => qt.id === q.id)
                       : quoteRequests.find((qr) => qr.id === q.id);
                     if (original) onSelectQuotation(original);
                   }}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-card cursor-pointer hover:border-indigo-300 hover:shadow-card-hover transition"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      const original = q.isQuotation
+                        ? quotes.find((qt) => qt.id === q.id)
+                        : quoteRequests.find((qr) => qr.id === q.id);
+                      if (original) onSelectQuotation(original);
+                    }
+                  }}
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-3 shadow-card cursor-pointer hover:border-indigo-300 hover:shadow-card-hover transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                     <div>

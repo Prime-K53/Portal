@@ -39,8 +39,17 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ deliveries }) => {
             {deliveries.map((item) => (
                 <div
                   key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Track delivery ${item.trackingNumber || item.id}, ${item.title}`}
                   onClick={() => handleOpenModal(item)}
-                  className="p-4 rounded-2xl border text-left cursor-pointer transition-all bg-white border-slate-200/80 hover:border-blue-400 hover:shadow-md group"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleOpenModal(item);
+                    }
+                  }}
+                  className="p-4 rounded-2xl border text-left cursor-pointer transition-all bg-white border-slate-200/80 hover:border-blue-400 hover:shadow-md group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <div className="flex items-center justify-between gap-1 mb-1.5">
                     <span className="font-mono text-xs font-bold text-slate-900 truncate">{item.trackingNumber || item.id}</span>

@@ -11,7 +11,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/authLifecycle.test.ts tests/conditionalQueryFetching.test.ts tests/customerIdentity.test.ts tests/documentVerify.test.ts tests/invoiceDetail.test.ts tests/officialDocument.test.ts tests/pwa.test.ts tests/referralRegistration.test.ts tests/registrationRequest.test.ts tests/usePortalQuery.test.ts tests/variantFlow.test.ts",
+    "test": "tsx --test tests/authLifecycle.test.ts tests/conditionalQueryFetching.test.ts tests/customerIdentity.test.ts tests/documentVerify.test.ts tests/invoiceDetail.test.ts tests/officialDocument.test.ts tests/pwa.test.ts tests/realContract.test.ts tests/referralRegistration.test.ts tests/registrationRequest.test.ts tests/usePortalQuery.test.ts tests/variantFlow.test.ts",
     "test:smoke": "tsx tests/smoke.test.ts",
     "test:load": "tsx tests/load.test.ts",
     "test:acceptance": "tsx --test acceptance/*.test.ts",

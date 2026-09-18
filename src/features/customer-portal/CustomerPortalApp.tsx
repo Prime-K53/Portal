@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router/useHashRoute';
 import { RouteGuard } from './router/RouteGuard';
+import { invalidatePortalQueries } from './hooks/usePortalQuery';
+import {
+  bumpOutboxAttempts,
+  enqueueOutbox,
+  isOfflineError,
+  listOutbox,
+  removeOutboxEntry,
+} from './utils/mutationOutbox';
 
 function useOnlineStatus(): boolean {
   const [online, setOnline] = useState(() => {
@@ -33,11 +41,78 @@ function useOnlineStatus(): boolean {
 
 function OfflineBanner(): React.ReactElement | null {
   const online = useOnlineStatus();
-  if (online) return null;
+  const [queued, setQueued] = useState(() => {
+    try {
+      return listOutbox().length;
+    } catch {
+      return 0;
+    }
+  });
+  useEffect(() => {
+    const update = () => {
+      try {
+        setQueued(listOutbox().length);
+      } catch {
+        // ignore
+      }
+    };
+    update();
+    try {
+      window.addEventListener('online', update);
+      window.addEventListener('offline', update);
+      window.addEventListener('portal-outbox-changed', update);
+    } catch {
+      // ignore
+    }
+    return () => {
+      try {
+        window.removeEventListener('online', update);
+        window.removeEventListener('offline', update);
+        window.removeEventListener('portal-outbox-changed', update);
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
+  const handleReplay = async () => {
+    const entries = listOutbox().filter((e) => e.kind === 'order-request');
+    for (const entry of entries) {
+      try {
+        const payload = entry.payload as Parameters<typeof portalService.createOrder>[0];
+        await portalService.createOrder(payload, entry.idempotencyKey);
+        removeOutboxEntry(entry.id);
+      } catch {
+        bumpOutboxAttempts(entry.id);
+        break;
+      }
+    }
+    try {
+      window.dispatchEvent(new CustomEvent('portal-queries-invalidated'));
+    } catch {
+      // ignore
+    }
+    invalidatePortalQueries();
+  };
+
+  if (online && queued === 0) return null;
   return (
     <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 pt-4" role="alert" aria-live="assertive">
-      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold">
-        You are offline. Browsing cached data works, but orders, payments, referrals and tickets will fail until you reconnect.
+      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold flex items-center justify-between gap-3">
+        <span>
+          {!online
+            ? 'You are offline. Browsing cached data works, but new submissions wait in the outbox.'
+            : `${queued} offline order${queued === 1 ? '' : 's'} queued.`}
+        </span>
+        {online && queued > 0 && (
+          <button
+            type="button"
+            onClick={() => void handleReplay()}
+            className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-bold shrink-0 min-h-[36px]"
+          >
+            Retry now
+          </button>
+        )}
       </div>
     </div>
   );
@@ -423,45 +498,54 @@ function CustomerPortalShell({
     idempotencyKey?: string
   ) => {
     const totalAmount = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-    await runAction(async () => {
-      const created = await portalService.createOrder(
-        {
-          items: cartItems.map((ci) => {
-            // Label the line with the selected variant so ERP staff see the
-            // exact option ordered (variantId is sent alongside; the ERP
-            // re-prices server-side from its own master data).
-            const variant = ci.variantId
-              ? ci.product.variants?.find((v) => v.id === ci.variantId)
-              : undefined;
-            const productName =
-              variant && variant.name && variant.name !== ci.product.name
-                ? `${ci.product.name} (${variant.name})`
-                : ci.product.name;
-            return {
-              productId: ci.product.id,
-              productName,
-              quantity: ci.quantity,
-              unitPrice: ci.product.price,
-              total: ci.product.price * ci.quantity,
-              variantId: ci.variantId,
-            };
-          }),
-          deliveryAddress: '',
-          paymentTerms: 'Net 30 Credit Terms',
-          totalAmount,
-          requestedDeliveryDate,
-        },
-        idempotencyKey ?? generateIdempotencyKey()
-      );
-      ordersQuery.refetch();
-      orderRequestsQuery.refetch();
-      invoicesQuery.refetch();
-      statementsQuery.refetch();
-      deliveriesQuery.refetch();
-      customerQuery.refetch();
-      setCartItems([]);
-      return created;
+    const key = idempotencyKey ?? generateIdempotencyKey();
+    const buildPayload = () => ({
+      items: cartItems.map((ci) => {
+        // Label the line with the selected variant so ERP staff see the
+        // exact option ordered (variantId is sent alongside; the ERP
+        // re-prices server-side from its own master data).
+        const variant = ci.variantId
+          ? ci.product.variants?.find((v) => v.id === ci.variantId)
+          : undefined;
+        const productName =
+          variant && variant.name && variant.name !== ci.product.name
+            ? `${ci.product.name} (${variant.name})`
+            : ci.product.name;
+        return {
+          productId: ci.product.id,
+          productName,
+          quantity: ci.quantity,
+          unitPrice: ci.product.price,
+          total: ci.product.price * ci.quantity,
+          variantId: ci.variantId,
+        };
+      }),
+      deliveryAddress: '',
+      paymentTerms: 'Net 30 Credit Terms',
+      totalAmount,
+      requestedDeliveryDate,
     });
+    try {
+      await runAction(async () => {
+        const created = await portalService.createOrder(buildPayload(), key);
+        ordersQuery.refetch();
+        orderRequestsQuery.refetch();
+        invoicesQuery.refetch();
+        statementsQuery.refetch();
+        deliveriesQuery.refetch();
+        customerQuery.refetch();
+        setCartItems([]);
+        return created;
+      });
+    } catch (err) {
+      // Offline: preserve intent + idempotency key so reconnect replays the
+      // SAME attempt instead of forging a duplicate.
+      if (isOfflineError(err)) {
+        enqueueOutbox({ kind: 'order-request', idempotencyKey: key, payload: buildPayload() });
+        setActionError('You are offline — order saved to outbox and will replay with the same key when you reconnect.');
+      }
+      throw err;
+    }
   };
 
   /**

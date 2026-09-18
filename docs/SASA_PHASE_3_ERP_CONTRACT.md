@@ -1,5 +1,13 @@
 # SASA REPLACEMENT — PHASE 3 ERP PORTAL CONTRACT
 
+> **SUPERSEDED in parts — see `docs/erp-contract.md` (canonical) and
+> `docs/SASA_PHASE_4_ERP_INTEGRATION.md`. In particular: §11 "NO server-side
+> PDF endpoints exist" is stale — official documents now ship via
+> `GET /portal/.../document` (`utils/officialDocument.ts`). The unified
+> `/api/auth/login` flow is stale for portal 2FA — use
+> `POST /api/portal/auth/login-password`. Do not treat Phase 3 as authoritative
+> where it conflicts with code + tests.
+
 **Extracted from the running PrimeERPsystem production implementation. READ-ONLY audit — no code, schema, auth, migration, or environment changes were made.**
 
 - **ERP repository:** `https://github.com/Prime-K53/PrimeERPsystem.git` (local: `D:\FonePaw\PrimeERPsystem`)

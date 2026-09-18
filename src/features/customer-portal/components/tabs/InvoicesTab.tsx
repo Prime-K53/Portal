@@ -131,20 +131,23 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
         {/* 2. Search Bar & Export CSV */}
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
+              <label htmlFor="invoice-search" className="sr-only">Search by invoice number, PO, or line items</label>
               <input
+                id="invoice-search"
                 type="text"
                 placeholder="Search by invoice #, PO #, or line items..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-900 shadow-2xs"
               />
-            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" aria-hidden="true" />
           </div>
 
           <button
             onClick={handleExportCSV}
             title="Export Invoices to CSV"
-            className="px-3 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition shrink-0"
+            aria-label="Export invoices to CSV"
+            className="px-3 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition shrink-0 min-h-[44px]"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span className="hidden sm:inline">Export CSV</span>
@@ -161,8 +164,10 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
           ].map((t) => (
             <button
               key={t.key}
+              type="button"
               onClick={() => setFilter(t.key as any)}
-              className={`text-xs font-extrabold tracking-wide relative transition ${
+              aria-pressed={filter === t.key}
+              className={`text-xs font-extrabold tracking-wide relative transition min-h-[36px] px-1 ${
                 filter === t.key ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -198,8 +203,17 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
             return (
               <div
                 key={inv.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`View invoice ${inv.invoiceNumber}, ${inv.status}`}
                 onClick={() => onSelectInvoiceDetail(inv)}
-                className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-2.5 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectInvoiceDetail(inv);
+                  }
+                }}
+                className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-900 space-y-2.5 shadow-2xs cursor-pointer hover:border-indigo-300 hover:shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                   <div>

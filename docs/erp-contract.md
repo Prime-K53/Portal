@@ -1,5 +1,7 @@
 # Prime PORTAL — ERP Contract
 
+> **Canonical contract.** Phase 2/3 docs are deprecated/superseded where they
+> conflict with this file + code + `tests/realContract.test.ts`.
 > Pinned assumptions the Portal makes about the ERP backend.
 > If the ERP changes in a way that breaks these contracts, the Portal will
 > silently misbehave until this document is updated and tests adjusted.
@@ -15,9 +17,10 @@ what the ERP says and only mutates state through explicit, validated endpoints.
 
 | Field | Contract |
 |-------|----------|
-| `POST /api/portal/auth/login` | Returns `{ access_token, refresh_token, expires_in, user }`. `user.id` MUST equal `customer_id`. |
+| `POST /api/portal/auth/login-password` | Customer login (2FA-capable). Returns `{ access_token, refresh_token, expires_in, user }`. `user.id` MUST equal `customer_id`. The legacy unified `POST /api/auth/login` strips `two_factor_code` — do not use for portal login. |
 | `POST /api/portal/auth/refresh` | Returns a fresh `{ access_token, refresh_token, expires_in, user }`. `user` may be `null` if the refresh is implicit (token rotation only). |
 | `POST /api/portal/auth/logout` | Idempotent. Revokes the refresh token server-side. |
+| Official documents | `GET /api/portal/invoices/:id/document`, `/portal/quotations/:id/document`, `/portal/customers/statement/document` (NOT the stale `/official-pdf` paths). |
 | JWT identity | The ERP derives `customer_id` from the JWT for every authenticated request. The Portal NEVER sends `customer_id` in any request body — the server owns identity. |
 
 **Portal responsibilities**

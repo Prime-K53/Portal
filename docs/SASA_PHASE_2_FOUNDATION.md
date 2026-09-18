@@ -1,5 +1,9 @@
 # SASA → PRIME ERP PORTAL REPLACEMENT — PHASE 2: PRODUCTION FOUNDATION
 
+> **DEPRECATED — superseded by live ERP integration (`ErpPortalService`, `ErpAuthService`) and `docs/erp-contract.md`.**
+> Do not follow Phase 2 setup instructions for new work — they describe the
+> pre-integration shell (`UnconnectedPortalService`, `localStorage prime_portal_token`).
+
 Status: **FOUNDATION COMPLETE — ERP INTEGRATION NOT YET CONNECTED**
 
 This document records the Phase 2 work that prepared the Sasa frontend as a clean,
