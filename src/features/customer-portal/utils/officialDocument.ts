@@ -28,7 +28,7 @@ export function officialDocumentPath(kind: OfficialDocumentKind, id: string): st
     case 'quotation': return `/portal/quotations/${safeId}/document`;
     case 'order': return `/portal/orders/${safeId}/document`;
     case 'receipt': return `/portal/payments/${safeId}/document`;
-    case 'delivery-note': return `/portal/deliveries/${safeId}/document`;
+    case 'delivery-note': return `/portal/deliveries/${safeId}/note`;
     case 'statement': return '/portal/customers/statement/document';
     default: throw new Error(`Unsupported official document kind: ${kind}`);
   }
@@ -241,14 +241,22 @@ export async function fetchOfficialDocument(
   }
   clearTimeout(timer);
 
+  const isDeliveryNote = apiPath.includes('/deliveries/');
   const contentType = response.headers.get('Content-Type') || '';
-  if (!response.ok || !contentType.includes('application/pdf')) {
+  const expectedContentType = isDeliveryNote ? 'application/json' : 'application/pdf';
+  if (!response.ok || !contentType.includes(expectedContentType)) {
     throw Object.assign(new Error(await describeDocumentError(response)), {
       status: response.status,
     });
   }
 
-  const blob = await response.blob();
+  let blob: Blob;
+  if (isDeliveryNote) {
+    const text = await response.text();
+    blob = new Blob([text], { type: 'application/json' });
+  } else {
+    blob = await response.blob();
+  }
   if (blob.size === 0) {
     throw new Error('The ERP returned an empty document.');
   }
@@ -259,7 +267,7 @@ export async function fetchOfficialDocument(
     : apiPath.includes('/payments/')
       ? 'Receipt.pdf'
       : apiPath.includes('/deliveries/')
-        ? 'Delivery-Note.pdf'
+        ? 'Delivery-Note.json'
         : `${String(typeof kindOrPath === 'string' ? kindOrPath : 'document')}-${id ?? 'document'}.pdf`;
 
   const filename = parseContentDispositionFilename(

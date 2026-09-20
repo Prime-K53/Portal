@@ -33,7 +33,7 @@ check('invoice path', officialDocumentPath('invoice', 'inv_1'), '/portal/invoice
 check('quotation path', officialDocumentPath('quotation', 'qtr/x'), '/portal/quotations/qtr%2Fx/document');
 check('order path', officialDocumentPath('order', 'so_9'), '/portal/orders/so_9/document');
 check('receipt path', officialDocumentPath('receipt', 'pay_7'), '/portal/payments/pay_7/document');
-check('delivery-note path', officialDocumentPath('delivery-note', 'dn#1'), '/portal/deliveries/dn%231/document');
+check('delivery-note path', officialDocumentPath('delivery-note', 'dn#1'), '/portal/deliveries/dn%231/note');
 check('statement path', officialDocumentPath('statement', 'ignored'), '/portal/customers/statement/document');
 check('unknown kind throws', (() => { try { return (officialDocumentPath as any)('nope', 'x'); } catch { return 'throws'; } })(), 'throws');
 
