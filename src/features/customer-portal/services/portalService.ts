@@ -500,14 +500,23 @@ function mapPaymentRequest(record: ErpPaymentRequestRecord): PaymentRequest {
 }
 
 function mapAd(ad: ErpPortalAd): PortalAd {
+  const imageUrl = ad.imageUrl && !ad.imageUrl.trim().startsWith('[') ? ad.imageUrl : null;
+  const clean = (v: string | null | undefined, field: string) => {
+    const trimmed = (v ?? '').trim();
+    if (!trimmed || trimmed.startsWith('[')) {
+      if (trimmed.startsWith('[')) console.warn(`[portalService] Stripping placeholder ${field}:`, JSON.stringify(v));
+      return null;
+    }
+    return v;
+  };
   return {
     id: ad.id,
-    title: ad.title ?? '',
-    subtitle: ad.subtitle ?? null,
-    badge: ad.badge ?? null,
-    ctaLabel: ad.ctaLabel ?? null,
+    title: clean(ad.title, 'title') ?? '',
+    subtitle: clean(ad.subtitle, 'subtitle'),
+    badge: clean(ad.badge, 'badge'),
+    ctaLabel: clean(ad.ctaLabel, 'ctaLabel'),
     ctaTarget: ad.ctaTarget ?? null,
-    imageUrl: ad.imageUrl ?? null,
+    imageUrl,
     imageMeta: ad.imageMeta ?? null,
     gradient: ad.gradient ?? null,
     emoji: ad.emoji ?? null,

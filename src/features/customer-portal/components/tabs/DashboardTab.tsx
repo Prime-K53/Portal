@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  AlertTriangle,
   CheckCircle2,
   ChevronRight,
   CreditCard,
@@ -167,6 +166,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
   // Paid invoices total comes from invoice records — never from ledger credits.
   const paidInvoicesTotal = paidInvoices.reduce((sum, i) => sum + i.amount, 0);
+  const totalBalance = profile.currentBalance;
 
   // Active orders (non-terminal)
   const activeOrders = orders.filter(
@@ -483,30 +483,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div className="flex items-center gap-3 sm:gap-5 min-w-0 pr-11 sm:pr-14">
-            {/* Outstanding Balance — left half, rose (money owed) */}
+            {/* Total Balance — left, rose (money owed) */}
             <button
               type="button"
-              onClick={() => onNavigateInvoices?.('unpaid')}
-              aria-label={`Outstanding balance ${formatCurrencyCompact(outstandingTotal)}. View unpaid invoices.`}
+              onClick={() => onNavigateTab('statements')}
+              aria-label={`Total balance ${formatCurrencyCompact(totalBalance)}. View statements.`}
               className="flex-1 min-w-0 text-left active:scale-[0.98] transition-transform"
             >
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                Outstanding Balance
+                Total Balance
               </p>
               <p className="text-[clamp(1rem,4.2vw,1.5rem)] font-black text-rose-600 leading-tight currency-display">
-                {formatCurrencyCompact(outstandingTotal)}
+                {formatCurrencyCompact(totalBalance)}
               </p>
-              {overdueInvoices.length > 0 ? (
-                <p className="text-[10px] font-bold text-rose-600 mt-1.5 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{overdueInvoices.length} Overdue</span>
-                </p>
-              ) : (
-                <p className="text-[10px] font-medium text-emerald-600 mt-1.5 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 shrink-0" />
-                  No overdue
-                </p>
-              )}
+              <p className="text-[10px] font-medium text-slate-400 mt-1.5">Account balance</p>
             </button>
             {/* Vertical divider */}
             <div className="w-px h-12 sm:h-14 bg-slate-200 shrink-0" />
@@ -518,7 +508,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               className="flex-1 min-w-0 text-left active:scale-[0.98] transition-transform"
             >
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                Ledger Credits
+                Total Paid
               </p>
               <p className="text-[clamp(1rem,4.2vw,1.5rem)] font-black text-emerald-600 leading-tight currency-display">
                 {formatCurrencyCompact(totalPayment)}
