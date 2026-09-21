@@ -427,14 +427,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => setIsCarouselPaused((p) => !p)}
-                className="absolute bottom-3 right-3 z-20 px-2.5 py-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white text-[10px] font-bold backdrop-blur-md"
-                aria-label={isCarouselPaused ? 'Resume automatic slide rotation' : 'Pause automatic slide rotation'}
-                aria-pressed={isCarouselPaused}
-              >
-                {isCarouselPaused ? 'Play' : 'Pause'}
-              </button>
             </>
           )}
           </div>
