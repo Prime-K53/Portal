@@ -422,7 +422,8 @@ function StampSeal({ tone = 'teal', symbol = 'check' }: { tone?: 'teal' | 'red' 
        setDownloading(false);
      }
    };
-  const typeLabel = typeTitle.replace(/^./, (c) => c.toUpperCase());
+   const typeTitle = TYPE_TITLES[type || ''] || 'document';
+   const typeLabel = typeTitle.replace(/^./, (c) => c.toUpperCase());
   const checkedOn = useMemo(
     () =>
       new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
