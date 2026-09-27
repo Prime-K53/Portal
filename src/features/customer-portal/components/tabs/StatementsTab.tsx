@@ -3,7 +3,7 @@ import { Calendar, ChevronRight, Clock, FileSpreadsheet, FileText, Receipt } fro
 import { AccountProfile, StatementEntry } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { exportToCSV } from '../../utils/exportUtils';
-import { KpiCard, SectionHeader } from '../ui';
+import { KpiCard, SectionHeader, EmptyState } from '../ui';
 
 interface StatementsTabProps {
   profile: AccountProfile;
@@ -256,8 +256,11 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
                <p className="text-xs text-slate-600 font-medium">{balanceBdEntry.description}</p>
                <div className="flex items-center gap-2 text-[11.5px] text-slate-400">
                  <span>{formatDate(balanceBdEntry.date)}</span>
-               </div>
-             </div>
+         </div>
+          {!balanceBdEntry && filteredStatements.length === 0 && (
+            <EmptyState title="No statement entries" description="Your account ledger will appear here." />
+          )}
+        </div>
 
              <div className="text-right shrink-0 flex items-center gap-2">
                <div className="text-right font-medium">

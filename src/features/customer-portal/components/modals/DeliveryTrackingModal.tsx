@@ -21,12 +21,12 @@ interface DeliveryTrackingModalProps {
   onClose: () => void;
 }
 
-export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
-  delivery,
-  isOpen,
-  onClose,
-}) => {
-  const titleId = useId();
+ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
+   delivery,
+   isOpen,
+   onClose,
+ }) => {
+   const titleId = useId();
 
   // Official ERP delivery-note PDF download. The ERP endpoint resolves the id
   // as a delivery-note id OR an order id linked to one — try the order link
@@ -56,9 +56,9 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
     }
   };
 
-  if (!isOpen || !delivery) return null;
+   if (!isOpen || !delivery) return null;
 
-  const steps: { key: DeliveryStatus; title: string; desc: string }[] = [
+   const steps: { key: DeliveryStatus; title: string; desc: string }[] = [
     { key: 'order_placed', title: 'Order Placed', desc: 'Order confirmed and generated in ERP system' },
     { key: 'dispatched', title: 'Dispatched', desc: 'Items picked, packed and departed logistics hub via Express Freight' },
     { key: 'out_for_delivery', title: 'Out for Delivery', desc: 'In transit with local delivery courier to your address' },

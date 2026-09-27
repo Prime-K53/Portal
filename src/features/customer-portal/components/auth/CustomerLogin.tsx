@@ -12,10 +12,10 @@
  */
 
 import React, { useState } from 'react';
-import { Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react';
+ import { Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react';
 import { useHashRoute } from '../../router/useHashRoute';
 import { ROUTES } from '../../router/routes';
-import { authErrorMessage, useCustomerAuth } from './CustomerAuthContext';
+import { useCustomerAuth, authErrorMessage } from './CustomerAuthContext';
 import {
   AuthError,
   AuthHeading,
@@ -24,6 +24,8 @@ import {
   authPrimaryButtonClass,
   authSecondaryButtonClass,
 } from './authTheme';
+import { FieldTooltip } from '../ui/FieldTooltip';
+import { validateEmail } from '../../utils/validation';
 
 export function CustomerLogin() {
   const { loginWithApi } = useCustomerAuth();
@@ -39,28 +41,36 @@ export function CustomerLogin() {
   const [submitting, setSubmitting] = useState(false);
 
   // ── Primary sign-in ────────────────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password) {
-      setError('Please enter your email address and password.');
-      return;
-    }
-    setError(null);
-    setSubmitting(true);
-    try {
-      const result = await loginWithApi(email.trim(), password);
-      if (result.requiresTwoFactor) {
-        setPendingToken(result.pendingToken ?? 'pending');
-        setTwoFactorCode('');
-      } else {
-        navigate(ROUTES.dashboard);
-      }
-    } catch (err) {
-      setError(authErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
+   const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (!email.trim()) {
+       setError('Please enter your email address.');
+       return;
+     }
+     if (!validateEmail(email.trim())) {
+       setError('Please enter a valid email address.');
+       return;
+     }
+     if (!password) {
+       setError('Please enter your password.');
+       return;
+     }
+     setError(null);
+     setSubmitting(true);
+     try {
+       const result = await loginWithApi(email.trim(), password);
+       if (result.requiresTwoFactor) {
+         setPendingToken(result.pendingToken ?? 'pending');
+         setTwoFactorCode('');
+       } else {
+         navigate(ROUTES.dashboard);
+       }
+     } catch (err) {
+       setError(authErrorMessage(err));
+     } finally {
+       setSubmitting(false);
+     }
+   };
 
   // ── Two-factor verification ───────────────────────────────────────────────
   const handleTwoFactorSubmit = async (e: React.FormEvent) => {
@@ -96,32 +106,36 @@ export function CustomerLogin() {
           {error && <AuthError error={error} onDismiss={() => setError(null)} />}
 
           <form onSubmit={handleSubmit} className="mt-4 space-y-3 animate-rise" style={{ animationDelay: '140ms' }}>
-            <div>
-              <label
-                htmlFor="login-email"
-                className="mb-1.5 block text-[13px] font-semibold text-slate-900"
-              >
-                Email
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="quality@prime.mw"
-                className={authInputClass}
-              />
-            </div>
+             <div>
+               <FieldTooltip tooltip="Enter the email address associated with your Prime Portal account.">
+                 <label
+                   htmlFor="login-email"
+                   className="mb-1.5 block text-[13px] font-semibold text-slate-900"
+                 >
+                   Email
+                 </label>
+               </FieldTooltip>
+               <input
+                 id="login-email"
+                 type="email"
+                 required
+                 autoComplete="email"
+                 value={email}
+                 onChange={(e) => setEmail(e.target.value)}
+                 placeholder="quality@prime.mw"
+                 className={authInputClass}
+               />
+             </div>
 
-            <div>
-              <label
-                htmlFor="login-password"
-                className="mb-1.5 block text-[13px] font-semibold text-slate-900"
-              >
-                Password
-              </label>
+             <div>
+               <FieldTooltip tooltip="Your account password. Minimum 8 characters recommended.">
+                 <label
+                   htmlFor="login-password"
+                   className="mb-1.5 block text-[13px] font-semibold text-slate-900"
+                 >
+                   Password
+                 </label>
+               </FieldTooltip>
               <div className="relative">
                 <input
                   id="login-password"

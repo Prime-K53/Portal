@@ -260,7 +260,14 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { Sidebar } from './components/Sidebar';
 import { PwaInstallChip } from './components/PwaInstallChip';
 import { DevModeBanner } from './components/DevModeBanner';
-import { DarkModeProvider } from './context/DarkModeContext';
+import { ToastProvider } from './components/ui/Toast';
+import { SessionTimeoutWarning } from './components/SessionTimeoutWarning';
+import { GlobalErrorBoundary } from './components/ui/GlobalErrorBoundary';
+import { RecentViewsProvider } from './context/RecentViewsContext';
+import { NotificationPrefsProvider } from './context/NotificationPrefsContext';
+import { WishlistProvider } from './context/WishlistContext';
+import { ComparisonProvider } from './context/ComparisonContext';
+
 
 // Verification view — split out so its chunk loads only on /verify/* routes.
 const DocumentVerify = lazy(() =>
@@ -792,7 +799,7 @@ function CustomerPortalShell({
    };
 
   const renderPortal = () => (
-    <div className={`min-h-screen bg-slate-100/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white flex ${className}`}>
+     <div className={`min-h-screen bg-slate-100/70 text-slate-900 font-sans selection:bg-slate-900 selection:text-white flex ${className}`}>
       {/* Skip link — visible on keyboard focus, jumps past nav chrome. */}
       <a
         href="#main-content"
@@ -815,7 +822,7 @@ function CustomerPortalShell({
       />
 
       {/* Main Workspace Area */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen-safe bg-slate-50/50 dark:bg-slate-900/50">
+       <div className="flex-1 min-w-0 flex flex-col min-h-screen-safe bg-slate-50/50">
         {/* Top Navigation Bar Header (persistent on every tab so mobile users
             keep access to cart, notifications, and command palette). */}
         <MobileHeader
@@ -1190,7 +1197,8 @@ function CustomerPortalShell({
     <>
        {/* Offline state matters before sign-in too (queued outbox replays
            after restore) — renders null while online with an empty outbox. */}
-      <OfflineBanner />
+       <OfflineBanner />
+       <SessionTimeoutWarning />
       <RouteGuard
         path={path}
         navigate={navigate}
@@ -1211,17 +1219,27 @@ function CustomerPortalShell({
  * After a successful login the provider flips to authenticated and the guard
  * swaps the login screen for the portal immediately.
  */
-export function CustomerPortalApp(props: CustomerPortalAppProps) {
-  return (
-    <CustomerAuthProvider>
-      <DarkModeProvider>
-        <div className="relative">
-          <DevModeBanner />
-          <CustomerPortalShell {...props} />
-        </div>
-      </DarkModeProvider>
-    </CustomerAuthProvider>
-  );
-}
+ export function CustomerPortalApp(props: CustomerPortalAppProps) {
+   return (
+       <CustomerAuthProvider>
+         <ToastProvider>
+         <GlobalErrorBoundary>
+           <RecentViewsProvider>
+             <NotificationPrefsProvider>
+               <WishlistProvider>
+                 <ComparisonProvider>
+                   <div className="relative">
+                     <DevModeBanner />
+                     <CustomerPortalShell {...props} />
+                   </div>
+                 </ComparisonProvider>
+               </WishlistProvider>
+             </NotificationPrefsProvider>
+           </RecentViewsProvider>
+         </GlobalErrorBoundary>
+        </ToastProvider>
+      </CustomerAuthProvider>
+   );
+ }
 
 export default CustomerPortalApp;

@@ -509,7 +509,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               aria-label={`Total paid ${formatCurrencyCompact(totalPayment)} in ledger credits. View statements.`}
               className="flex-1 min-w-0 text-left active:scale-[0.98] transition-transform"
             >
-               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
                  TOTAL PAYMENT
                </p>
               <p className="text-[clamp(1rem,4.2vw,1.5rem)] font-black text-emerald-600 leading-tight currency-display">

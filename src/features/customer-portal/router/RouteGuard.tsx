@@ -117,9 +117,9 @@ export function RouteGuard({
   if (isRestoring) {
     if (restoreTimedOut) {
       return (
-        <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-sm w-full text-center space-y-4 p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Session restore is taking too long</p>
+         <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+           <div className="max-w-sm w-full text-center space-y-4 p-6 bg-white rounded-2xl border border-slate-200">
+             <p className="text-sm font-semibold text-slate-900">Session restore is taking too long</p>
             <p className="text-xs text-slate-500">Check your connection, then retry or return to sign in.</p>
             <div className="flex gap-2 justify-center">
               <button
@@ -140,7 +140,7 @@ export function RouteGuard({
                   onRestoreTimeout?.();
                   navigate('/login');
                 }}
-                className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700"
+                 className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-300"
               >
                 Sign in
               </button>
@@ -165,7 +165,7 @@ export function RouteGuard({
   if (!isKnown) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6" role="alert">
-        <div className="max-w-sm w-full text-center space-y-4 p-6 bg-white dark:bg-slate-900 rounded-2xl border">
+         <div className="max-w-sm w-full text-center space-y-4 p-6 bg-white rounded-2xl border">
           <p className="text-sm font-semibold">Page not found</p>
           <p className="text-xs text-slate-500 break-all">{path}</p>
           <button

@@ -496,10 +496,31 @@ html.dark .skeleton {
     transform: none !important;
   }
 
-  /* Force stable currency / tabular numbers on print. */
-  .currency-display,
-  .finance-nums {
-    font-variant-numeric: tabular-nums;
-  }
-}
+   /* Force stable currency / tabular numbers on print. */
+   .currency-display,
+   .finance-nums {
+     font-variant-numeric: tabular-nums;
+   }
+ }
+
+ /* ── Print styles for all tabs ─────────────────────────────────── */
+ @media print {
+   body * {
+     visibility: hidden;
+   }
+   [data-print-region],
+   [data-print-region] * {
+     visibility: visible;
+   }
+   [data-print-region] {
+     position: absolute;
+     left: 0;
+     top: 0;
+     width: 100%;
+     overflow: visible;
+   }
+   .no-print {
+     display: none !important;
+   }
+ }
 

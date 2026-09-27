@@ -15,7 +15,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Clock3, Loader2, Search, XCircle } from 'lucide-react';
+ import { CheckCircle2, Clock3, Loader2, Search, XCircle } from 'lucide-react';
 import { useHashRoute } from '../../router/useHashRoute';
 import { ROUTES } from '../../router/routes';
 import {
@@ -28,6 +28,10 @@ import {
   type PendingRegistrationInfo,
 } from '../../services/registrationRequestService';
 import { generateIdempotencyKey } from '../../utils/idempotency';
+import {
+  loadPendingReferralCode,
+  clearPendingReferralCode,
+} from '../../utils/referral';
 import {
   AuthError,
   AuthHeading,
@@ -207,9 +211,15 @@ export function CustomerRegistrationPending() {
 
       {pending ? (
         <div className="mt-6 space-y-4">
-          {/* Request identity */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-            <div>
+           {/* Request identity */}
+           <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+             {loadPendingReferralCode() && (
+               <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-center">
+                 <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 mb-1">Referral Code Applied</p>
+                 <p className="text-sm font-black text-emerald-900 font-mono">{loadPendingReferralCode()}</p>
+               </div>
+             )}
+             <div>
               <p className="text-[13px] font-semibold text-slate-900">
                 Request Number
               </p>

@@ -12,7 +12,7 @@ import {
 import type { Quotation, QuoteRequest } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { downloadOfficialDocument } from '../../utils/officialDocument';
-import { StatusBadge } from '../ui';
+import { StatusBadge, EmptyState } from '../ui';
 
 type QuoteTab = 'submitted' | 'converted';
 
@@ -173,13 +173,16 @@ export const QuotesTab: React.FC<QuotesTabProps> = ({
 
       {/* Quote List */}
       <div className="space-y-3">
-        {visible.length === 0 ? (
-          <div className="p-8 rounded-2xl bg-slate-50 border border-slate-200/80 text-center text-slate-500 text-xs font-medium">
-            {activeTab === 'submitted'
-              ? 'No pending or reviewed quotation requests. Accepted and converted quotations appear in the Converted tab.'
-              : 'No converted quotation requests yet. Accepted quotation requests will appear here.'}
-          </div>
-        ) : (
+         {visible.length === 0 ? (
+           <EmptyState
+             title="No quotations"
+             description={
+               activeTab === 'submitted'
+                 ? 'No pending or reviewed quotation requests. Accepted and converted quotations appear in the Converted tab.'
+                 : 'No converted quotation requests yet. Accepted quotation requests will appear here.'
+             }
+           />
+         ) : (
           [...visible]
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .map((q) => {

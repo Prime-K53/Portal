@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Award,
   Building2,
@@ -20,12 +20,9 @@ import {
 } from 'lucide-react';
 import { AccountProfile, TabType } from '../types';
 import { formatCurrency } from '../utils/formatters';
-import { useDarkModeContext } from '../context/DarkModeContext';
 
 /**
- * Dark mode ships when tab/modal surfaces are tokenized (no component
- * styles `dark:` yet — toggling today yields white cards on a dark
- * background). Flip to true once the Phase 3 token migration lands.
+ * Dark mode ships when tab/modal surfaces are tokenized.
  */
 const DARK_MODE_AVAILABLE = false;
 
@@ -43,19 +40,19 @@ interface SidebarProps {
   onSignOut?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  activeTab,
-  setActiveTab,
-  profile,
-  unpaidCount,
-  unpaidTotal,
-  cartCount,
-  onOpenPaymentModal,
-  onOpenQuoteModal,
-  onOpenCommandPalette,
-  onSignOut,
-}) => {
-  const { isDark, toggle } = useDarkModeContext();
+ export const Sidebar: React.FC<SidebarProps> = ({
+   activeTab,
+   setActiveTab,
+   profile,
+   unpaidCount,
+   unpaidTotal,
+   cartCount,
+   onOpenPaymentModal,
+   onOpenQuoteModal,
+   onOpenCommandPalette,
+   onSignOut,
+ }) => {
+   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   const navItems: { id: TabType; label: string; icon: React.FC<{ className?: string }>; badge?: number; badgeColor?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -69,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="hidden lg:flex flex-col w-72 bg-white border-r border-slate-200/80 min-h-screen p-5 shrink-0 sticky top-0 h-screen overflow-y-auto shadow-2xs">
+    <aside className="hidden lg:flex flex-col w-72 bg-white border-r border-slate-200/80 min-h-screen p-5 shrink-0 sticky top-0 h-screen overflow-y-auto shadow-2xs z-50">
       {/* Brand Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-xs shrink-0">
@@ -179,15 +176,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>Request Custom Quote</span>
         </button>
 
-        {onSignOut && (
-          <button
-            onClick={onSignOut}
-            className="w-full py-2 px-3.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-             <span>Sign Out ({profile?.customerName || profile?.companyName || 'Prime PORTAL'})</span>
-          </button>
-        )}
+         {onSignOut && (
+           <>
+             <button
+               onClick={() => setShowSignOutConfirm(true)}
+               className="w-full py-2 px-3.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition"
+             >
+               <LogOut className="w-3.5 h-3.5" />
+               <span>Sign Out ({profile?.customerName || profile?.companyName || 'Prime PORTAL'})</span>
+             </button>
+             {showSignOutConfirm && (
+               <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="Confirm sign out">
+                 <div className="bg-white rounded-2xl p-5 max-w-xs mx-4 shadow-xl space-y-3 animate-fade-in">
+                   <p className="text-sm font-bold text-slate-900">Sign out?</p>
+                   <p className="text-xs text-slate-500">You will need to sign in again to continue.</p>
+                   <div className="flex gap-2 justify-end">
+                     <button type="button" onClick={() => setShowSignOutConfirm(false)} className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition">Cancel</button>
+                     <button type="button" onClick={() => { setShowSignOutConfirm(false); onSignOut(); }} className="px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition">Sign Out</button>
+                   </div>
+                 </div>
+               </div>
+             )}
+           </>
+         )}
 
         {DARK_MODE_AVAILABLE && (
           <div className="flex items-center justify-center pt-3 border-t border-slate-200 mt-3">
