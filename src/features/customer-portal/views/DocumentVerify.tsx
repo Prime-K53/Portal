@@ -354,10 +354,12 @@ function StampSeal({ tone = 'teal', symbol = 'check' }: { tone?: 'teal' | 'red' 
   );
 }
 
-export const DocumentVerify: React.FC = () => {
-  const { path } = useHashRoute();
-  const { type, number, token } = parseVerificationPath(path);
-  const [state, setState] = useState<PageState>({ kind: 'loading' });
+ export const DocumentVerify: React.FC = () => {
+   const { path } = useHashRoute();
+   const { type, number, token } = parseVerificationPath(path);
+   const [state, setState] = useState<PageState>({ kind: 'loading' });
+   const [downloading, setDownloading] = useState(false);
+   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -393,7 +395,33 @@ export const DocumentVerify: React.FC = () => {
     };
   }, [type, number, token]);
 
-  const typeTitle = TYPE_TITLES[type || ''] || 'document';
+   const handleDownload = async () => {
+     if (!type || !number || !token) return;
+     setDownloading(true);
+     setDownloadError(null);
+     try {
+       const apiBase = env.apiUrl.replace(/\/+$/, '');
+       const url = `${apiBase}/api/public/documents/download/${encodeURIComponent(type)}/${encodeURIComponent(number)}?t=${encodeURIComponent(token)}`;
+       const res = await fetch(url);
+       if (!res.ok) throw new Error('Download failed');
+       const blob = await res.blob();
+       const disposition = res.headers.get('Content-Disposition');
+       const match = disposition?.match(/filename="?([^"]+)"?/);
+       const filename = match?.[1] || `${type}-${number}.pdf`;
+       const blobUrl = URL.createObjectURL(blob);
+       const a = document.createElement('a');
+       a.href = blobUrl;
+       a.download = filename;
+       document.body.appendChild(a);
+       a.click();
+       document.body.removeChild(a);
+       URL.revokeObjectURL(blobUrl);
+     } catch {
+       setDownloadError('Unable to download the document. Please try again.');
+     } finally {
+       setDownloading(false);
+     }
+   };
   const typeLabel = typeTitle.replace(/^./, (c) => c.toUpperCase());
   const checkedOn = useMemo(
     () =>
@@ -558,12 +586,40 @@ export const DocumentVerify: React.FC = () => {
         )}
       </div>
 
-      <div className="vp-status" data-tone={tone}>
-        <span className="vp-lab">Payment status</span>
-        <span className="vp-val">{(status || '—').toUpperCase()}</span>
-      </div>
-    </>
-  );
+       <div className="vp-status" data-tone={tone}>
+         <span className="vp-lab">Payment status</span>
+         <span className="vp-val">{(status || '—').toUpperCase()}</span>
+       </div>
+
+       <div style={{ marginTop: 20, textAlign: 'center' }}>
+         {downloadError && (
+           <p style={{ fontSize: 13, color: '#B23A2E', marginBottom: 10 }}>{downloadError}</p>
+         )}
+         <button
+           type="button"
+           onClick={handleDownload}
+           disabled={downloading}
+           style={{
+             display: 'inline-flex',
+             alignItems: 'center',
+             justifyContent: 'center',
+             gap: 8,
+             padding: '12px 28px',
+             borderRadius: 999,
+             border: 'none',
+             background: downloading ? '#94a3b8' : '#145C54',
+             color: '#fff',
+             fontSize: 14,
+             fontWeight: 700,
+             cursor: downloading ? 'not-allowed' : 'pointer',
+             letterSpacing: '0.02em',
+           }}
+         >
+           {downloading ? 'Downloading…' : 'Download Document'}
+         </button>
+       </div>
+     </>
+   );
 };
 
 export default DocumentVerify;
