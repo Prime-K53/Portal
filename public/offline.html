@@ -37,6 +37,11 @@
         padding: 12px 22px; border-radius: 12px;
       }
       button:hover { filter: brightness(1.05); }
+      .actions { display: flex; gap: 10px; justify-content: center; }
+      .ghost {
+        background: transparent; color: #e2e8f0;
+        border: 1px solid #334155;
+      }
     </style>
   </head>
   <body>
@@ -47,7 +52,10 @@
         The portal needs a connection to reach the ERP for live pricing,
         orders and official documents. Reconnect and try again.
       </p>
-      <button onclick="location.reload()">Retry</button>
+      <div class="actions">
+        <button onclick="location.reload()">Retry</button>
+        <button class="ghost" onclick="location.href='/#/dashboard'">Go to dashboard</button>
+      </div>
     </div>
   </body>
 </html>

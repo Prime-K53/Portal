@@ -135,8 +135,17 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
               return (
                 <div
                   key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${item.isRead ? 'Read notification' : 'Unread notification'}: ${item.title}. Press Enter to mark as read.`}
                   onClick={handleItemClick}
-                  className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleItemClick();
+                    }
+                  }}
+                  className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     !item.isRead
                       ? 'bg-slate-50 border-slate-300 shadow-2xs'
                       : 'bg-white border-slate-200/80 opacity-75'

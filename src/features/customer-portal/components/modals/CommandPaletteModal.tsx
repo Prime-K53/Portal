@@ -45,6 +45,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useFocusTrap(containerRef, { active: isOpen, onEscape: onClose });
   // Mandatory variant chooser for "+ Cart" on variant products.
@@ -73,6 +74,37 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  /** Arrow-key navigation across result buttons (input + list share it). */
+  const moveResultFocus = (direction: 1 | -1 | 'first' | 'last') => {
+    const buttons = Array.from(
+      resultsRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? []
+    ).filter((b) => b.offsetParent !== null);
+    if (buttons.length === 0) return;
+    const activeIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    let next: number;
+    if (direction === 'first') next = 0;
+    else if (direction === 'last') next = buttons.length - 1;
+    else if (activeIndex === -1) next = direction === 1 ? 0 : buttons.length - 1;
+    else next = (activeIndex + direction + buttons.length) % buttons.length;
+    buttons[next].focus();
+  };
+
+  const handleDialogKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveResultFocus(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveResultFocus(-1);
+    } else if (e.key === 'Home' && document.activeElement !== inputRef.current) {
+      e.preventDefault();
+      moveResultFocus('first');
+    } else if (e.key === 'End' && document.activeElement !== inputRef.current) {
+      e.preventDefault();
+      moveResultFocus('last');
+    }
+  };
 
   const trimmed = query.trim().toLowerCase();
 
@@ -142,8 +174,12 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        onKeyDown={handleDialogKeyDown}
         className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[80vh] animate-in fade-in zoom-in-95 duration-150"
       >
+        <h2 id={titleId} className="sr-only">
+          Quick search commands and results
+        </h2>
         {/* Search Header Input */}
         <div className="relative flex items-center px-4 py-3.5 border-b border-slate-100 bg-slate-50/80">
           <Search className="w-5 h-5 text-slate-400 shrink-0 mr-3" aria-hidden="true" />
@@ -154,7 +190,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search invoices, products, tracking #, orders, or commands... (e.g. INV-2026, Paper, TRK)"
             aria-label="Search invoices, products, tracking #, orders, or commands"
-            className="w-full bg-transparent text-slate-900 font-normal placeholder:text-slate-400 focus:outline-none text-sm"
+            className="w-full bg-transparent text-slate-900 font-normal placeholder:text-slate-500 focus:outline-none text-sm"
           />
           {query && (
             <button
@@ -171,7 +207,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         </div>
 
         {/* Results Container */}
-        <div className="overflow-y-auto p-3 space-y-4 text-xs">
+        <div ref={resultsRef} className="overflow-y-auto p-3 space-y-4 text-xs">
           {!trimmed && (
             <div className="px-2 py-1 text-[12.5px] font-bold uppercase tracking-wider text-slate-400">
               Suggested Quick Actions
@@ -231,6 +267,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                     <img
                       src={prod.image}
                       alt={prod.name}
+                      loading="lazy"
+                      decoding="async"
+                      width={36}
+                      height={36}
                       className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0"
                     />
                     <div className="min-w-0">
@@ -387,7 +427,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         {/* Command Palette Footer */}
         <div className="p-2.5 bg-slate-50 border-t border-slate-100 text-[11.5px] text-slate-500 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span>Tip: Use <kbd className="px-1 py-0.5 bg-white border rounded font-mono">Cmd + K</kbd> anytime to open</span>
+            <span>Tip: Use <kbd className="px-1 py-0.5 bg-white border rounded font-mono">Cmd + K</kbd> anytime to open, <kbd className="px-1 py-0.5 bg-white border rounded font-mono">↑↓</kbd> to navigate</span>
           </div>
           <span className="font-medium text-slate-400">Customer ID B2B Portal</span>
         </div>

@@ -375,7 +375,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                   placeholder="Search catalog by product name, SKU, or description..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                   className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs"
+                   className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs font-normal text-slate-900 placeholder-slate-500 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs"
                 />
                 <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" aria-hidden="true" />
               </div>

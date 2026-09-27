@@ -212,6 +212,16 @@ async function normalizeError(response: Response): Promise<ApiError> {
 export function createApiClient(deps: ApiClientDependencies): ApiClient {
   const { baseUrl } = deps;
 
+  /**
+   * In-flight GET coalescing. Tab switches, SSE bursts, and overlapping
+   * mounts often fire the same GET concurrently — without this each one
+   * hits the ERP and risks 429s. Callers awaiting the same path share one
+   * network flight; the entry is removed the moment it settles. Never
+   * applied when the caller passes its own AbortSignal (cancellation
+   * semantics must stay per-caller).
+   */
+  const inflightGets = new Map<string, Promise<unknown>>();
+
   async function perform(
     method: HttpMethod,
     path: string,
@@ -412,7 +422,17 @@ export function createApiClient(deps: ApiClientDependencies): ApiClient {
 
   return {
     get<T>(path: string, options?: ApiRequestOptions) {
-      return request<T>('GET', path, options);
+      if (options?.signal) return request<T>('GET', path, options);
+      const key = `GET ${path}|${options?.timeoutMs ?? ''}|${options?.skipAuth ? 1 : 0}|${options?.maxRetries ?? 3}`;
+      const existing = inflightGets.get(key);
+      if (existing) return existing as Promise<T>;
+      const promise = request<T>('GET', path, options);
+      inflightGets.set(key, promise);
+      const forget = () => {
+        if (inflightGets.get(key) === (promise as Promise<unknown>)) inflightGets.delete(key);
+      };
+      void promise.then(forget, forget);
+      return promise;
     },
     post<T>(path: string, body?: unknown, options?: ApiRequestOptions) {
       return request<T>('POST', path, { ...options, body });

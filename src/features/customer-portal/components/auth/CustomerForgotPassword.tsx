@@ -1,23 +1,23 @@
 /**
  * Prime PORTAL — Customer Forgot Password
  *
- * Email-only reset flow in the same visual family as CustomerLogin. On a
+ * Email-only reset flow in the same mint visual family as CustomerLogin. On a
  * successful send it shows an inline success state plus a toast notification;
  * the server never reveals whether the address exists.
  */
 
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, Lock, Mail } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
 import { useHashRoute } from '../../router/useHashRoute';
 import { ROUTES } from '../../router/routes';
 import { authErrorMessage, useCustomerAuth } from './CustomerAuthContext';
-import { AuthShell } from './AuthShell';
-
-const inputClass =
-  'w-full h-11 pl-10 pr-4 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/60 transition';
-
-const buttonClass =
-  'w-full h-11 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] text-white text-sm font-bold shadow-lg shadow-blue-900/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 transition-all';
+import {
+  AuthError,
+  AuthHeading,
+  AuthMintShell,
+  authInputClass,
+  authPrimaryButtonClass,
+} from './authTheme';
 
 /** Minimal self-contained toast — auto-dismisses after 4 seconds. */
 function Toast({ message, onDone }: { message: string; onDone: () => void }) {
@@ -28,10 +28,10 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
 
   return (
     <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-4 animate-fade-in">
-        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-xl">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-          <p className="text-xs font-semibold text-emerald-800">{message}</p>
-        </div>
+      <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-xl">
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+        <p className="text-xs font-semibold text-emerald-800">{message}</p>
+      </div>
     </div>
   );
 }
@@ -68,56 +68,38 @@ export function CustomerForgotPassword() {
   };
 
   return (
-    <AuthShell>
-      {/* Brand header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] shadow-lg shadow-blue-900/30">
-          <Mail className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <h1 className="text-lg font-black tracking-tight text-slate-900">
-            Prime <span className="text-[#2563eb]">PORTAL</span>
-          </h1>
-          <p className="text-xs font-medium text-slate-500">Smart. Simple. School Supplies.</p>
-        </div>
-      </div>
-
+    <AuthMintShell>
       {!submitted ? (
         <>
-          <div className="mt-6 space-y-1">
-            <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Forgot Password</h2>
-            <p className="text-xs font-medium leading-relaxed text-slate-500">
-              Enter your registered email and we'll send you password reset instructions.
-            </p>
-          </div>
+          <AuthHeading
+            lead="Forgot"
+            accent="Password"
+            description="Enter your registered email and we'll send you password reset instructions."
+          />
 
-          {error && (
-            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium leading-relaxed text-rose-700">
-              {error}
-            </div>
-          )}
+          {error && <AuthError error={error} onDismiss={() => setError(null)} />}
 
-          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
-              <label htmlFor="forgot-email" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">
+              <label
+                htmlFor="forgot-email"
+                className="mb-1.5 block text-[13px] font-semibold text-slate-900"
+              >
                 Email Address
               </label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  id="forgot-email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="accounts@company.mw"
-                  className={inputClass}
-                />
-              </div>
+              <input
+                id="forgot-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="quality@prime.mw"
+                className={authInputClass}
+              />
             </div>
 
-            <button type="submit" disabled={submitting} className={buttonClass}>
+            <button type="submit" disabled={submitting} className={authPrimaryButtonClass}>
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -128,44 +110,46 @@ export function CustomerForgotPassword() {
               )}
             </button>
           </form>
+
+          {/* Auxiliary navigation */}
+          <div className="mt-6 flex justify-center">
+            <button
+              type="button"
+              onClick={() => navigate(ROUTES.login)}
+              className="flex min-h-[44px] items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-slate-800 transition"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Sign In
+            </button>
+          </div>
         </>
       ) : (
-        /* Success state */
+        /* Success state — single primary action (no duplicate footer link). */
         <div className="mt-8 space-y-4 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border-2 border-emerald-200 bg-emerald-50">
             <CheckCircle2 className="h-7 w-7 text-emerald-600" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Check Your Email</h2>
-            <p className="text-xs font-medium leading-relaxed text-slate-500">
-              If an account exists for <strong className="text-slate-700">{email}</strong>, we've sent password
+            <h2 className="text-[28px] font-extrabold tracking-tight text-slate-900">
+              Check Your <span className="text-[#2563eb]">Email</span>
+            </h2>
+            <p className="text-[14px] font-medium leading-relaxed text-slate-500">
+              If an account exists for <strong className="text-slate-700">{email}</strong>, we&apos;ve sent password
               reset instructions.
             </p>
           </div>
           <button
             type="button"
             onClick={() => navigate(ROUTES.login)}
-            className={`${buttonClass} mt-2`}
+            className={`${authPrimaryButtonClass} mt-2`}
           >
             Back to Sign In
           </button>
         </div>
       )}
 
-      {/* Auxiliary navigation */}
-      <div className="mt-6 border-t border-slate-100 pt-5">
-        <button
-          type="button"
-          onClick={() => navigate(ROUTES.login)}
-          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-700 transition"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Sign In
-        </button>
-      </div>
-
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
-    </AuthShell>
+    </AuthMintShell>
   );
 }
 

@@ -8,8 +8,9 @@
  *   - static assets      → stale-while-revalidate (scripts/styles/images/fonts)
  *
  * Version bump the CACHE_NAME to invalidate everything on deploy.
+ * (Bumped for the route-split bundles: tab/modal chunks must not serve stale.)
  */
-const CACHE_NAME = 'prime-portal-v5';
+const CACHE_NAME = 'prime-portal-v6';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -19,6 +20,7 @@ const PRECACHE = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-512-maskable.png',
+  '/prime-logo.png',
 ];
 const MAX_CACHE_ENTRIES = 120;
 

@@ -16,13 +16,15 @@
  * routing (`#/register?ref=CODE`) while shared links use the path form
  * (`/register?ref=CODE`) — both are parsed (see utils/referral.ts). The
  * pending referral is cleared ONLY after the backend accepts the request.
+ *
+ * Chrome comes from the shared auth kit (authTheme) — same mint theme as
+ * the Welcome Back screen.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Link2, Loader2, ShieldCheck, UserPlus } from 'lucide-react';
+import { Link2, Loader2, ShieldCheck } from 'lucide-react';
 import { useHashRoute } from '../../router/useHashRoute';
 import { ROUTES } from '../../router/routes';
-import { AuthShell } from './AuthShell';
 import {
   RegistrationRequestError,
   submitRegistrationRequest,
@@ -36,15 +38,16 @@ import {
 } from '../../utils/referral';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import type { RegistrationRequestInput, RegistrationRequestTier } from '../../types';
+import {
+  AuthField,
+  AuthHeading,
+  AuthMintShell,
+  authInputClass,
+  authPrimaryButtonClass,
+} from './authTheme';
 
-const inputClass =
-  'w-full h-11 px-4 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/60 transition';
-
-const selectClass =
-  'w-full h-11 px-4 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/60 transition appearance-none';
-
-const buttonClass =
-  'w-full h-11 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] text-white text-sm font-bold shadow-lg shadow-blue-900/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 transition-all';
+const authSelectClass =
+  'w-full h-[52px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition appearance-none';
 
 interface Notice {
   message: string;
@@ -235,38 +238,20 @@ export function CustomerRegister() {
   };
 
   return (
-    <AuthShell>
-      {/* Brand header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] shadow-lg shadow-blue-900/30">
-          <UserPlus className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <h1 className="text-lg font-black tracking-tight text-slate-900">
-            Prime <span className="text-[#2563eb]">PORTAL</span>
-          </h1>
-          <p className="text-xs font-medium text-slate-500">Smart. Simple. School Supplies.</p>
-        </div>
-      </div>
-
-      {/* Heading */}
-      <div className="mt-6 space-y-1">
-        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Request an Account</h2>
-        {referralCode ? (
-          <p className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">
-            <ShieldCheck className="w-4 h-4 shrink-0" />
-            You&apos;re requesting through a Prime referral.
-          </p>
-        ) : (
-          <p className="text-sm text-slate-500">
-            Submit a registration request — our team will review it and contact you once approved.
-          </p>
-        )}
-      </div>
+    <AuthMintShell>
+      <AuthHeading
+        lead="Request an"
+        accent="Account"
+        description={
+          referralCode
+            ? "You're requesting through a Prime referral — submit the form below and our team will review it."
+            : 'Submit a registration request — our team will review it and contact you once approved.'
+        }
+      />
 
       {/* Referral badge */}
       {referralCode && (
-        <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5">
+        <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5">
           <Link2 className="w-4 h-4 text-emerald-500 shrink-0" />
           <span className="text-xs font-bold text-emerald-700">
             Referral Code:{' '}
@@ -275,7 +260,7 @@ export function CustomerRegister() {
           <button
             type="button"
             onClick={removeReferralCode}
-            className="ml-auto shrink-0 rounded-lg bg-white border border-emerald-300 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 transition"
+            className="ml-auto min-h-[44px] shrink-0 rounded-lg bg-white border border-emerald-300 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 transition"
             aria-label="Remove referral code"
           >
             Remove
@@ -285,113 +270,81 @@ export function CustomerRegister() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
-        {/* Business name */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600" htmlFor="reg-company">
-            Business Name <span className="text-red-500">*</span>
-          </label>
-          <div className="relative">
-            <input
-              id="reg-company"
-              type="text"
-              autoComplete="organization"
-              placeholder="Prime School Supplies"
-              className={inputClass}
-              value={form.companyName}
-              onChange={setField('companyName')}
-              disabled={submitting}
-            />
-          </div>
-          {errors.companyName && <p className="mt-1 text-xs text-red-500">{errors.companyName}</p>}
-        </div>
-
-        {/* Contact name */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600" htmlFor="reg-contact">
-            Contact Name <span className="text-red-500">*</span>
-          </label>
+        <AuthField id="reg-company" label={<>Business Name <span className="text-rose-500">*</span></>} error={errors.companyName}>
           <input
-            id="reg-contact"
+            type="text"
+            autoComplete="organization"
+            placeholder="Prime School Supplies"
+            className={authInputClass}
+            value={form.companyName}
+            onChange={setField('companyName')}
+            disabled={submitting}
+          />
+        </AuthField>
+
+        <AuthField id="reg-contact" label={<>Contact Name <span className="text-rose-500">*</span></>} error={errors.contactName}>
+          <input
             type="text"
             autoComplete="name"
             placeholder="Jane Smith"
-            className={inputClass}
+            className={authInputClass}
             value={form.contactName}
             onChange={setField('contactName')}
             disabled={submitting}
           />
-          {errors.contactName && <p className="mt-1 text-xs text-red-500">{errors.contactName}</p>}
-        </div>
+        </AuthField>
 
-        {/* Email */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600" htmlFor="reg-email">
-            Email Address <span className="text-red-500">*</span>
-          </label>
+        <AuthField id="reg-email" label={<>Email Address <span className="text-rose-500">*</span></>} error={errors.email}>
           <input
-            id="reg-email"
             type="email"
             autoComplete="email"
             placeholder="jane@primeschool.co.za"
-            className={inputClass}
+            className={authInputClass}
             value={form.email}
             onChange={setField('email')}
             disabled={submitting}
           />
-          {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
-        </div>
+        </AuthField>
 
-        {/* Phone */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600" htmlFor="reg-phone">
-            Phone Number
-          </label>
+        <AuthField id="reg-phone" label="Phone Number">
           <input
-            id="reg-phone"
             type="tel"
             autoComplete="tel"
             placeholder="+27 11 123 4567"
-            className={inputClass}
+            className={authInputClass}
             value={form.phone}
             onChange={setField('phone')}
             disabled={submitting}
           />
-        </div>
+        </AuthField>
 
-        {/* Tier */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600" htmlFor="reg-tier">
-            Account Type
-          </label>
-          <div className="relative">
-            <select
-              id="reg-tier"
-              className={selectClass}
-              value={form.tier}
-              onChange={setField('tier')}
-              disabled={submitting}
-            >
-              <option value="">Select account type...</option>
-              <option value="Individual">Individual</option>
-              <option value="School Account">School Account</option>
-              <option value="Institution">Institution</option>
-              <option value="Government">Government</option>
-            </select>
-          </div>
-        </div>
+        <AuthField id="reg-tier" label="Account Type">
+          <select
+            className={authSelectClass}
+            value={form.tier}
+            onChange={setField('tier')}
+            disabled={submitting}
+          >
+            <option value="">Select account type...</option>
+            <option value="Individual">Individual</option>
+            <option value="School Account">School Account</option>
+            <option value="Institution">Institution</option>
+            <option value="Government">Government</option>
+          </select>
+        </AuthField>
 
         {/* No password is collected: credentials are set after administrator
             approval through the secure invitation/activation flow. */}
 
         {/* Notice */}
         {notice && (
-          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-            <p className="text-sm text-amber-700 font-medium">{notice.message}</p>
+          <div role="alert" className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+            <p className="text-[13px] text-amber-700 font-medium">{notice.message}</p>
             {notice.existingRequestNumber && (
               <button
                 type="button"
                 onClick={viewExistingRequest}
-                className="mt-2 text-sm font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                className="mt-2 min-h-[44px] text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
               >
                 View pending request {notice.existingRequestNumber}
               </button>
@@ -400,7 +353,7 @@ export function CustomerRegister() {
         )}
 
         {/* Submit */}
-        <button type="submit" className={buttonClass} disabled={submitting}>
+        <button type="submit" className={authPrimaryButtonClass} disabled={submitting}>
           {submitting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -418,28 +371,31 @@ export function CustomerRegister() {
       </form>
 
       {/* Footer links */}
-      <div className="mt-5 flex items-center justify-between text-xs">
-        <p className="text-slate-400">
-          Already have an account?{' '}
+      <div className="mt-6 flex items-center justify-between text-[13px]">
+        <p className="text-slate-500">
+          Have an account?{' '}
           <button
             type="button"
             onClick={() => navigate(ROUTES.login)}
-            className="font-bold text-blue-600 hover:text-blue-700 hover:underline"
+            className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
           >
             Sign in
           </button>
         </p>
-        <p className="text-slate-400">
+        <p className="text-slate-500">
+          <ShieldCheck className="mr-1 inline h-3.5 w-3.5 text-emerald-600" />
           Have an invite code?{' '}
           <button
             type="button"
             onClick={() => navigate(ROUTES.activate)}
-            className="font-bold text-blue-600 hover:text-blue-700 hover:underline"
+            className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
           >
             Activate
           </button>
         </p>
       </div>
-    </AuthShell>
+    </AuthMintShell>
   );
 }
+
+export default CustomerRegister;

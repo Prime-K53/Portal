@@ -13,6 +13,8 @@ import { AlertTriangle, Inbox, Loader2, Lock, RefreshCcw, WifiOff } from 'lucide
 import { ApiError } from '../../services/apiClient';
 import { AuthError, PORTAL_SESSION_EXPIRED_EVENT } from '../../services/authService';
 import { isMockModeActive } from '../../config/env';
+import { Button } from '../ui/Button';
+import { SkeletonCard, SkeletonKpi, SkeletonLedgerRow, SkeletonRow } from '../ui/Skeleton';
 
 /**
  * True once the auth layer has broadcast `portal-session-expired` — i.e. the
@@ -116,14 +118,16 @@ export function ErrorState({
       <h3 className="text-sm font-extrabold text-slate-700">Unable to load this data</h3>
       <p className="text-xs text-slate-500 max-w-md leading-relaxed">{message}</p>
       {onRetry && (
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           onClick={onRetry}
-          className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl transition"
+          icon={<RefreshCcw className="w-3.5 h-3.5" />}
+          className="mt-1"
         >
-          <RefreshCcw className="w-3.5 h-3.5" />
           Try Again
-        </button>
+        </Button>
       )}
       {isMockModeActive() && kind === 'notConfigured' && (
         <p className="text-[11.5px] text-slate-400 max-w-md leading-relaxed">
@@ -173,6 +177,46 @@ export function DashboardSkeleton() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="h-48 rounded-2xl bg-slate-100 border border-slate-200" />
         <div className="h-48 rounded-2xl bg-slate-100 border border-slate-200" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton for list-style tabs (invoices, deliveries, quotes, support):
+ * summary KPI strip plus ledger rows.
+ */
+export function ListSkeletonView({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Loading">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {[...Array(3)].map((_, i) => (
+          <SkeletonKpi key={i} />
+        ))}
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+        {[...Array(rows)].map((_, i) => (
+          <SkeletonLedgerRow key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton for card-grid tabs (orders catalog, referrals, statements):
+ * filter bar plus a grid of cards.
+ */
+export function GridSkeletonView({ cards = 6 }: { cards?: number }) {
+  return (
+    <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Loading">
+      <div className="flex gap-2">
+        <SkeletonRow cols={3} className="flex-1 rounded-2xl border border-slate-200 bg-white" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[...Array(cards)].map((_, i) => (
+          <SkeletonCard key={i} />
+        ))}
       </div>
     </div>
   );

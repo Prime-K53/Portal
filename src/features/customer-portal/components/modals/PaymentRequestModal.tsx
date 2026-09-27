@@ -444,7 +444,7 @@ export const PaymentRequestModal: React.FC<PaymentRequestModalProps> = ({ invoic
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Add a note for the finance team (e.g. bank reference or expected transfer date)."
-                  className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-900 shadow-2xs resize-none"
+                  className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-normal text-slate-900 placeholder-slate-500 focus:outline-none focus:border-slate-900 shadow-2xs resize-none"
                 />
               </div>
 

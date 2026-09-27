@@ -9,7 +9,7 @@
  */
 
 import { useEffect } from 'react';
-import { usePortalQuery, invalidatePortalQueries, type PortalQueryResult } from './usePortalQuery';
+import { usePortalQuery, invalidatePortalQueries, type PortalQueryResult, type PortalQueryScope } from './usePortalQuery';
 import { env } from '../config/env';
 import { portalService, sseService } from '../services';
 import { useCustomerAuth } from '../components/auth/CustomerAuthContext';
@@ -64,14 +64,66 @@ export function getCachedInvoiceItems(invoiceId: string): InvoiceItem[] {
   return invoiceItemsCache.get(invoiceId) ?? [];
 }
 
+/**
+ * Cache freshness policy — the ERP 429s when one JWT fires many requests in
+ * a short window, so mounted queries reuse data briefly instead of
+ * refetching on every render, tab switch, or unrelated SSE ping:
+ *   TRANSACTIONAL — money/ledger documents, refetch at most every 10s.
+ *   REFERENCE     — catalogs, articles, contact info, refetch at most every 60s.
+ */
+export const STALE_MS_TRANSACTIONAL = 10_000;
+export const STALE_MS_REFERENCE = 60_000;
+
+// Stable scope arrays (module-level so listener identity is stable).
+const SCOPE_CUSTOMER: PortalQueryScope[] = ['customer'];
+const SCOPE_INVOICES: PortalQueryScope[] = ['invoices'];
+const SCOPE_ORDERS: PortalQueryScope[] = ['orders', 'order-requests'];
+const SCOPE_QUOTES: PortalQueryScope[] = ['quotations', 'quote-requests'];
+const SCOPE_DELIVERIES: PortalQueryScope[] = ['deliveries'];
+const SCOPE_STATEMENTS: PortalQueryScope[] = ['statements', 'payments', 'payment-requests'];
+const SCOPE_REFERRALS: PortalQueryScope[] = ['referrals', 'wallet'];
+const SCOPE_CATALOG: PortalQueryScope[] = ['catalog'];
+const SCOPE_NOTIFICATIONS: PortalQueryScope[] = ['notifications'];
+const SCOPE_SUPPORT: PortalQueryScope[] = ['support', 'articles'];
+const SCOPE_ADS: PortalQueryScope[] = ['ads'];
+const SCOPE_CONTACT: PortalQueryScope[] = ['company-contact'];
+const SCOPE_LOYALTY: PortalQueryScope[] = ['loyalty'];
+
+/**
+ * Maps an ERP `entity_changed` docType to the query scopes that read it.
+ * Returns `undefined` for unrecognized types — the caller then invalidates
+ * globally so nothing ever goes silently stale.
+ */
+export function scopesForDocType(docType: string): PortalQueryScope[] | undefined {
+  const t = (docType ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!t) return undefined;
+  if (t.includes('invoice')) return ['invoices', 'statements'];
+  if (t.includes('statement') || t.includes('ledger')) return ['statements'];
+  if (t.includes('payment')) return ['payments', 'payment-requests', 'invoices', 'statements'];
+  if (t.includes('order') || t.includes('request')) return ['orders', 'order-requests'];
+  if (t.includes('quot') || t.includes('rfq')) return ['quotations', 'quote-requests'];
+  if (t.includes('notif')) return ['notifications'];
+  if (t.includes('deliver') || t.includes('ship') || t.includes('dispatch') || t.includes('deliverynote')) return ['deliveries'];
+  if (t.includes('referral') || t.includes('reward') || t.includes('wallet')) return ['referrals', 'wallet'];
+  if (t.includes('product') || t.includes('catalog') || t.includes('catalogue')) return ['catalog'];
+  if (t.includes('ticket') || t.includes('support') || t.includes('article') || t.includes('message')) return ['support', 'articles'];
+  if (t.includes('customer') || t.includes('profile') || t.includes('account')) return ['customer'];
+  if (t.includes('loyal')) return ['loyalty'];
+  if (t === 'ad' || t === 'ads' || t.includes('advert') || t.includes('banner') || t.includes('promo')) return ['ads'];
+  return undefined;
+}
+
 /** Live events subscription — starts with the session, stops on logout. */
 export function usePortalEvents(active = true): void {
   const { isAuthenticated } = useCustomerAuth();
   useEffect(() => {
     if (!active || !isAuthenticated || !env.useRealBackend) return;
     sseService.start({
-      onNotification: () => invalidatePortalQueries(),
-      onEntityChanged: () => invalidatePortalQueries(),
+      // Per-entity invalidation: only queries reading the changed document
+      // type refetch. Unknown doc types fall back to a global invalidation
+      // so nothing ever goes silently stale.
+      onNotification: () => invalidatePortalQueries(['notifications']),
+      onEntityChanged: (event) => invalidatePortalQueries(scopesForDocType(event.docType)),
     });
     return () => {
       sseService.stop();
@@ -86,7 +138,7 @@ export function usePortalEvents(active = true): void {
 }
 
 export function useCustomerData(overrides?: Partial<AccountProfile>): PortalQueryResult<AccountProfile> {
-  const query = usePortalQuery(() => portalService.getCurrentCustomer(), []);
+  const query = usePortalQuery(() => portalService.getCurrentCustomer(), [], true, STALE_MS_TRANSACTIONAL, SCOPE_CUSTOMER);
   if (overrides && query.data) {
     return { ...query, data: { ...query.data, ...overrides } };
   }
@@ -94,7 +146,7 @@ export function useCustomerData(overrides?: Partial<AccountProfile>): PortalQuer
 }
 
 export function useInvoicesData(enabled = true): PortalQueryResult<Invoice[]> {
-  return usePortalQuery(() => portalService.getInvoices(), [], enabled);
+  return usePortalQuery(() => portalService.getInvoices(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_INVOICES);
 }
 
 export function useInvoiceDetailData(invoiceId: string | null): PortalQueryResult<Invoice> {
@@ -109,12 +161,14 @@ export function useInvoiceDetailData(invoiceId: string | null): PortalQueryResul
       });
     },
     invoiceId ? [invoiceId] : ['none'],
-    invoiceId !== null
+    invoiceId !== null,
+    STALE_MS_TRANSACTIONAL,
+    SCOPE_INVOICES
   );
 }
 
 export function useOrdersData(enabled = true): PortalQueryResult<Order[]> {
-  return usePortalQuery(() => portalService.getOrders(), [], enabled);
+  return usePortalQuery(() => portalService.getOrders(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_ORDERS);
 }
 
 /**
@@ -122,19 +176,19 @@ export function useOrdersData(enabled = true): PortalQueryResult<Order[]> {
  * pipeline. Distinct from official Sales Orders (useOrdersData).
  */
 export function useOrderRequestsData(enabled = true): PortalQueryResult<OrderRequest[]> {
-  return usePortalQuery(() => portalService.getOrderRequests(), [], enabled);
+  return usePortalQuery(() => portalService.getOrderRequests(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_ORDERS);
 }
 
 export function useQuoteRequestsData(enabled = true): PortalQueryResult<QuoteRequest[]> {
-  return usePortalQuery(() => portalService.getQuoteRequests(), [], enabled);
+  return usePortalQuery(() => portalService.getQuoteRequests(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_QUOTES);
 }
 
 export function useQuotationsData(enabled = true): PortalQueryResult<Quotation[]> {
-  return usePortalQuery(() => portalService.getQuotations(), [], enabled);
+  return usePortalQuery(() => portalService.getQuotations(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_QUOTES);
 }
 
 export function useDeliveriesData(enabled = true): PortalQueryResult<DeliveryNotification[]> {
-  return usePortalQuery(() => portalService.getDeliveries(), [], enabled);
+  return usePortalQuery(() => portalService.getDeliveries(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_DELIVERIES);
 }
 
 export function useStatementsData(
@@ -145,12 +199,14 @@ export function useStatementsData(
   return usePortalQuery(
     () => portalService.getStatements(startDate, endDate),
     [startDate, endDate],
-    enabled
+    enabled,
+    STALE_MS_TRANSACTIONAL,
+    SCOPE_STATEMENTS
   );
 }
 
 export function usePaymentsData(enabled = true): PortalQueryResult<Payment[]> {
-  return usePortalQuery(() => portalService.getPayments(), [], enabled);
+  return usePortalQuery(() => portalService.getPayments(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_STATEMENTS);
 }
 
 /**
@@ -159,53 +215,53 @@ export function usePaymentsData(enabled = true): PortalQueryResult<Payment[]> {
  * closed.
  */
 export function usePaymentRequestsData(enabled = true): PortalQueryResult<PaymentRequest[]> {
-  return usePortalQuery(() => portalService.getPaymentRequests(), [], enabled);
+  return usePortalQuery(() => portalService.getPaymentRequests(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_STATEMENTS);
 }
 
 export function useReferralsData(enabled = true): PortalQueryResult<PortalReferral[]> {
-  return usePortalQuery(() => portalService.getReferrals(), [], enabled);
+  return usePortalQuery(() => portalService.getReferrals(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_REFERRALS);
 }
 
 export function useReferralStatsData(enabled = true): PortalQueryResult<ReferralStats> {
-  return usePortalQuery(() => portalService.getReferralStats(), [], enabled);
+  return usePortalQuery(() => portalService.getReferralStats(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_REFERRALS);
 }
 
 export function useReferralRewardsData(enabled = true): PortalQueryResult<ReferralReward[]> {
-  return usePortalQuery(() => portalService.getReferralRewards(), [], enabled);
+  return usePortalQuery(() => portalService.getReferralRewards(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_REFERRALS);
 }
 
 export function useWalletData(enabled = true): PortalQueryResult<Wallet> {
-  return usePortalQuery(() => portalService.getWallet(), [], enabled);
+  return usePortalQuery(() => portalService.getWallet(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_REFERRALS);
 }
 
 export function useCatalogData(enabled = true): PortalQueryResult<Product[]> {
-  return usePortalQuery(() => portalService.getCatalog(), [], enabled);
+  return usePortalQuery(() => portalService.getCatalog(), [], enabled, STALE_MS_REFERENCE, SCOPE_CATALOG);
 }
 
 export function useNotificationsData(): PortalQueryResult<PortalNotification[]> {
-  return usePortalQuery(() => portalService.getNotifications(), []);
+  return usePortalQuery(() => portalService.getNotifications(), [], true, STALE_MS_TRANSACTIONAL, SCOPE_NOTIFICATIONS);
 }
 
 export function useUnreadNotificationCount(): PortalQueryResult<number> {
-  return usePortalQuery(() => portalService.getUnreadNotificationCount(), []);
+  return usePortalQuery(() => portalService.getUnreadNotificationCount(), [], true, STALE_MS_TRANSACTIONAL, SCOPE_NOTIFICATIONS);
 }
 
 export function useLoyaltyData(): PortalQueryResult<ErpLoyalty> {
-  return usePortalQuery(() => portalService.getLoyalty(), []);
+  return usePortalQuery(() => portalService.getLoyalty(), [], true, STALE_MS_TRANSACTIONAL, SCOPE_LOYALTY);
 }
 
 export function useAdsData(enabled = true): PortalQueryResult<PortalAd[]> {
-  return usePortalQuery(() => portalService.getAds(), [], enabled);
+  return usePortalQuery(() => portalService.getAds(), [], enabled, STALE_MS_REFERENCE, SCOPE_ADS);
 }
 
 export function useSupportTicketsData(enabled = true): PortalQueryResult<SupportTicket[]> {
-  return usePortalQuery(() => portalService.getSupportTickets(), [], enabled);
+  return usePortalQuery(() => portalService.getSupportTickets(), [], enabled, STALE_MS_TRANSACTIONAL, SCOPE_SUPPORT);
 }
 
 export function useSupportArticlesData(enabled = true): PortalQueryResult<SupportArticle[]> {
-  return usePortalQuery(() => portalService.getSupportArticles(), [], enabled);
+  return usePortalQuery(() => portalService.getSupportArticles(), [], enabled, STALE_MS_REFERENCE, SCOPE_SUPPORT);
 }
 
 export function useCompanyContactData(): PortalQueryResult<CompanyContactInfo | null> {
-  return usePortalQuery(() => portalService.getCompanyContactInfo(), []);
+  return usePortalQuery(() => portalService.getCompanyContactInfo(), [], true, STALE_MS_REFERENCE, SCOPE_CONTACT);
 }

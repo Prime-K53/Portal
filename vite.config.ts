@@ -11,6 +11,20 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      target: 'es2020',
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          // Isolate heavy / rarely-changing vendor code so the main entry
+          // chunk stays small and these chunks cache across deploys.
+          manualChunks: {
+            'vendor-icons': ['lucide-react'],
+            'vendor-sentry': ['@sentry/react'],
+          },
+        },
+      },
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.

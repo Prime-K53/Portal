@@ -295,7 +295,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                   onChange={(e) => setReferredName(e.target.value)}
                   placeholder="e.g. Grace Banda"
                   disabled={isSubmitting}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
                 />
               </div>
 
@@ -310,7 +310,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                     onChange={(e) => setReferredEmail(e.target.value)}
                     placeholder="email@example.com"
                     disabled={isSubmitting}
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
                   />
                 </div>
                 <div>
@@ -323,7 +323,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                     onChange={(e) => setReferredPhone(e.target.value)}
                     placeholder="+265 ..."
                     disabled={isSubmitting}
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
                   />
                 </div>
               </div>
@@ -338,7 +338,7 @@ export const ReferralsTab: React.FC<ReferralsTabProps> = ({
                   placeholder="Any context for the referral…"
                   rows={2}
                   disabled={isSubmitting}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition resize-none disabled:opacity-50"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition resize-none disabled:opacity-50"
                 />
               </div>
             </div>

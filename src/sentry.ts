@@ -20,9 +20,20 @@
  *   - Extra / body data from API responses
  */
 
-import * as Sentry from '@sentry/react';
 import type { ErrorEvent, EventHint } from '@sentry/core';
 import { env } from './features/customer-portal/config/env';
+
+/**
+ * The Sentry SDK is dynamic-imported (never statically bundled) so the
+ * initial paint pays zero cost for error tracking — the chunk loads only
+ * when initialization or an actual report runs in a production build
+ * with a DSN configured.
+ */
+type SentryModule = typeof import('@sentry/react');
+
+function loadSentry(): Promise<SentryModule | null> {
+  return import('@sentry/react').catch(() => null);
+}
 
 function sentryBeforeSend(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
   if (!event.request) return null;
@@ -66,7 +77,9 @@ export function initSentry(): void {
   if (!env.sentryDsn) return;
   if (import.meta.env.DEV) return;
 
-  Sentry.init({
+  void loadSentry().then((Sentry) => {
+    if (!Sentry) return;
+    Sentry.init({
     dsn: env.sentryDsn,
     environment: import.meta.env.PROD ? 'production' : 'staging',
 
@@ -96,6 +109,7 @@ export function initSentry(): void {
       }
       return breadcrumb;
     },
+    });
   });
 }
 
@@ -120,17 +134,20 @@ export function reportError(
     return;
   }
 
-  Sentry.withScope((scope) => {
-    if (context?.tags) {
-      for (const [key, value] of Object.entries(context.tags)) {
-        scope.setTag(key, value);
+  void loadSentry().then((Sentry) => {
+    if (!Sentry) return;
+    Sentry.withScope((scope) => {
+      if (context?.tags) {
+        for (const [key, value] of Object.entries(context.tags)) {
+          scope.setTag(key, value);
+        }
       }
-    }
-    if (context?.extra) {
-      for (const [key, value] of Object.entries(context.extra)) {
-        scope.setExtra(key, value);
+      if (context?.extra) {
+        for (const [key, value] of Object.entries(context.extra)) {
+          scope.setExtra(key, value);
+        }
       }
-    }
-    Sentry.captureException(error);
+      Sentry.captureException(error);
+    });
   });
 }

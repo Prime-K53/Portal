@@ -32,6 +32,64 @@ function getFocusable(container: HTMLElement): HTMLElement[] {
   );
 }
 
+/**
+ * Background hiding for screen readers. A focus trap alone doesn't remove
+ * the page behind the modal from the accessibility tree — VoiceOver/NVDA
+ * users can still navigate it. While any trap is active, every ancestor's
+ * siblings that do NOT contain an active trap are `aria-hidden`.
+ *
+ * Stacking-aware: nested modals (variant picker inside the command palette)
+ * register too, so the parent dialog is never hidden from its own child.
+ */
+const activeTrapContainers = new Set<HTMLElement>();
+const hiddenByTrap = new Map<HTMLElement, string | null>();
+
+function containsActiveTrap(el: HTMLElement): boolean {
+  for (const container of activeTrapContainers) {
+    if (el === container || el.contains(container)) return true;
+  }
+  return false;
+}
+
+function updateBackgroundHiding(): void {
+  // Restore everything first, then re-apply for the current stack.
+  hiddenByTrap.forEach((original, el) => {
+    try {
+      if (original === null) el.removeAttribute('aria-hidden');
+      else el.setAttribute('aria-hidden', original);
+    } catch {
+      // ignore
+    }
+  });
+  hiddenByTrap.clear();
+
+  if (activeTrapContainers.size === 0) return;
+
+  for (const container of activeTrapContainers) {
+    let node: HTMLElement | null = container;
+    while (node && node !== document.body) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      for (const sibling of Array.from(parent.children)) {
+        if (
+          sibling instanceof HTMLElement &&
+          sibling !== node &&
+          !containsActiveTrap(sibling) &&
+          sibling.getAttribute('aria-hidden') !== 'true'
+        ) {
+          hiddenByTrap.set(sibling, sibling.getAttribute('aria-hidden'));
+          try {
+            sibling.setAttribute('aria-hidden', 'true');
+          } catch {
+            // ignore
+          }
+        }
+      }
+      node = parent;
+    }
+  }
+}
+
 export interface FocusTrapOptions {
   /** When false the trap is detached and focus is restored. */
   active: boolean;
@@ -51,6 +109,10 @@ export function useFocusTrap(
     // Remember the element that had focus before the modal opened so we can
     // restore it when the modal closes.
     const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    // Register for background hiding (supports nested traps).
+    activeTrapContainers.add(container);
+    updateBackgroundHiding();
 
     // Move focus into the trap on open. Prefer the first focusable child;
     // fall back to the container itself (which must be focusable via tabindex).
@@ -98,6 +160,8 @@ export function useFocusTrap(
     return () => {
       window.clearTimeout(initialTimer);
       document.removeEventListener('keydown', handleKeyDown);
+      activeTrapContainers.delete(container);
+      updateBackgroundHiding();
       // Restore the previously-focused element on close, but only if it's
       // still in the DOM and focusable.
       if (previouslyFocused && previouslyFocused.isConnected) {

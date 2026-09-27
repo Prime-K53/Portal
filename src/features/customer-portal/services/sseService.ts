@@ -34,14 +34,20 @@ interface PendingTicket {
   expiresAt: number;
 }
 
-const DEFAULT_RECONNECT_MS = 4000;
+const BASE_RECONNECT_MS = 2000;
+const MAX_RECONNECT_MS = 30000;
+// Tickets live ~5 minutes — proactively re-ticket before expiry while open.
+const TICKET_REFRESH_MS = 4.5 * 60 * 1000;
 
 export class ErpSseService {
   private readonly client: ApiClient;
   private source: EventSource | null = null;
   private handlers: SseEventHandlers | null = null;
   private reconnectTimer: number | null = null;
+  private ticketRefreshTimer: number | null = null;
+  private reconnectAttempts = 0;
   private disposed = false;
+  private visibilityListener: (() => void) | null = null;
   private readonly seen = new Set<string>();
   private readonly seenMax = 200;
 
@@ -55,23 +61,66 @@ export class ErpSseService {
 
   /** Starts the event stream (idempotent). Refreshes the ticket on reconnect. */
   start(handlers: SseEventHandlers): void {
+    // A previous stop() must never permanently wedge the stream: starting
+    // again (e.g. next login) re-arms everything.
+    this.disposed = false;
     this.handlers = handlers;
     if (this.source || this.reconnectTimer) return;
+    this.watchVisibility();
     this.open();
   }
 
   stop(): void {
     this.disposed = true;
     this.handlers = null;
-    if (this.reconnectTimer !== null) {
-      window.clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.clearTimers();
     this.closeSource();
+    this.unwatchVisibility();
     this.seen.clear();
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
+
+  private clearTimers(): void {
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ticketRefreshTimer !== null) {
+      window.clearTimeout(this.ticketRefreshTimer);
+      this.ticketRefreshTimer = null;
+    }
+  }
+
+  /** Pause the stream while the tab is hidden — no point holding it open. */
+  private watchVisibility(): void {
+    if (this.visibilityListener || typeof document === 'undefined') return;
+    const onChange = () => {
+      try {
+        if (document.hidden) {
+          this.closeSource();
+          this.clearTimers();
+        } else if (!this.disposed && this.handlers && !this.source && !this.reconnectTimer) {
+          this.open();
+        }
+      } catch {
+        // ignore
+      }
+    };
+    this.visibilityListener = onChange;
+    document.addEventListener('visibilitychange', onChange);
+  }
+
+  private unwatchVisibility(): void {
+    if (this.visibilityListener && typeof document !== 'undefined') {
+      try {
+        document.removeEventListener('visibilitychange', this.visibilityListener);
+      } catch {
+        // ignore
+      }
+    }
+    this.visibilityListener = null;
+  }
 
   private closeSource(): void {
     if (this.source) {
@@ -106,6 +155,8 @@ export class ErpSseService {
     this.source = source;
 
     source.onopen = () => {
+      this.reconnectAttempts = 0;
+      this.scheduleTicketRefresh();
       this.handlers?.onConnected?.();
     };
 
@@ -142,11 +193,29 @@ export class ErpSseService {
 
   private scheduleReconnect(): void {
     if (this.disposed || this.reconnectTimer !== null) return;
+    // Exponential backoff with jitter: 2s, 4s, 8s … capped at 30s, so a
+    // flapping backend doesn't get hammered on a fixed cadence.
+    const backoff = Math.min(MAX_RECONNECT_MS, BASE_RECONNECT_MS * 2 ** this.reconnectAttempts);
+    const delay = backoff / 2 + Math.random() * (backoff / 2);
+    this.reconnectAttempts += 1;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (this.disposed) return;
       void this.open();
-    }, DEFAULT_RECONNECT_MS);
+    }, delay);
+  }
+
+  /** Re-ticket an open stream before the 5-minute ticket expires. */
+  private scheduleTicketRefresh(): void {
+    if (this.ticketRefreshTimer !== null) {
+      window.clearTimeout(this.ticketRefreshTimer);
+    }
+    this.ticketRefreshTimer = window.setTimeout(() => {
+      this.ticketRefreshTimer = null;
+      if (this.disposed || !this.handlers) return;
+      this.closeSource();
+      void this.open();
+    }, TICKET_REFRESH_MS);
   }
 
   private dispatch(event: ErpSseEvent): void {
@@ -154,7 +223,7 @@ export class ErpSseService {
 
     if (event.name === 'entity_changed') {
       const data = event.data;
-      const key = `e_${data.docType}_${data.docId}_${data.event}`;
+      const key = `e_${data.docType}_${data.docId}_${data.event}_${data.status ?? ''}_${data.updatedAt ?? ''}`;
       if (this.isDuplicate(key)) return;
       this.handlers.onEntityChanged?.(data);
       return;
@@ -162,7 +231,7 @@ export class ErpSseService {
 
     if (event.name === 'notification') {
       const data = event.data;
-      const key = `n_${data.createdAt}_${data.title}`;
+      const key = `n_${data.createdAt}_${data.type}_${data.title}_${data.body ?? ''}_${data.link ?? ''}`;
       if (this.isDuplicate(key)) return;
       this.handlers.onNotification?.(data);
     }

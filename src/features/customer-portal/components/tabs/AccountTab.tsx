@@ -369,6 +369,10 @@ export const AccountTab: React.FC<AccountTabProps> = ({
               <img
                 src={profile.accountManager.avatar}
                 alt={profile.accountManager.name}
+                loading="lazy"
+                decoding="async"
+                width={48}
+                height={48}
                 className="w-12 h-12 rounded-full object-cover border-2 border-slate-300"
                 onError={(e) => {
                   // Fall back to initials if the avatar URL fails to load.

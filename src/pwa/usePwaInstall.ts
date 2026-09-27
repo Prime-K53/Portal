@@ -23,6 +23,18 @@ function markDismissed(): void {
   try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch { /* private mode */ }
 }
 
+function isIosDevice(): boolean {
+  try {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    if (/iphone|ipad|ipod/i.test(ua)) return true;
+    // iPadOS 13+ reports as Mac — touch points distinguish it.
+    return navigator.platform === 'MacIntel' && (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints !== undefined && (navigator as Navigator & { maxTouchPoints: number }).maxTouchPoints > 1;
+  } catch {
+    return false;
+  }
+}
+
 export interface PwaInstallState {
   /** The browser can install the app right now (beforeinstallprompt captured). */
   canInstall: boolean;
@@ -34,6 +46,11 @@ export interface PwaInstallState {
   outcome: 'accepted' | 'dismissed' | 'error' | null;
   /** Whether the chip should be visible. */
   shouldOffer: boolean;
+  /**
+   * iOS Safari never fires beforeinstallprompt — show manual
+   * Share → Add to Home Screen guidance instead.
+   */
+  shouldShowIosHint: boolean;
   promptInstall: () => Promise<void>;
   dismiss: () => void;
 }
@@ -100,8 +117,11 @@ export function usePwaInstall(): PwaInstallState {
   }, []);
 
   const canInstall = Boolean(deferred);
+  const recentlyDismissed = Boolean(dismissedAt && Date.now() - dismissedAt < DISMISS_COOLDOWN_MS);
   const shouldOffer =
-    !installed && !prompting && (canInstall ? !(dismissedAt && Date.now() - dismissedAt < DISMISS_COOLDOWN_MS) : false);
+    !installed && !prompting && (canInstall ? !recentlyDismissed : false);
+  const isIos = isIosDevice();
+  const shouldShowIosHint = !installed && isIos && !recentlyDismissed && !canInstall;
 
-  return { canInstall, installed, prompting, outcome, shouldOffer, promptInstall, dismiss };
+  return { canInstall, installed, prompting, outcome, shouldOffer, shouldShowIosHint, promptInstall, dismiss };
 }

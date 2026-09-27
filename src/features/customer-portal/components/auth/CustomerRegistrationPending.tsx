@@ -9,13 +9,15 @@
  * auth context is not touched, and an approved request does NOT sign the
  * applicant in — credentials arrive separately through the
  * invitation/activation flow.
+ *
+ * Chrome comes from the shared auth kit (authTheme) — same mint theme as
+ * the Welcome Back screen.
  */
 
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Clock3, Loader2, Search, XCircle } from 'lucide-react';
 import { useHashRoute } from '../../router/useHashRoute';
 import { ROUTES } from '../../router/routes';
-import { AuthShell } from './AuthShell';
 import {
   RegistrationRequestError,
   cancelRegistrationRequest,
@@ -26,15 +28,14 @@ import {
   type PendingRegistrationInfo,
 } from '../../services/registrationRequestService';
 import { generateIdempotencyKey } from '../../utils/idempotency';
-
-const buttonClass =
-  'w-full h-11 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] text-white text-sm font-bold shadow-lg shadow-blue-900/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 transition-all';
-
-const secondaryButtonClass =
-  'w-full h-11 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all';
-
-const inputClass =
-  'w-full h-11 px-4 bg-slate-50/80 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/60 transition';
+import {
+  AuthError,
+  AuthHeading,
+  AuthMintShell,
+  authInputClass,
+  authPrimaryButtonClass,
+  authSecondaryButtonClass,
+} from './authTheme';
 
 type StatusTone = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
@@ -93,6 +94,8 @@ export function CustomerRegistrationPending() {
 
   const [pending, setPending] = useState<PendingRegistrationInfo | null>(null);
   const [email, setEmail] = useState('');
+  const [lookupRequestNumber, setLookupRequestNumber] = useState('');
+  const [lookupEmail, setLookupEmail] = useState('');
   const [checking, setChecking] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -179,46 +182,44 @@ export function CustomerRegistrationPending() {
     }
   };
 
+  const handleLookup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (lookupRequestNumber.trim() && lookupEmail.trim()) {
+      setPending({
+        requestNumber: lookupRequestNumber.trim(),
+        email: lookupEmail.trim(),
+        status: 'pending',
+        submittedAt: null,
+      });
+      setEmail(lookupEmail.trim());
+    }
+  };
+
   const tone = pending ? toneOf(pending.status) : 'pending';
 
   return (
-    <AuthShell>
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] shadow-lg shadow-blue-900/30">
-          <StatusIcon status={pending?.status ?? 'pending'} />
-        </div>
-        <div>
-          <h1 className="text-lg font-black tracking-tight text-slate-900">
-            Prime <span className="text-[#2563eb]">PORTAL</span>
-          </h1>
-          <p className="text-xs font-medium text-slate-500">Smart. Simple. School Supplies.</p>
-        </div>
-      </div>
-
-      <div className="mt-6 space-y-1">
-        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">
-          Registration Submitted
-        </h2>
-        <p className="text-sm text-slate-500">
-          Your registration request has been received and is pending review.
-        </p>
-      </div>
+    <AuthMintShell>
+      <AuthHeading
+        lead="Registration"
+        accent="Submitted"
+        description="Your registration request has been received and is pending review."
+      />
 
       {pending ? (
         <div className="mt-6 space-y-4">
           {/* Request identity */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <p className="text-[13px] font-semibold text-slate-900">
                 Request Number
               </p>
               <p className="mt-0.5 font-mono text-lg font-black tracking-wider text-slate-900">
                 {pending.requestNumber}
               </p>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
+            <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status</p>
+                <p className="text-[13px] font-semibold text-slate-900">Status</p>
                 <p className="mt-0.5 flex items-center gap-1.5 text-sm font-bold text-slate-900">
                   <StatusIcon status={pending.status} />
                   {statusLabel(pending.status)}
@@ -226,7 +227,7 @@ export function CustomerRegistrationPending() {
               </div>
               {pending.submittedAt && (
                 <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <p className="text-[13px] font-semibold text-slate-900">
                     Submitted
                   </p>
                   <p className="mt-0.5 text-xs font-medium text-slate-600">
@@ -238,7 +239,7 @@ export function CustomerRegistrationPending() {
           </div>
 
           {tone === 'pending' && (
-            <p className="text-xs leading-relaxed text-slate-500">
+            <p className="text-[13px] leading-relaxed text-slate-500">
               We will review your registration and contact you once your account is approved.
               You&apos;ll receive sign-in instructions after approval — there is nothing else
               you need to do right now.
@@ -246,14 +247,14 @@ export function CustomerRegistrationPending() {
           )}
           {tone === 'approved' && (
             <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3">
-              <p className="text-sm text-emerald-700 font-medium">
+              <p className="text-[13px] text-emerald-700 font-medium">
                 Your registration was approved. Use the invitation details sent to your email to
                 activate your account and set your password.
               </p>
               <button
                 type="button"
                 onClick={() => navigate(ROUTES.activate)}
-                className="mt-2 text-sm font-bold text-emerald-700 hover:underline"
+                className="mt-2 min-h-[44px] text-[13px] font-bold text-emerald-700 hover:underline"
               >
                 Go to Activate Account
               </button>
@@ -261,21 +262,21 @@ export function CustomerRegistrationPending() {
           )}
           {tone === 'rejected' && (
             <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3">
-              <p className="text-sm text-rose-600 font-medium">
+              <p className="text-[13px] text-rose-600 font-medium">
                 This registration request was not approved. Please contact support if you believe
                 this is a mistake.
               </p>
             </div>
           )}
           {tone === 'cancelled' && (
-            <div className="rounded-xl bg-slate-100 border border-slate-200 px-4 py-3">
-              <p className="text-sm text-slate-600 font-medium">
+            <div className="rounded-xl bg-white border border-slate-200 px-4 py-3">
+              <p className="text-[13px] text-slate-600 font-medium">
                 This registration request was cancelled. You can submit a new request at any time.
               </p>
               <button
                 type="button"
                 onClick={() => navigate(ROUTES.register)}
-                className="mt-2 text-sm font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                className="mt-2 min-h-[44px] text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
               >
                 Submit a new request
               </button>
@@ -283,23 +284,13 @@ export function CustomerRegistrationPending() {
           )}
 
           {message && (
-            <div
-              className={
-                message.tone === 'error'
-                  ? 'rounded-xl bg-red-50 border border-red-200 px-4 py-3'
-                  : 'rounded-xl bg-blue-50 border border-blue-200 px-4 py-3'
-              }
-            >
-              <p
-                className={
-                  message.tone === 'error'
-                    ? 'text-sm text-red-600 font-medium'
-                    : 'text-sm text-blue-700 font-medium'
-                }
-              >
-                {message.text}
-              </p>
-            </div>
+            message.tone === 'error' ? (
+              <AuthError error={message.text} onDismiss={() => setMessage(null)} />
+            ) : (
+              <div role="status" className="mt-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3">
+                <p className="text-[13px] text-blue-700 font-medium">{message.text}</p>
+              </div>
+            )
           )}
 
           {/* Status check */}
@@ -307,7 +298,7 @@ export function CustomerRegistrationPending() {
             <form onSubmit={handleCheckStatus} className="space-y-3">
               <div>
                 <label
-                  className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600"
+                  className="mb-1.5 block text-[13px] font-semibold text-slate-900"
                   htmlFor="pending-email"
                 >
                   Check registration status
@@ -317,13 +308,13 @@ export function CustomerRegistrationPending() {
                   type="email"
                   autoComplete="email"
                   placeholder="Email used for the request"
-                  className={inputClass}
+                  className={authInputClass}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={checking || cancelling}
                 />
               </div>
-              <button type="submit" className={secondaryButtonClass} disabled={checking || cancelling}>
+              <button type="submit" className={authSecondaryButtonClass} disabled={checking || cancelling}>
                 {checking ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -331,7 +322,7 @@ export function CustomerRegistrationPending() {
                   </>
                 ) : (
                   <>
-                    <Search className="w-4 h-4" />
+                    <Search className="w-4 h-4 text-emerald-600" />
                     Check Status
                   </>
                 )}
@@ -345,14 +336,14 @@ export function CustomerRegistrationPending() {
               type="button"
               onClick={() => setConfirmingCancel(true)}
               disabled={checking || cancelling}
-              className="text-xs font-semibold text-slate-400 hover:text-rose-600 transition disabled:opacity-50"
+              className="min-h-[44px] text-[13px] font-semibold text-slate-400 hover:text-rose-600 transition disabled:opacity-50"
             >
               Cancel this request
             </button>
           )}
           {tone === 'pending' && confirmingCancel && (
             <div className="rounded-xl border border-rose-200 bg-rose-50/60 px-4 py-3 space-y-3">
-              <p className="text-xs font-medium text-rose-700">
+              <p className="text-[13px] font-medium text-rose-700">
                 Cancel request {pending.requestNumber}? This cannot be undone.
               </p>
               <div className="flex gap-2">
@@ -360,7 +351,7 @@ export function CustomerRegistrationPending() {
                   type="button"
                   onClick={() => setConfirmingCancel(false)}
                   disabled={cancelling}
-                  className="flex-1 h-10 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  className="flex-1 h-[52px] rounded-[16px] bg-white border border-slate-200 text-[14px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Keep Request
                 </button>
@@ -368,7 +359,7 @@ export function CustomerRegistrationPending() {
                   type="button"
                   onClick={handleCancel}
                   disabled={cancelling}
-                  className="flex-1 h-10 rounded-xl bg-rose-600 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  className="flex-1 h-[52px] rounded-[16px] bg-black text-[14px] font-bold text-white hover:bg-slate-900 disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   {cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   Yes, Cancel
@@ -379,63 +370,71 @@ export function CustomerRegistrationPending() {
         </div>
       ) : (
         <div className="mt-6 space-y-4">
-          <div className="rounded-xl bg-slate-100 border border-slate-200 px-4 py-3">
-            <p className="text-sm text-slate-600 font-medium">
+          <div className="rounded-xl bg-white border border-slate-200 px-4 py-3">
+            <p className="text-[13px] text-slate-600 font-medium">
               No pending registration found on this device. Submit a request first, or check the
               status of an existing request below.
             </p>
           </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.target as HTMLFormElement;
-              const data = new FormData(form);
-              const requestNumber = String(data.get('requestNumber') ?? '').trim();
-              const lookupEmail = String(data.get('email') ?? '').trim();
-              if (requestNumber && lookupEmail) {
-                setPending({ requestNumber, email: lookupEmail, status: 'pending', submittedAt: null });
-                setEmail(lookupEmail);
-              }
-            }}
-            className="space-y-3"
-          >
-            <input
-              name="requestNumber"
-              type="text"
-              placeholder="Request number (e.g. CREG-2026-000001)"
-              className={`${inputClass} font-mono`}
-            />
-            <input
-              name="email"
-              type="email"
-              autoComplete="email"
-              placeholder="Email used for the request"
-              className={inputClass}
-            />
-            <button type="submit" className={secondaryButtonClass}>
+          <form onSubmit={handleLookup} className="space-y-3">
+            <div>
+              <label
+                htmlFor="lookup-request-number"
+                className="mb-1.5 block text-[13px] font-semibold text-slate-900"
+              >
+                Request Number
+              </label>
+              <input
+                id="lookup-request-number"
+                type="text"
+                placeholder="Request number (e.g. CREG-2026-000001)"
+                className={`${authInputClass} font-mono`}
+                value={lookupRequestNumber}
+                onChange={(e) => setLookupRequestNumber(e.target.value)}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="lookup-email"
+                className="mb-1.5 block text-[13px] font-semibold text-slate-900"
+              >
+                Email Address
+              </label>
+              <input
+                id="lookup-email"
+                type="email"
+                autoComplete="email"
+                placeholder="Email used for the request"
+                className={authInputClass}
+                value={lookupEmail}
+                onChange={(e) => setLookupEmail(e.target.value)}
+              />
+            </div>
+            <button type="submit" className={authSecondaryButtonClass}>
               Look Up Request
             </button>
           </form>
         </div>
       )}
 
-      <div className="mt-6 border-t border-slate-100 pt-5 flex items-center justify-between text-xs">
+      <div className="mt-6 flex items-center justify-between text-[13px]">
         <button
           type="button"
           onClick={() => navigate(ROUTES.login)}
-          className="font-semibold text-slate-500 hover:text-blue-700 transition"
+          className="min-h-[44px] font-semibold text-slate-500 hover:text-slate-800 transition"
         >
           Back to Sign In
         </button>
         <button
           type="button"
           onClick={() => navigate(ROUTES.register)}
-          className="font-semibold text-slate-500 hover:text-blue-700 transition"
+          className="min-h-[44px] font-semibold text-slate-500 hover:text-slate-800 transition"
         >
           New Request
         </button>
       </div>
-    </AuthShell>
+
+    </AuthMintShell>
   );
 }
 

@@ -13,6 +13,7 @@
 import type { TabType } from '../types';
 
 export const ROUTES = {
+  landing: '/landing',
   login: '/login',
   activate: '/activate',
   forgotPassword: '/forgot-password',
@@ -68,6 +69,7 @@ export function tabFromPath(path: string): TabType | null {
 
 /** Routes renderable without a session (auth screens + pending registration). */
 const PUBLIC_ROUTES: readonly string[] = [
+  ROUTES.landing,
   ROUTES.login,
   ROUTES.activate,
   ROUTES.forgotPassword,
@@ -77,6 +79,7 @@ const PUBLIC_ROUTES: readonly string[] = [
 
 /** Auth screens that an authenticated user should leave (login flows). Pending receipt stays viewable. */
 const AUTH_ONLY_ROUTES: readonly string[] = [
+  ROUTES.landing,
   ROUTES.login,
   ROUTES.activate,
   ROUTES.forgotPassword,

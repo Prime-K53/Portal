@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   CheckCircle2,
   ChevronRight,
@@ -98,6 +98,8 @@ const BannerBackground: React.FC<{ slide?: BannerSlide }> = ({ slide }) => {
         <img
           src={slide.imageUrl}
           alt={slide.title}
+          loading="lazy"
+          decoding="async"
           onError={() => setImageFailed(true)}
           className="absolute inset-0 z-[2] w-full h-full object-cover"
         />
@@ -156,21 +158,29 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isCarouselPaused, setIsCarouselPaused] = useState(false);
 
-  // ── Data derivations ──────────────────────────────────────────────────
-  const overdueInvoices = invoices.filter((i) => i.status === 'overdue');
-  const unpaidInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid');
-  const paidInvoices = invoices.filter((i) => i.status === 'paid');
-  const draftInvoices = invoices.filter((i) => i.status === 'draft');
-
-  const outstandingTotal = unpaidInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
-  const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
-  // Paid invoices total comes from invoice records — never from ledger credits.
-  const paidInvoicesTotal = paidInvoices.reduce((sum, i) => sum + i.amount, 0);
+  // ── Data derivations (memoized: DashboardTab re-renders on carousel
+  //    ticks, and these scans must not repeat per frame) ──────────────────
+  const { overdueInvoices, unpaidInvoices, paidInvoices, outstandingTotal, totalPayment, paidInvoicesTotal } =
+    useMemo(() => {
+      const overdue = invoices.filter((i) => i.status === 'overdue');
+      const unpaid = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid');
+      const paid = invoices.filter((i) => i.status === 'paid');
+      return {
+        overdueInvoices: overdue,
+        unpaidInvoices: unpaid,
+        paidInvoices: paid,
+        outstandingTotal: unpaid.reduce((sum, i) => sum + i.amountRemaining, 0),
+        totalPayment: statements.reduce((sum, s) => sum + s.credit, 0),
+        // Paid invoices total comes from invoice records — never from ledger credits.
+        paidInvoicesTotal: paid.reduce((sum, i) => sum + i.amount, 0),
+      };
+    }, [invoices, statements]);
+  const draftInvoices = useMemo(() => invoices.filter((i) => i.status === 'draft'), [invoices]);
   const totalBalance = profile.currentBalance;
 
-  // Active orders (non-terminal)
+  // Active orders (non-terminal, no associated invoice)
   const activeOrders = orders.filter(
-    (o) => !['delivered', 'cancelled', 'fulfilled'].includes(o.status)
+    (o) => !['delivered', 'cancelled', 'fulfilled'].includes(o.status) && !o.associatedInvoiceId
   );
 
   // Recent statements for activity
@@ -499,9 +509,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               aria-label={`Total paid ${formatCurrencyCompact(totalPayment)} in ledger credits. View statements.`}
               className="flex-1 min-w-0 text-left active:scale-[0.98] transition-transform"
             >
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                Total Paid
-              </p>
+               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                 TOTAL PAYMENT
+               </p>
               <p className="text-[clamp(1rem,4.2vw,1.5rem)] font-black text-emerald-600 leading-tight currency-display">
                 {formatCurrencyCompact(totalPayment)}
               </p>
@@ -574,159 +584,153 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
         </div>
 
-        {/* ── Active Orders ──────────────────────────────────────────────── */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden min-w-0">
-          <div className="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 truncate">Active Orders</h3>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('orders')}
-              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors min-h-[44px] px-2 shrink-0"
-            >
-              View all <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="px-3 pb-3 space-y-1.5">
-            {activeOrders.length === 0 ? (
-              <p className="text-xs text-slate-400 py-6 text-center">No active orders</p>
-            ) : (
-              activeOrders.slice(0, 3).map((order) => {
-                const st = ORDER_STATUS_STYLES[order.status] ?? { label: order.status, dot: 'bg-slate-400', bg: 'bg-slate-100 text-slate-600' };
-                return (
-                  <button
-                    key={order.id}
-                    type="button"
-                    onClick={() => onNavigateTab('orders')}
-                    className="w-full flex items-center gap-3 p-2.5 bg-slate-50/80 rounded-xl hover:bg-slate-100 active:scale-[0.99] transition-all cursor-pointer group min-h-[44px] min-w-0"
-                  >
-                    <span className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                      <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                    </span>
-                    <div className="flex-1 min-w-0 text-left">
-                      <p className="text-xs font-bold font-mono text-blue-600 truncate group-hover:text-blue-700 transition-colors">
-                        {order.orderNumber}
-                      </p>
-                      <p className="text-[10px] text-slate-500 font-medium truncate">
-                        {order.items.length} item{order.items.length === 1 ? '' : 's'} · {formatCurrency(order.totalAmount)}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+         {/* ── Active Orders ──────────────────────────────────────────────── */}
+         {activeOrders.length > 0 && (
+         <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden min-w-0">
+           <div className="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
+             <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 truncate">Active Orders</h3>
+             <button
+               type="button"
+               onClick={() => onNavigateTab('orders')}
+               className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors min-h-[44px] px-2 shrink-0"
+             >
+               View all <ChevronRight className="w-3 h-3" />
+             </button>
+           </div>
+           <div className="px-3 pb-3 space-y-1.5">
+             {activeOrders.slice(0, 3).map((order) => {
+               const st = ORDER_STATUS_STYLES[order.status] ?? { label: order.status, dot: 'bg-slate-400', bg: 'bg-slate-100 text-slate-600' };
+               return (
+                 <button
+                   key={order.id}
+                   type="button"
+                   onClick={() => onNavigateTab('orders')}
+                   className="w-full flex items-center gap-3 p-2.5 bg-slate-50/80 rounded-xl hover:bg-slate-100 active:scale-[0.99] transition-all cursor-pointer group min-h-[44px] min-w-0"
+                 >
+                   <span className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                     <ShoppingBag className="w-4 h-4 text-emerald-600" />
+                   </span>
+                   <div className="flex-1 min-w-0 text-left">
+                     <p className="text-xs font-bold font-mono text-blue-600 truncate group-hover:text-blue-700 transition-colors">
+                       {order.orderNumber}
+                     </p>
+                     <p className="text-[10px] text-slate-500 font-medium truncate">
+                       {order.items.length} item{order.items.length === 1 ? '' : 's'} · {formatCurrency(order.totalAmount)}
+                     </p>
+                   </div>
+                   <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                 </button>
+               );
+             })}
+           </div>
+         </div>
+         )}
 
-        {/* ── Recent Deliveries ──────────────────────────────────────────── */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden min-w-0 md:col-span-2 lg:col-span-1">
-          <div className="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 truncate">Recent Deliveries</h3>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('deliveries')}
-              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors min-h-[44px] px-2 shrink-0"
-            >
-              View all <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="px-3 pb-3 space-y-1.5">
-            {deliveries.length === 0 ? (
-              <p className="text-xs text-slate-400 py-6 text-center">No recent deliveries</p>
-            ) : (
-              deliveries.slice(0, 3).map((d) => {
-                const st = DELIVERY_STATUS_STYLES[d.status] ?? { label: d.status, dot: 'bg-slate-400', bg: 'bg-slate-100 text-slate-600' };
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => onNavigateTab('deliveries')}
-                    className="w-full flex items-center gap-3 p-2.5 bg-slate-50/80 rounded-xl hover:bg-slate-100 active:scale-[0.99] transition-all cursor-pointer group min-h-[44px] min-w-0"
-                  >
-                    <span className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center shrink-0">
-                      <Truck className="w-4 h-4 text-sky-600" />
-                    </span>
-                    <div className="flex-1 min-w-0 text-left">
-                      <p className="text-xs font-bold font-mono text-blue-600 truncate group-hover:text-blue-700 transition-colors">
-                        {d.trackingNumber}
-                      </p>
-                      <p className="text-[10px] text-slate-500 font-medium truncate">
-                        {d.title || `Order ${d.orderId}`}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+         {/* ── Recent Deliveries ──────────────────────────────────────────── */}
+          {deliveries.filter(d => d.status !== 'delivered').length > 0 && (
+         <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden min-w-0 md:col-span-2 lg:col-span-1">
+           <div className="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
+             <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 truncate">Recent Deliveries</h3>
+             <button
+               type="button"
+               onClick={() => onNavigateTab('deliveries')}
+               className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors min-h-[44px] px-2 shrink-0"
+             >
+               View all <ChevronRight className="w-3 h-3" />
+             </button>
+           </div>
+           <div className="px-3 pb-3 space-y-1.5">
+              {deliveries.filter(d => d.status !== 'delivered').slice(0, 3).map((d) => {
+               const st = DELIVERY_STATUS_STYLES[d.status] ?? { label: d.status, dot: 'bg-slate-400', bg: 'bg-slate-100 text-slate-600' };
+               return (
+                 <button
+                   key={d.id}
+                   type="button"
+                   onClick={() => onNavigateTab('deliveries')}
+                   className="w-full flex items-center gap-3 p-2.5 bg-slate-50/80 rounded-xl hover:bg-slate-100 active:scale-[0.99] transition-all cursor-pointer group min-h-[44px] min-w-0"
+                 >
+                   <span className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center shrink-0">
+                     <Truck className="w-4 h-4 text-sky-600" />
+                   </span>
+                   <div className="flex-1 min-w-0 text-left">
+                     <p className="text-xs font-bold font-mono text-blue-600 truncate group-hover:text-blue-700 transition-colors">
+                       {d.trackingNumber}
+                     </p>
+                     <p className="text-[10px] text-slate-500 font-medium truncate">
+                       {d.title || `Order ${d.orderId}`}
+                     </p>
+                   </div>
+                   <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                 </button>
+               );
+             })}
+           </div>
+         </div>
+         )}
       </div>
 
       {/* ═══ 6. BOTTOM — Recent Activity + Account Snapshot ═══════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* ── Recent Activity (right-aligned amount + status badge) ───────── */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Recent Activity</h3>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('statements')}
-              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors min-h-[44px] px-2"
-            >
-              View all <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="px-3 pb-3 divide-y divide-slate-100">
-            {recentStatements.length === 0 ? (
-              <p className="text-xs text-slate-400 py-6 text-center">No activity yet</p>
-            ) : (
-              recentStatements.map((st) => {
-                const isCredit = st.type === 'Payment' || st.type === 'Credit Note';
-                const Icon = isCredit ? CheckCircle2 : FileText;
-                const iconBg = isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600';
-                const amount = st.debit > 0 ? st.debit : st.credit;
-                const isPositive = isCredit;
-                return (
-                  <button
-                    key={st.id}
-                    type="button"
-                    onClick={() => onNavigateTab('statements')}
-                    aria-label={`${st.description}, ${st.type}, ${formatCurrency(amount)}`}
-                    className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 active:scale-[0.99] transition-all group min-h-[44px]"
-                  >
-                    <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${iconBg}`}>
-                      <Icon className="w-4 h-4" />
-                    </span>
-                    <div className="flex-1 min-w-0 text-left">
-                      <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
-                        {st.description}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-medium">
-                        {st.type} · {timeAgo(st.date)}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      <span className={`text-xs font-black currency-display ${
-                        isPositive ? 'text-emerald-600' : 'text-slate-900'
-                      }`}>
-                        {isPositive ? '+' : '−'}{formatCurrency(amount)}
-                      </span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                        isPositive
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-slate-100 text-slate-600 border border-slate-200'
-                      }`}>
-                        {st.type}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+         {/* ── Recent Activity (right-aligned amount + status badge) ───────── */}
+         {recentStatements.length > 0 && (
+         <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden">
+           <div className="flex items-center justify-between px-4 pt-4 pb-2">
+             <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Recent Activity</h3>
+             <button
+               type="button"
+               onClick={() => onNavigateTab('statements')}
+               className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors min-h-[44px] px-2"
+             >
+               View all <ChevronRight className="w-3 h-3" />
+             </button>
+           </div>
+           <div className="px-3 pb-3 divide-y divide-slate-100">
+             {recentStatements.map((st) => {
+               const isCredit = st.type === 'Payment' || st.type === 'Credit Note';
+               const Icon = isCredit ? CheckCircle2 : FileText;
+               const iconBg = isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600';
+               const amount = st.debit > 0 ? st.debit : st.credit;
+               const isPositive = isCredit;
+               return (
+                 <button
+                   key={st.id}
+                   type="button"
+                   onClick={() => onNavigateTab('statements')}
+                   aria-label={`${st.description}, ${st.type}, ${formatCurrency(amount)}`}
+                   className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 active:scale-[0.99] transition-all group min-h-[44px]"
+                 >
+                   <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${iconBg}`}>
+                     <Icon className="w-4 h-4" />
+                   </span>
+                   <div className="flex-1 min-w-0 text-left">
+                     <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
+                       {st.description}
+                     </p>
+                     <p className="text-[10px] text-slate-400 font-medium">
+                       {st.type} · {timeAgo(st.date)}
+                     </p>
+                   </div>
+                   <div className="flex flex-col items-end gap-0.5 shrink-0">
+                     <span className={`text-xs font-black currency-display ${
+                       isPositive ? 'text-emerald-600' : 'text-slate-900'
+                     }`}>
+                       {isPositive ? '+' : '−'}{formatCurrency(amount)}
+                     </span>
+                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                       isPositive
+                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                         : 'bg-slate-100 text-slate-600 border border-slate-200'
+                     }`}>
+                       {st.type}
+                     </span>
+                   </div>
+                 </button>
+               );
+             })}
+           </div>
+         </div>
+         )}
 
         {/* ── Account Snapshot ───────────────────────────────────────────── */}
         <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden">

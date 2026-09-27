@@ -3,4 +3,5 @@ export { EmptyState } from './EmptyState';
 export { KpiCard } from './KpiCard';
 export { SectionHeader } from './SectionHeader';
 export { Button } from './Button';
+export { ErrorBanner } from './ErrorBanner';
 export { Skeleton, SkeletonRow, SkeletonCard, SkeletonKpi, SkeletonLedgerRow } from './Skeleton';

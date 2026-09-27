@@ -21,7 +21,7 @@ interface RouteGuardProps {
   defaultPath: string;
   children: ReactNode;
   onUnauthenticated: () => ReactNode;
-  /** Max ms to show restoring spinner before offering escape. Default 15000. */
+  /** Max ms to show restoring spinner before offering escape. Default 8000. */
   restoreTimeoutMs?: number;
   /** Called when session restore times out (e.g. force logout). */
   onRestoreTimeout?: () => void;
@@ -58,19 +58,28 @@ export function RouteGuard({
   defaultPath,
   children,
   onUnauthenticated,
-  restoreTimeoutMs = 15000,
+  restoreTimeoutMs = 8000,
   onRestoreTimeout,
 }: RouteGuardProps) {
   const [restoreTimedOut, setRestoreTimedOut] = useState(false);
+  const [restoreElapsed, setRestoreElapsed] = useState(0);
 
   useEffect(() => {
     if (!isRestoring) {
       setRestoreTimedOut(false);
+      setRestoreElapsed(0);
       return;
     }
     setRestoreTimedOut(false);
+    setRestoreElapsed(0);
+    // Staged progress: tick each second so the copy can escalate from
+    // "restoring" to "still trying" instead of one static spinner.
+    const ticker = setInterval(() => setRestoreElapsed((s) => s + 1), 1000);
     const timer = setTimeout(() => setRestoreTimedOut(true), restoreTimeoutMs);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(ticker);
+    };
   }, [isRestoring, restoreTimeoutMs]);
 
   // Remember deep links while logged out so post-login can return there.
@@ -140,7 +149,12 @@ export function RouteGuard({
         </div>
       );
     }
-    return <LoadingState label="Restoring your session..." fullScreen />;
+    return (
+      <LoadingState
+        label={restoreElapsed < 3 ? 'Restoring your session...' : 'Still restoring — checking with the server...'}
+        fullScreen
+      />
+    );
   }
 
   if (!isAuthenticated) {

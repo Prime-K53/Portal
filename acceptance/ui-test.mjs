@@ -68,7 +68,7 @@ async function main() {
   await page.goto(`${DEV_URL}/#/dashboard`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(4000);
   let bodyText = await page.evaluate(() => document.body.innerText);
-  check('Unauthenticated users land on the Sign In page', /Sign In to Portal/i.test(bodyText), 'login form rendered');
+  check('Unauthenticated users land on the Sign In page', /Welcome Back|SECURE SIGN-IN/i.test(bodyText), 'login form rendered');
 
   // Login form error handling: bad credentials → friendly error, no crash.
   const inputs = await page.$$('input');
@@ -80,7 +80,7 @@ async function main() {
     bodyText = await page.evaluate(() => document.body.innerText);
     const errShown = /incorrect|do not match|invalid|error/i.test(bodyText);
     check('Login form rejects bad credentials with a friendly error', errShown, (bodyText.match(/[^\n]*(incorrect|do not match|Invalid)[^\n]*/i)?.[0] ?? '').slice(0, 90));
-    check('Portal not crashed after failed login', /Sign In to Portal/i.test(bodyText));
+    check('Portal not crashed after failed login', /Welcome Back|SECURE SIGN-IN/i.test(bodyText));
   } else {
     check('Login form inputs present', false, `inputs=${inputs.length}`);
   }

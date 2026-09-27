@@ -22,6 +22,13 @@ import { AccountProfile, TabType } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { useDarkModeContext } from '../context/DarkModeContext';
 
+/**
+ * Dark mode ships when tab/modal surfaces are tokenized (no component
+ * styles `dark:` yet — toggling today yields white cards on a dark
+ * background). Flip to true once the Phase 3 token migration lands.
+ */
+const DARK_MODE_AVAILABLE = false;
+
 interface SidebarProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
@@ -178,20 +185,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="w-full py-2 px-3.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out (Prime PORTAL)</span>
+             <span>Sign Out ({profile?.customerName || profile?.companyName || 'Prime PORTAL'})</span>
           </button>
         )}
 
-        <div className="flex items-center justify-center pt-3 border-t border-slate-200 mt-3">
-          <button
-            onClick={() => toggle()}
-            aria-label="Toggle dark mode"
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
-          >
-            {isDark ? <Sun className="w-4 h-4" aria-hidden="true" /> : <Moon className="w-4 h-4" aria-hidden="true" />}
-            <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
-          </button>
-        </div>
+        {DARK_MODE_AVAILABLE && (
+          <div className="flex items-center justify-center pt-3 border-t border-slate-200 mt-3">
+            <button
+              onClick={() => toggle()}
+              aria-label="Toggle dark mode"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition min-h-[44px]"
+            >
+              {isDark ? <Sun className="w-4 h-4" aria-hidden="true" /> : <Moon className="w-4 h-4" aria-hidden="true" />}
+              <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

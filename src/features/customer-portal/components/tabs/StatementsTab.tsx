@@ -53,25 +53,33 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
     return true;
   });
 
-  // Outstanding balance is the ERP's running account balance — NEVER derived
-  // from the (date-filtered) ledger, which can truncate payments inside the
-  // window. The profile field is authoritative; we fall back to the most
-  // recent unfiltered ledger row only when the ERP does not provide it.
-  const outstandingBalance =
-    profile.outstandingBalance ??
-    (statements.length > 0
-      ? statements[statements.length - 1].balance
-      : 0);
+   // Total balance — same logic as dashboard: profile.currentBalance is authoritative.
+   const totalBalance = profile.currentBalance ?? 0;
+
+  // Current Drawn Balance — prepended as the first ledger entry labelled "Balance b/d"
+  const balanceBdEntry =
+    profile.currentBalance != null && profile.currentBalance !== 0
+      ? {
+          id: 'balance_bd',
+          date: statements.length > 0 ? statements[statements.length - 1].date : new Date().toISOString().split('T')[0],
+           type: 'Balance' as const,
+          reference: 'BAL-BD',
+          description: 'Balance b/d',
+          debit: profile.currentBalance > 0 ? profile.currentBalance : 0,
+          credit: profile.currentBalance < 0 ? Math.abs(profile.currentBalance) : 0,
+          balance: profile.currentBalance,
+        }
+      : null;
 
   // Total payment is always all-time so it matches the dashboard widget.
   const totalPayment = statements.reduce((sum, s) => sum + s.credit, 0);
 
-  const isFullyPaid = outstandingBalance === 0;
+   const isFullyPaid = totalBalance === 0;
 
   const handleExportCSV = () => {
     exportToCSV(
       `Statement_Ledger_${profile?.accountNumber || 'statement'}`,
-      filteredStatements.map((st) => ({
+      (balanceBdEntry ? [balanceBdEntry, ...filteredStatements] : filteredStatements).map((st) => ({
         Date: st.date,
         Type: st.type,
         Reference: st.reference,
@@ -119,15 +127,15 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
         }
       />
 
-      {/* Outstanding & Total Payment KPI */}
+       {/* Total Balance & Total Payment KPI */}
       <div className="grid grid-cols-2 gap-3">
-        <KpiCard
-          label="OUTSTANDING"
-          value={formatCurrency(outstandingBalance)}
-          hint={isFullyPaid ? 'Fully Settled' : 'Has Outstanding Balance'}
-          variant={isFullyPaid ? 'success' : 'danger'}
-          icon={Clock}
-        />
+       <KpiCard
+           label="TOTAL BALANCE"
+           value={formatCurrency(totalBalance)}
+           hint={isFullyPaid ? 'Fully Settled' : 'Has Outstanding Balance'}
+           variant={isFullyPaid ? 'success' : 'danger'}
+           icon={Clock}
+         />
         <KpiCard
           label="TOTAL PAYMENT"
           value={formatCurrency(totalPayment)}
@@ -216,13 +224,54 @@ export const StatementsTab: React.FC<StatementsTabProps> = ({
         )}
       </div>
 
-      {/* Ledger List */}
-      <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Statement Ledger Entries</h3>
-        <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
-        {[...filteredStatements]
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .map((st) => (
+       {/* Ledger List */}
+       <div>
+         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Statement Ledger Entries</h3>
+         <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+         {balanceBdEntry && (
+           <div
+             key={balanceBdEntry.id}
+             role="button"
+             tabIndex={0}
+             aria-label={`${balanceBdEntry.type}: ${balanceBdEntry.description}, balance ${balanceBdEntry.balance}`}
+             onClick={() => onSelectEntryDetail && onSelectEntryDetail(balanceBdEntry)}
+             onKeyDown={(e) => {
+               if (e.key === 'Enter' || e.key === ' ') {
+                 e.preventDefault();
+                 onSelectEntryDetail?.(balanceBdEntry);
+               }
+             }}
+             className="px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-all cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+           >
+             <div className="space-y-0.5 min-w-0">
+               <div className="flex items-center gap-2">
+                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                   balanceBdEntry.type === 'Payment'
+                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                     : 'bg-slate-200 text-slate-700'
+                 }`}>
+                   {balanceBdEntry.type}
+                 </span>
+               </div>
+               <p className="text-xs text-slate-600 font-medium">{balanceBdEntry.description}</p>
+               <div className="flex items-center gap-2 text-[11.5px] text-slate-400">
+                 <span>{formatDate(balanceBdEntry.date)}</span>
+               </div>
+             </div>
+
+             <div className="text-right shrink-0 flex items-center gap-2">
+               <div className="text-right font-medium">
+                 {balanceBdEntry.debit > 0 && <span className="text-xs font-black text-rose-600 block tabular-nums">−{formatCurrency(balanceBdEntry.debit)}</span>}
+                 {balanceBdEntry.credit > 0 && <span className="text-xs font-black text-emerald-600 block tabular-nums">+{formatCurrency(balanceBdEntry.credit)}</span>}
+                 <span className="text-[12.5px] text-slate-500 block font-medium tabular-nums">Bal: {formatCurrency(balanceBdEntry.balance)}</span>
+               </div>
+               <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+             </div>
+           </div>
+         )}
+         {[...filteredStatements]
+           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+           .map((st) => (
           <div
             key={st.id}
             role="button"

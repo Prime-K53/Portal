@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, X } from 'lucide-react';
+import { Download, Share, X } from 'lucide-react';
 import { usePwaInstall } from '../../../pwa/usePwaInstall';
 
 interface PwaInstallChipProps {
@@ -13,9 +13,32 @@ interface PwaInstallChipProps {
  * user hasn't dismissed it recently / isn't already running standalone).
  */
 export const PwaInstallChip: React.FC<PwaInstallChipProps> = ({ suppressed = false }) => {
-  const { shouldOffer, prompting, promptInstall, dismiss } = usePwaInstall();
+  const { shouldOffer, shouldShowIosHint, prompting, promptInstall, dismiss } = usePwaInstall();
 
-  if (suppressed || !shouldOffer) return null;
+  if (suppressed) return null;
+
+  // iOS Safari has no install prompt — manual guidance instead.
+  if (shouldShowIosHint && !shouldOffer) {
+    return (
+      <div className="fixed bottom-24 right-3 sm:right-5 md:bottom-6 z-40 animate-slide-up">
+        <div className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full bg-slate-950/95 text-white border border-slate-700 shadow-2xl backdrop-blur-md max-w-[280px]">
+          <Share className="w-4 h-4 shrink-0 text-amber-400" aria-hidden="true" />
+          <span className="text-[11px] font-extrabold tracking-tight leading-tight">
+            Install app: tap Share, then Add to Home Screen
+          </span>
+          <button
+            onClick={dismiss}
+            aria-label="Dismiss install guidance"
+            className="p-1 rounded-full text-slate-400 hover:text-white transition min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!shouldOffer) return null;
 
   return (
     <div className="fixed bottom-24 right-3 sm:right-5 md:bottom-6 z-40 animate-slide-up">
@@ -25,7 +48,8 @@ export const PwaInstallChip: React.FC<PwaInstallChipProps> = ({ suppressed = fal
           onClick={() => { void promptInstall(); }}
           disabled={prompting}
           title="Install the portal as an app"
-          className="p-1.5 rounded-full bg-amber-400 text-slate-950 hover:bg-amber-300 disabled:opacity-60 transition"
+          aria-label="Install Prime PORTAL as an app"
+          className="p-1.5 rounded-full bg-amber-400 text-slate-950 hover:bg-amber-300 disabled:opacity-60 transition min-h-[44px] min-w-[44px] flex items-center justify-center"
         >
           {prompting ? (
             <span className="block w-4 h-4 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />

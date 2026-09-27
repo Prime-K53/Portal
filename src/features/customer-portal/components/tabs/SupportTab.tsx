@@ -116,7 +116,7 @@ function NewTicketForm({
           onChange={(e) => setSubject(e.target.value)}
           placeholder="Brief description of your issue"
           required
-          className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition"
+          className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition"
         />
       </div>
       <div>
@@ -130,7 +130,7 @@ function NewTicketForm({
           placeholder="Describe your issue in detail"
           rows={4}
           required
-          className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition resize-none"
+          className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition resize-none"
         />
       </div>
       <div className="grid grid-cols-2 gap-4">

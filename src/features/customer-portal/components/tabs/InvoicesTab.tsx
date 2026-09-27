@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Calendar,
   Download,
@@ -35,7 +35,9 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
   const [filter, setFilter] = useState<InvoiceFilter>(initialFilter ?? 'unpaid');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredInvoices = invoices.filter((inv) => {
+  // Memoized: the line-item cache lookup per invoice is not free, and this
+  // component re-renders on every keystroke in the search box.
+  const filteredInvoices = useMemo(() => invoices.filter((inv) => {
     const term = searchTerm.toLowerCase();
     const cachedItems = getCachedInvoiceItems(inv.id);
     // Merge list-time items (usually empty) with anything the detail modal
@@ -52,10 +54,12 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
     if (filter === 'overdue') return inv.status === 'overdue';
     if (filter === 'paid') return inv.status === 'paid';
     return true;
-  });
+  }), [invoices, searchTerm, filter]);
 
-  const unpaidInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid');
-  const unpaidTotal = unpaidInvoices.reduce((sum, i) => sum + i.amountRemaining, 0);
+  const { unpaidInvoices, unpaidTotal } = useMemo(() => {
+    const unpaid = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partially_paid');
+    return { unpaidInvoices: unpaid, unpaidTotal: unpaid.reduce((sum, i) => sum + i.amountRemaining, 0) };
+  }, [invoices]);
 
   const handleExportCSV = () => {
     exportToCSV(
@@ -138,7 +142,7 @@ export const InvoicesTab: React.FC<InvoicesTabProps> = ({
                 placeholder="Search by invoice #, PO #, or line items..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs font-normal text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-900 shadow-2xs"
+                className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-xs font-normal text-slate-900 placeholder-slate-500 focus:outline-none focus:border-slate-900 shadow-2xs"
               />
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" aria-hidden="true" />
           </div>

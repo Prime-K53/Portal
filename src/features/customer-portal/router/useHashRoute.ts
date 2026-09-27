@@ -21,14 +21,14 @@ export interface HashRoute {
 export function useHashRoute(): HashRoute {
   const [path, setPath] = useState<string>(() => {
     const initial = readHashPath();
-    // Boot with no hash → initialize to dashboard instead of flashing a guard redirect.
+    // Boot with no hash → initialize to landing instead of flashing a guard redirect.
     if (!initial || initial === '/') {
       try {
-        window.location.hash = '/dashboard';
+        window.location.hash = '/landing';
       } catch {
         // ignore
       }
-      return '/dashboard';
+      return '/landing';
     }
     return initial;
   });

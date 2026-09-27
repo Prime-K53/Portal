@@ -95,7 +95,9 @@ import type {
 } from '../types';
 import { ApiError, type ApiClient } from './apiClient';
 import { authService } from './authService';
-import { MockPortalService } from './mockPortalService';
+// NOTE: MockPortalService is deliberately NOT statically imported. It loads
+// via top-level await below so the mock tree ships in its own chunk that
+// production bundles never download.
 
 export interface PortalService {
   // ── Current customer / account ────────────────────────────────────────────
@@ -1419,14 +1421,25 @@ export class ErpPortalService implements PortalService {
 }
 
 /**
+ * Mock constructor loaded on demand. The dynamic import keeps
+ * mockPortalService (+ mockData) in a separate chunk that is fetched only
+ * when mock mode is actually enabled — never in production.
+ */
+type MockPortalServiceCtor = new () => PortalService;
+let MockPortalServiceClass: MockPortalServiceCtor | null = null;
+if (!env.useRealBackend && env.enableMockApi) {
+  MockPortalServiceClass = (await import('./mockPortalService')).MockPortalService;
+}
+
+/**
  * Selects the active Portal service from the environment configuration.
  * The real ERP implementation is the default. The mock implementation is only
  * active when VITE_ENABLE_MOCK_API=true AND VITE_USE_REAL_BACKEND is not 'true'.
  * Production never silently falls back to mock data.
  */
 export function createPortalService(): PortalService {
-  if (!env.useRealBackend && env.enableMockApi) {
-    return new MockPortalService();
+  if (MockPortalServiceClass) {
+    return new MockPortalServiceClass();
   }
   const client = authService.getApiClient?.() ?? null;
   if (!client) {

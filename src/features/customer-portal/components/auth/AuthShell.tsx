@@ -70,14 +70,14 @@ export function AuthShell({ children }: AuthShellProps) {
                       </span>
                       <span>
                         <span className="block text-xs font-bold text-white">{title}</span>
-                        <span className="block text-xs font-medium leading-relaxed text-white/60">{text}</span>
+                        <span className="block text-xs font-medium leading-relaxed text-white/80">{text}</span>
                       </span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <p className="relative z-10 text-[11px] font-medium text-white/40">
+              <p className="relative z-10 text-[11px] font-medium text-white/70">
                 &copy; {new Date().getFullYear()} Prime Portal &middot; Powered by PrimeERP
               </p>
             </aside>

@@ -301,6 +301,24 @@
   animation: fadeIn 0.2s ease-out forwards;
 }
 
+/* Gentle entrance: fade + 10px rise. Paired with inline animation-delay
+   for staggered auth-screen entrances. Honored by the global
+   prefers-reduced-motion reset below. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.5s var(--ease-smooth) both;
+}
+
 /* ── Shimmer for skeleton loading states ─────────────────────────────────────── */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
@@ -333,13 +351,16 @@ html.dark .skeleton {
   .skeleton { display: none; }
 }
 
-/* ── Dark mode overrides for document print output ─────────────────────────────── */
-html.dark .animate-letter-in,
-html.dark .animate-slide-left,
-html.dark .animate-slide-right,
-html.dark .animate-slide-up,
-html.dark .animate-fade-in {
-  animation-play-state: paused;
+/* ── Reduced motion: honor the OS setting for vestibular safety ─────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /*

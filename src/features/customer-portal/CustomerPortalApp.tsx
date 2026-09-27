@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router/useHashRoute';
 import { RouteGuard } from './router/RouteGuard';
 import { invalidatePortalQueries } from './hooks/usePortalQuery';
@@ -6,8 +6,10 @@ import {
   bumpOutboxAttempts,
   enqueueOutbox,
   isOfflineError,
+  isOutboxEntryRetryable,
   listOutbox,
   removeOutboxEntry,
+  type OutboxEntry,
 } from './utils/mutationOutbox';
 
 function useOnlineStatus(): boolean {
@@ -37,6 +39,65 @@ function useOnlineStatus(): boolean {
     };
   }, []);
   return online;
+}
+
+/**
+ * Replays ONE outbox entry against the ERP. Returns true when the sweep may
+ * continue, false when it must stop (offline again or a failure needing
+ * attention — attempts are bumped so poison pills age out via MAX attempts).
+ */
+async function replayOutboxEntry(entry: OutboxEntry): Promise<boolean> {
+  const payload = entry.payload as Record<string, unknown> | null;
+  if (!payload || typeof payload !== 'object') {
+    removeOutboxEntry(entry.id); // malformed — can never succeed
+    return true;
+  }
+  try {
+    switch (entry.kind) {
+      case 'order-request':
+        await portalService.createOrder(
+          payload as Parameters<typeof portalService.createOrder>[0],
+          entry.idempotencyKey
+        );
+        break;
+      case 'payment-request':
+        await portalService.createPaymentRequest(
+          payload as Parameters<typeof portalService.createPaymentRequest>[0]
+        );
+        break;
+      case 'referral':
+        await portalService.createReferral(
+          payload as Parameters<typeof portalService.createReferral>[0],
+          entry.idempotencyKey
+        );
+        break;
+      case 'support-ticket':
+        await portalService.createSupportTicket(
+          payload as Parameters<typeof portalService.createSupportTicket>[0]
+        );
+        break;
+      case 'support-message': {
+        const ticketId = (payload as { ticketId?: unknown }).ticketId;
+        const content = (payload as { content?: unknown }).content;
+        if (typeof ticketId !== 'string' || typeof content !== 'string') {
+          removeOutboxEntry(entry.id);
+          return true;
+        }
+        await portalService.addSupportMessage(ticketId, content);
+        break;
+      }
+      default:
+        removeOutboxEntry(entry.id);
+        return true;
+    }
+    removeOutboxEntry(entry.id);
+    return true;
+  } catch (err) {
+    // Offline again → keep queued WITHOUT burning an attempt.
+    if (isOfflineError(err)) return false;
+    bumpOutboxAttempts(entry.id);
+    return false;
+  }
 }
 
 function OfflineBanner(): React.ReactElement | null {
@@ -76,16 +137,12 @@ function OfflineBanner(): React.ReactElement | null {
   }, []);
 
   const handleReplay = async () => {
-    const entries = listOutbox().filter((e) => e.kind === 'order-request');
+    // Retryable only: expired or repeatedly-failing entries need human
+    // attention via "Retry now", never silent auto-replay.
+    const entries = listOutbox().filter((e) => isOutboxEntryRetryable(e));
     for (const entry of entries) {
-      try {
-        const payload = entry.payload as Parameters<typeof portalService.createOrder>[0];
-        await portalService.createOrder(payload, entry.idempotencyKey);
-        removeOutboxEntry(entry.id);
-      } catch {
-        bumpOutboxAttempts(entry.id);
-        break;
-      }
+      const settled = await replayOutboxEntry(entry);
+      if (!settled) break;
     }
     try {
       window.dispatchEvent(new CustomEvent('portal-queries-invalidated'));
@@ -95,13 +152,35 @@ function OfflineBanner(): React.ReactElement | null {
     invalidatePortalQueries();
   };
 
+  // Auto-flush on reconnect: queued intent replays with its ORIGINAL
+  // Idempotency-Key so the ERP replays the stored attempt instead of
+  // duplicating it. Depends only on module singletons — safe to bind once.
+  useEffect(() => {
+    const onOnline = () => {
+      void handleReplay();
+    };
+    try {
+      window.addEventListener('online', onOnline);
+    } catch {
+      // ignore
+    }
+    return () => {
+      try {
+        window.removeEventListener('online', onOnline);
+      } catch {
+        // ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (online && queued === 0) return null;
   return (
     <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 pt-4" role="alert" aria-live="assertive">
       <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold flex items-center justify-between gap-3">
         <span>
           {!online
-            ? 'You are offline. Browsing cached data works, but new submissions wait in the outbox.'
+            ? 'You are offline. New submissions wait in the outbox and send automatically on reconnect.'
             : `${queued} offline order${queued === 1 ? '' : 's'} queued.`}
         </span>
         {online && queued > 0 && (
@@ -142,7 +221,8 @@ import {
 } from './hooks/usePortalData';
 import { portalService } from './services';
 import { ROUTES, pathForTab, tabFromPath } from './router/routes';
-import { combineQueryStates, DashboardSkeleton, PortalDataBoundary } from './components/state/PortalDataBoundary';
+import { combineQueryStates, DashboardSkeleton, GridSkeletonView, ListSkeletonView, PortalDataBoundary } from './components/state/PortalDataBoundary';
+import { ErrorBanner } from './components/ui/ErrorBanner';
 import { generateIdempotencyKey } from './utils/idempotency';
 import {
   AccountProfile,
@@ -166,13 +246,12 @@ import {
 
 // Auth Component
 import { CustomerActivate } from './components/auth/CustomerActivate';
+import { LandingPage } from './components/auth/LandingPage';
 import { CustomerAuthProvider, useCustomerAuth } from './components/auth/CustomerAuthContext';
 import { CustomerForgotPassword } from './components/auth/CustomerForgotPassword';
 import { CustomerLogin } from './components/auth/CustomerLogin';
 import { CustomerRegister } from './components/auth/CustomerRegister';
 import { CustomerRegistrationPending } from './components/auth/CustomerRegistrationPending';
-import { BrandSplash } from './components/auth/BrandSplash';
-import { onSplashChange, setSplashVisible } from './components/auth/splashState';
 
 // Layout & Navigation
 import { BottomNavigation } from './components/BottomNavigation';
@@ -182,31 +261,74 @@ import { Sidebar } from './components/Sidebar';
 import { PwaInstallChip } from './components/PwaInstallChip';
 import { DevModeBanner } from './components/DevModeBanner';
 import { DarkModeProvider } from './context/DarkModeContext';
-import { DocumentVerify } from './views/DocumentVerify';
 
-// Modals
-import { CartDrawer } from './components/modals/CartDrawer';
-import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
-import { InvoiceDetailModal } from './components/modals/InvoiceDetailModal';
-import { OrderDetailModal } from './components/modals/OrderDetailModal';
-import { PaymentRequestModal } from './components/modals/PaymentRequestModal';
-import { ProductDetailModal } from './components/modals/ProductDetailModal';
-import { QuoteRequestModal } from './components/modals/QuoteRequestModal';
-import { QuotationDetailModal } from './components/modals/QuotationDetailModal';
-import { StatementItemDetailModal } from './components/modals/StatementItemDetailModal';
-import { StatementPrintModal } from './components/modals/StatementPrintModal';
+// Verification view — split out so its chunk loads only on /verify/* routes.
+const DocumentVerify = lazy(() =>
+  import('./views/DocumentVerify').then((m) => ({ default: m.DocumentVerify }))
+);
 
-// Tabs
-import { AccountTab } from './components/tabs/AccountTab';
-import { DashboardTab } from './components/tabs/DashboardTab';
-import { DeliveriesTab } from './components/tabs/DeliveriesTab';
-import { InvoicesTab } from './components/tabs/InvoicesTab';
-import type { InvoiceFilter } from './components/tabs/InvoicesTab';
-import { OrdersTab } from './components/tabs/OrdersTab';
-import { QuotesTab } from './components/tabs/QuotesTab';
-import { ReferralsTab } from './components/tabs/ReferralsTab';
-import { StatementsTab } from './components/tabs/StatementsTab';
-import { SupportTab } from './components/tabs/SupportTab';
+// Modals — split into separate chunks; they mount inside a Suspense boundary
+// with a null fallback so the first paint never waits for them.
+const CartDrawer = lazy(() =>
+  import('./components/modals/CartDrawer').then((m) => ({ default: m.CartDrawer }))
+);
+const CommandPaletteModal = lazy(() =>
+  import('./components/modals/CommandPaletteModal').then((m) => ({ default: m.CommandPaletteModal }))
+);
+const InvoiceDetailModal = lazy(() =>
+  import('./components/modals/InvoiceDetailModal').then((m) => ({ default: m.InvoiceDetailModal }))
+);
+const OrderDetailModal = lazy(() =>
+  import('./components/modals/OrderDetailModal').then((m) => ({ default: m.OrderDetailModal }))
+);
+const PaymentRequestModal = lazy(() =>
+  import('./components/modals/PaymentRequestModal').then((m) => ({ default: m.PaymentRequestModal }))
+);
+const ProductDetailModal = lazy(() =>
+  import('./components/modals/ProductDetailModal').then((m) => ({ default: m.ProductDetailModal }))
+);
+const QuoteRequestModal = lazy(() =>
+  import('./components/modals/QuoteRequestModal').then((m) => ({ default: m.QuoteRequestModal }))
+);
+const QuotationDetailModal = lazy(() =>
+  import('./components/modals/QuotationDetailModal').then((m) => ({ default: m.QuotationDetailModal }))
+);
+const StatementItemDetailModal = lazy(() =>
+  import('./components/modals/StatementItemDetailModal').then((m) => ({ default: m.StatementItemDetailModal }))
+);
+const StatementPrintModal = lazy(() =>
+  import('./components/modals/StatementPrintModal').then((m) => ({ default: m.StatementPrintModal }))
+);
+
+// Tabs — only the active tab's chunk loads; the tab content area suspends
+// to the dashboard skeleton while its chunk streams in.
+const AccountTab = lazy(() =>
+  import('./components/tabs/AccountTab').then((m) => ({ default: m.AccountTab }))
+);
+const DashboardTab = lazy(() =>
+  import('./components/tabs/DashboardTab').then((m) => ({ default: m.DashboardTab }))
+);
+const DeliveriesTab = lazy(() =>
+  import('./components/tabs/DeliveriesTab').then((m) => ({ default: m.DeliveriesTab }))
+);
+const InvoicesTab = lazy(() =>
+  import('./components/tabs/InvoicesTab').then((m) => ({ default: m.InvoicesTab }))
+);
+const OrdersTab = lazy(() =>
+  import('./components/tabs/OrdersTab').then((m) => ({ default: m.OrdersTab }))
+);
+const QuotesTab = lazy(() =>
+  import('./components/tabs/QuotesTab').then((m) => ({ default: m.QuotesTab }))
+);
+const ReferralsTab = lazy(() =>
+  import('./components/tabs/ReferralsTab').then((m) => ({ default: m.ReferralsTab }))
+);
+const StatementsTab = lazy(() =>
+  import('./components/tabs/StatementsTab').then((m) => ({ default: m.StatementsTab }))
+);
+const SupportTab = lazy(() =>
+  import('./components/tabs/SupportTab').then((m) => ({ default: m.SupportTab }))
+);
 
 export interface CustomerPortalAppProps {
   initialTab?: TabType;
@@ -348,24 +470,7 @@ function CustomerPortalShell({
   const [invoicePresetFilter, setInvoicePresetFilter] = useState<InvoiceFilter | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
-  const [isStatementPrintModalOpen, setIsStatementPrintModalOpen] = useState(false);
-  const [showBrandSplash, setShowBrandSplash] = useState(true);
-  const [loginSplashActive, setLoginSplashActive] = useState(false);
-
-  useEffect(() => {
-    const unsub = onSplashChange((visible) => {
-      setLoginSplashActive(visible);
-    });
-    return unsub;
-  }, []);
-
-  useEffect(() => {
-    if (!showBrandSplash) return;
-    const timer = window.setTimeout(() => setShowBrandSplash(false), 4000);
-    return () => window.clearTimeout(timer);
-  }, [showBrandSplash]);
-
-  const isSplashVisible = showBrandSplash || loginSplashActive;
+   const [isStatementPrintModalOpen, setIsStatementPrintModalOpen] = useState(false);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -425,11 +530,12 @@ function CustomerPortalShell({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'The operation could not be completed.';
       // Preserve server correlation ID so support can trace the failure.
+      // The ErrorBanner renders it as a separate Ref line.
       const correlationId =
         err instanceof Error && 'correlationId' in err
           ? String((err as unknown as { correlationId: unknown }).correlationId ?? '')
           : null;
-      setActionError(correlationId ? `${message} (Ref: ${correlationId})` : message);
+      setActionError(message);
       setActionCorrelationId(correlationId || null);
       throw err;
     }
@@ -668,23 +774,32 @@ function CustomerPortalShell({
   };
 
   // Auth screens (public routes) — switched by the current hash path.
-  const renderUnauthenticated = () => {
-    switch (path.split('?')[0].replace(/\/+$/, '')) {
-      case ROUTES.activate:
-        return <CustomerActivate />;
-      case ROUTES.forgotPassword:
-        return <CustomerForgotPassword />;
-      case ROUTES.register:
-        return <CustomerRegister />;
-      case ROUTES.registerPending:
-        return <CustomerRegistrationPending />;
-      default:
-        return <CustomerLogin />;
-    }
-  };
+   const renderUnauthenticated = () => {
+     switch (path.split('?')[0].replace(/\/+$/, '')) {
+       case ROUTES.landing:
+         return <LandingPage />;
+       case ROUTES.activate:
+         return <CustomerActivate />;
+       case ROUTES.forgotPassword:
+         return <CustomerForgotPassword />;
+       case ROUTES.register:
+         return <CustomerRegister />;
+       case ROUTES.registerPending:
+         return <CustomerRegistrationPending />;
+       default:
+         return <CustomerLogin />;
+     }
+   };
 
   const renderPortal = () => (
     <div className={`min-h-screen bg-slate-100/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white flex ${className}`}>
+      {/* Skip link — visible on keyboard focus, jumps past nav chrome. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[80] focus:rounded-xl focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-white"
+      >
+        Skip to main content
+      </a>
       {/* Sidebar Navigation for Desktop (hidden on mobile) */}
       <Sidebar
         activeTab={activeTab}
@@ -713,32 +828,22 @@ function CustomerPortalShell({
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
-        {/* Offline banner — mutations queue nothing, so say so explicitly. */}
-        <OfflineBanner />
-
         {/* Action Error Banner (real API failures are never hidden).
             Lives outside the tab conditional so it surfaces on every tab. */}
         {actionError && (
-          <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 pt-4" role="alert" aria-live="assertive">
-            <div className="flex items-start justify-between gap-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium">
-              <span className="leading-relaxed">{actionError}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setActionError(null);
-                  setActionCorrelationId(null);
-                }}
-                className="text-rose-400 hover:text-rose-600 font-black shrink-0"
-                aria-label="Dismiss error"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+          <ErrorBanner
+            message={actionError}
+            correlationId={actionCorrelationId}
+            onDismiss={() => {
+              setActionError(null);
+              setActionCorrelationId(null);
+            }}
+          />
         )}
 
-        {/* Main Content View */}
-        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-8 max-w-7xl w-full mx-auto min-w-0" id="main-content">
+        {/* Main Content View — the active tab's chunk streams in behind the skeleton. */}
+        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-8 max-w-7xl w-full mx-auto min-w-0" id="main-content" tabIndex={-1}>
+          <Suspense fallback={<DashboardSkeleton />}>
           {activeTab === 'dashboard' && (
             <PortalDataBoundary
               isLoading={combineQueryStates([customerQuery, invoicesQuery, deliveriesQuery, ordersQuery, orderRequestsQuery, statementsQuery, adsQuery]).isLoading}
@@ -786,6 +891,7 @@ function CustomerPortalShell({
               emptyTitle="No invoices found"
               emptyDescription="Invoices issued by the ERP will appear here."
               onRetry={invoicesQuery.refetch}
+              skeleton={<ListSkeletonView />}
             >
               <InvoicesTab
                 key={`${invoicesTabNonce}-${invoicePresetFilter ?? 'default'}`}
@@ -805,6 +911,7 @@ function CustomerPortalShell({
               emptyTitle="No deliveries yet"
               emptyDescription="Shipment updates from the ERP dispatch system will appear here."
               onRetry={deliveriesQuery.refetch}
+              skeleton={<ListSkeletonView rows={4} />}
             >
               <DeliveriesTab deliveries={deliveries} />
             </PortalDataBoundary>
@@ -819,6 +926,7 @@ function CustomerPortalShell({
                 ordersQuery.refetch();
                 orderRequestsQuery.refetch();
               }}
+              skeleton={<GridSkeletonView />}
             >
               <OrdersTab
                 products={products}
@@ -846,6 +954,7 @@ function CustomerPortalShell({
                 quoteRequestsQuery.refetch();
                 quotationsQuery.refetch();
               }}
+              skeleton={<ListSkeletonView />}
             >
               <QuotesTab
                 quotes={quotations}
@@ -868,13 +977,14 @@ function CustomerPortalShell({
             <PortalDataBoundary
               isLoading={combineQueryStates([customerQuery, statementsQuery]).isLoading}
               error={combineQueryStates([customerQuery, statementsQuery]).error}
-              isEmpty={!statementsQuery.isLoading && !statementsQuery.error && statements.length === 0}
+              isEmpty={!statementsQuery.isLoading && !statementsQuery.error && statements.length === 0 && (!profile || profile.currentBalance == null || profile.currentBalance === 0)}
               emptyTitle="No statement entries"
               emptyDescription="Your account ledger will appear here."
               onRetry={() => {
                 customerQuery.refetch();
                 statementsQuery.refetch();
               }}
+              skeleton={<ListSkeletonView />}
             >
               <StatementsTab
                 profile={profile ?? ({} as AccountProfile)}
@@ -897,6 +1007,7 @@ function CustomerPortalShell({
               isLoading={referralsQuery.isLoading}
               error={referralsQuery.error}
               onRetry={referralsQuery.refetch}
+              skeleton={<GridSkeletonView cards={3} />}
             >
               <ReferralsTab
                 profile={profile ?? ({} as AccountProfile)}
@@ -915,6 +1026,7 @@ function CustomerPortalShell({
               isLoading={customerQuery.isLoading}
               error={customerQuery.error}
               onRetry={customerQuery.refetch}
+              skeleton={<ListSkeletonView rows={3} />}
             >
               <AccountTab
                 profile={profile ?? ({} as AccountProfile)}
@@ -934,6 +1046,7 @@ function CustomerPortalShell({
                 supportArticlesQuery.refetch();
                 companyContactQuery.refetch();
               }}
+              skeleton={<ListSkeletonView rows={4} />}
             >
               <SupportTab
                 tickets={supportTickets}
@@ -945,6 +1058,7 @@ function CustomerPortalShell({
               />
             </PortalDataBoundary>
           )}
+          </Suspense>
         </main>
 
         {/* Bottom Navigation Dock (Visible on Mobile) */}
@@ -955,7 +1069,8 @@ function CustomerPortalShell({
         />
       </div>
 
-      {/* Modals & Overlays */}
+      {/* Modals & Overlays — chunk-split; null fallback so paint never waits. */}
+      <Suspense fallback={null}>
       <InvoiceDetailModal
         invoice={selectedInvoiceDetail}
         onClose={() => setSelectedInvoiceDetail(null)}
@@ -1054,6 +1169,7 @@ function CustomerPortalShell({
         onSelectProductDetail={(prod) => setSelectedProductDetail(prod)}
         onAddToCart={handleAddToCart}
       />
+      </Suspense>
 
       {/* PWA installer chip (hidden while the cart bar owns the bottom edge). */}
       <PwaInstallChip suppressed={cartCount > 0} />
@@ -1063,14 +1179,18 @@ function CustomerPortalShell({
   const isVerificationPath = /^\/(verify\/invoice|verify\/(receipt|quotation|sales-order|purchase-order|delivery-note|supplier-payment|statement))/.test(path.split('?')[0]);
 
   if (isVerificationPath) {
-    return <DocumentVerify />;
+    return (
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DocumentVerify />
+      </Suspense>
+    );
   }
 
   return (
     <>
-      {isSplashVisible && (
-        <BrandSplash onReady={() => setShowBrandSplash(false)} duration={4000} />
-      )}
+       {/* Offline state matters before sign-in too (queued outbox replays
+           after restore) — renders null while online with an empty outbox. */}
+      <OfflineBanner />
       <RouteGuard
         path={path}
         navigate={navigate}

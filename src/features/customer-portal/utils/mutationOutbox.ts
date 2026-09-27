@@ -21,6 +21,21 @@ export interface OutboxEntry {
 
 const STORAGE_KEY = 'portal_mutation_outbox';
 const MAX_ENTRIES = 50;
+/** Entries older than this are never replayed — intent goes stale. */
+export const OUTBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Entries failing this many times need human attention, not auto-retry. */
+export const MAX_OUTBOX_ATTEMPTS = 5;
+
+function isExpired(entry: OutboxEntry, now = Date.now()): boolean {
+  const created = Date.parse(entry.createdAt);
+  if (Number.isNaN(created)) return true;
+  return now - created > OUTBOX_TTL_MS;
+}
+
+/** True while an entry is still worth an automatic replay attempt. */
+export function isOutboxEntryRetryable(entry: OutboxEntry): boolean {
+  return !isExpired(entry) && entry.attempts < MAX_OUTBOX_ATTEMPTS;
+}
 
 function readAll(): OutboxEntry[] {
   try {
@@ -28,7 +43,18 @@ function readAll(): OutboxEntry[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as OutboxEntry[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // Lazily prune expired entries so stale intent can never replay.
+    const now = Date.now();
+    const fresh = parsed.filter((e) => e && !isExpired(e, now));
+    if (fresh.length !== parsed.length) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh.slice(0, MAX_ENTRIES)));
+      } catch {
+        // ignore
+      }
+    }
+    return fresh;
   } catch {
     return [];
   }

@@ -56,7 +56,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           {onOpenCommandPalette && (
             <button
               onClick={onOpenCommandPalette}
-              className="p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px]"
+              className="p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[44px] min-w-[44px]"
               title="Search (Cmd+K)"
               aria-label="Search"
             >
@@ -67,7 +67,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           {onOpenCart && (
             <button
               onClick={onOpenCart}
-              className="relative p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px]"
+              className="relative p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[44px] min-w-[44px]"
               aria-label="Cart"
             >
               <ShoppingBag className="w-[18px] h-[18px]" />
@@ -79,8 +79,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
           <button
             onClick={onOpenNotifications}
-            className="relative p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px]"
-            aria-label="Notifications"
+            className="relative p-2 sm:p-2.5 rounded-xl hover:bg-slate-100/80 text-slate-500 hover:text-slate-800 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[44px] min-w-[44px]"
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
           >
             <Bell className="w-[18px] h-[18px]" />
             {unreadCount > 0 && (
@@ -93,7 +93,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           {/* Profile avatar */}
           <button
             onClick={onOpenAccount}
-            className="ml-0.5 sm:ml-1 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-[10px] sm:text-[11px] font-bold shadow-sm hover:shadow-md active:scale-95 transition-all min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px]"
+            className="ml-0.5 sm:ml-1 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-[10px] sm:text-[11px] font-bold shadow-sm hover:shadow-md active:scale-95 transition-all min-h-[44px] min-w-[44px]"
             aria-label="Account"
           >
             {initials}
