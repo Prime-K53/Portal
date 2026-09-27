@@ -11,8 +11,8 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-    build: {
-      target: 'es2020',
+     build: {
+       target: 'es2022',
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
