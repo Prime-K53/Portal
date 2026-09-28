@@ -323,9 +323,17 @@ function mapInvoiceLineItem(item: ErpInvoiceLineItem, idx: number): InvoiceItem 
     item.title,
     item.label,
   ].find((v) => typeof v === 'string' && v.trim().length > 0);
-  const quantity = toFiniteNumber(item.quantity ?? item.qty ?? 0);
-  const unitPrice = toFiniteNumber(item.unitPrice ?? item.unit_price ?? item.price ?? 0);
-  const explicitTotal = item.total ?? item.lineTotal ?? item.lineTotalNet ?? item.line_total ?? item.subtotal;
+  // Quantity/price/total alias coverage mirrors the ERP canonical layers
+  // (invoiceLineItemNormalization.cjs + officialDocumentService
+  // normalizeRecordForRenderer + renderer mapToInvoiceData). Existing
+  // precedence is preserved; missing historical spellings are appended
+  // so INV-P726/063-style lines (sellingPrice/rate + amount/extendedPrice)
+  // map instead of collapsing to zero. Other document types untouched.
+  const quantity = toFiniteNumber(item.quantity ?? item.qty ?? item.quantityOrdered ?? item.qty_ordered ?? 0);
+  const unitPrice = toFiniteNumber(
+    item.unitPrice ?? item.unit_price ?? item.price ?? item.selling_price ?? item.sellingPrice ?? item.unitCost ?? item.unit_cost ?? item.cost ?? item.rate ?? 0
+  );
+  const explicitTotal = item.total ?? item.lineTotal ?? item.lineTotalNet ?? item.line_total ?? item.subtotal ?? item.totalAmount ?? item.amount ?? item.extendedPrice ?? item.extended_price;
   const total =
     explicitTotal === undefined || explicitTotal === null || explicitTotal === ''
       ? quantity * unitPrice
@@ -895,12 +903,16 @@ export class ErpPortalService implements PortalService {
     const itemsRaw = resolveInvoiceLineItems(raw);
     // Preserve ERP order: map 1:1 in received order, one row per line.
     const items: InvoiceItem[] = itemsRaw.map(mapInvoiceLineItem);
-    const totalAmount = toFiniteNumber(raw.total_amount ?? raw.totalAmount ?? 0);
-    const paidAmount = toFiniteNumber(raw.paid_amount ?? raw.paidAmount ?? 0);
+    // Invoice-only alias fallbacks (existing precedence preserved; `date`,
+    // `total`, and `amountPaid` appended so records that spell the canonical
+    // business date/total under those keys still map). Other document types
+    // are not touched.
+    const totalAmount = toFiniteNumber(raw.total_amount ?? raw.totalAmount ?? raw.total ?? 0);
+    const paidAmount = toFiniteNumber(raw.paid_amount ?? raw.paidAmount ?? raw.amountPaid ?? 0);
     return {
       id: invoiceId,
       invoiceNumber: String(raw.invoice_number ?? raw.invoiceNumber ?? invoiceId),
-      issueDate: String(raw.created_at ?? raw.issueDate ?? ''),
+      issueDate: String(raw.created_at ?? raw.issueDate ?? raw.date ?? ''),
       dueDate: String(raw.due_date ?? raw.dueDate ?? ''),
       amount: totalAmount,
       amountPaid: paidAmount,

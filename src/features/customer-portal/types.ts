@@ -815,14 +815,26 @@ export interface ErpInvoiceLineItem {
   label?: string | null;
   quantity?: number | string | null;
   qty?: number | string | null;
+  quantityOrdered?: number | string | null;
+  qty_ordered?: number | string | null;
   unitPrice?: number | string | null;
   unit_price?: number | string | null;
   price?: number | string | null;
+  selling_price?: number | string | null;
+  sellingPrice?: number | string | null;
+  unitCost?: number | string | null;
+  unit_cost?: number | string | null;
+  cost?: number | string | null;
+  rate?: number | string | null;
   total?: number | string | null;
   lineTotal?: number | string | null;
   lineTotalNet?: number | string | null;
   line_total?: number | string | null;
   subtotal?: number | string | null;
+  totalAmount?: number | string | null;
+  amount?: number | string | null;
+  extendedPrice?: number | string | null;
+  extended_price?: number | string | null;
 }
 
 /**
@@ -841,10 +853,13 @@ export interface ErpInvoiceDetail {
   status?: string | null;
   total_amount?: number | string | null;
   totalAmount?: number | string | null;
+  total?: number | string | null;
   paid_amount?: number | string | null;
   paidAmount?: number | string | null;
+  amountPaid?: number | string | null;
   due_date?: string | null;
   dueDate?: string | null;
+  date?: string | null;
   created_at?: string | null;
   issueDate?: string | null;
   notes?: string | null;
