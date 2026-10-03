@@ -2,7 +2,9 @@
  * Prime PORTAL — Centralized Environment & Configuration Layer
  *
  * All runtime configuration is resolved from Vite environment variables HERE.
- * No application code reads `import.meta.env` directly.
+ * No application code reads `VITE_*` variables directly — only Vite's own
+ * `import.meta.env.DEV` / `import.meta.env.PROD` build constants, which the
+ * bundler inlines so dev-only branches can be eliminated from dist.
  *
  * Environment variables:
  *   VITE_API_URL             Backend origin WITHOUT the /api suffix. The API
@@ -21,9 +23,12 @@
  *                            in-memory mock AuthService. Ignored when
  *                            VITE_USE_REAL_BACKEND=true.
  *   VITE_SENTRY_DSN          Sentry Data Source Name for error tracking. When
- *                            absent Sentry is not initialised (safe for local
- *                            dev where npm run dev has no network). Set only
- *                            in the production Vite environment.
+ *                            absent Sentry is not initialised and the build
+ *                            runs without external error reporting. It is
+ *                            OPTIONAL: a missing DSN is not a production
+ *                            defect, so it is only noted in development
+ *                            builds. Supply it as a build-time variable to
+ *                            enable tracking in a deployed build.
  *
  * Session storage follows the ERP contract: sessionStorage key `portal_session`
  * holds the ERP envelope { access_token, refresh_token, expires_in, user }.
@@ -40,7 +45,7 @@ export interface AppEnv {
   readonly enableMockApi: boolean;
   /** DEVELOPMENT ONLY flag — routes authentication through the mock AuthService. */
   readonly enableMockAuth: boolean;
-  /** Sentry DSN — absent means error tracking is disabled. */
+  /** Sentry DSN — absent means error tracking is disabled (optional in every mode). */
   readonly sentryDsn: string | undefined;
   /** sessionStorage key for the ERP portal session envelope. */
   readonly sessionStorageKey: string;
@@ -127,8 +132,8 @@ export function getEnvIssues(options: { isProd?: boolean } = {}): string[] {
   if (isProd && (env.enableMockApi || env.enableMockAuth)) {
     issues.push('Mock flags (VITE_ENABLE_MOCK_API / VITE_ENABLE_MOCK_AUTH) must be false in production.');
   }
-  if (!env.sentryDsn && isProd) {
-    issues.push('VITE_SENTRY_DSN is missing — production will run blind (no error tracking).');
+  if (!env.sentryDsn && !isProd) {
+    issues.push('VITE_SENTRY_DSN is not set — error tracking is disabled for this build.');
   }
   return issues;
 }

@@ -25,7 +25,6 @@ export type {
   PendingStorageLike,
   RegistrationRequestErrorKind,
 } from './registrationRequestService';
-export { MockPortalService } from './mockPortalService';
 export { createPortalService, portalService } from './portalService';
 export type { PortalService } from './portalService';
 export { ErpSseService, sseService } from './sseService';

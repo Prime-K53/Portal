@@ -96,8 +96,8 @@ import type {
 import { ApiError, type ApiClient } from './apiClient';
 import { authService } from './authService';
 // NOTE: MockPortalService is deliberately NOT statically imported. It loads
-// via top-level await below so the mock tree ships in its own chunk that
-// production bundles never download.
+// via top-level await below, behind import.meta.env.DEV, so the mock tree is
+// eliminated from production builds entirely rather than merely unused.
 
 export interface PortalService {
   // ── Current customer / account ────────────────────────────────────────────
@@ -1433,13 +1433,19 @@ export class ErpPortalService implements PortalService {
 }
 
 /**
- * Mock constructor loaded on demand. The dynamic import keeps
- * mockPortalService (+ mockData) in a separate chunk that is fetched only
- * when mock mode is actually enabled — never in production.
+ * Mock constructor loaded on demand — DEVELOPMENT BUILDS ONLY.
+ *
+ * Vite inlines `import.meta.env.DEV` at build time, so a production build
+ * folds this flag to `false` and eliminates the dynamic import below —
+ * mockPortalService + mockData are never emitted into dist. The runtime flags
+ * remain as a second gate so a stray .env value cannot enable mocks locally.
+ * `import.meta.env` is read with optional chaining because Node-based test
+ * runners have no Vite environment object.
  */
 type MockPortalServiceCtor = new () => PortalService;
 let MockPortalServiceClass: MockPortalServiceCtor | null = null;
-if (!env.useRealBackend && env.enableMockApi) {
+const MOCKS_ALLOWED_IN_THIS_BUILD = import.meta.env?.DEV === true;
+if (MOCKS_ALLOWED_IN_THIS_BUILD && !env.useRealBackend && env.enableMockApi) {
   MockPortalServiceClass = (await import('./mockPortalService')).MockPortalService;
 }
 
