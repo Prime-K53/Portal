@@ -19,6 +19,10 @@ const TYPE_TITLES: Record<string, string> = {
   delivery_note: 'delivery note',
   supplier_payment: 'supplier payment',
   statement: 'statement',
+  printing_contract: 'printing contract',
+  printing_contract_schedule: 'printing contract schedule',
+  printing_contract_completion_receipt: 'printing contract completion receipt',
+  work_order: 'work order',
 };
 
 const TYPE_SLUGS: Record<string, string> = {
@@ -30,6 +34,10 @@ const TYPE_SLUGS: Record<string, string> = {
   delivery_note: 'delivery-note',
   supplier_payment: 'supplier-payment',
   statement: 'statement',
+  printing_contract: 'printing-contract',
+  printing_contract_schedule: 'printing-contract-schedule',
+  printing_contract_completion_receipt: 'printing-contract-completion-receipt',
+  work_order: 'work-order',
 };
 
 const SLUG_TO_TYPE: Record<string, string> = Object.fromEntries(

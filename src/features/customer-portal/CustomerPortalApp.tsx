@@ -1183,7 +1183,7 @@ function CustomerPortalShell({
     </div>
   );
 
-  const isVerificationPath = /^\/(verify\/invoice|verify\/(receipt|quotation|sales-order|purchase-order|delivery-note|supplier-payment|statement))/.test(path.split('?')[0]);
+  const isVerificationPath = /^\/verify\//.test(path.split('?')[0]);
 
   if (isVerificationPath) {
     return (
