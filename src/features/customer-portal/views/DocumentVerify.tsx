@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useHashRoute } from '../router/useHashRoute';
 import { env } from '../config/env';
+import { formatDate } from '../utils/formatters';
 
 type VerificationData = Record<string, any>;
 
@@ -63,6 +64,7 @@ const DATE_KEYS = [
 const SKIP_KEYS = new Set([
   'verified', 'documentType', 'companyName', ...NUMBER_KEYS, ...DATE_KEYS,
   'customerName', 'supplierName', 'status',
+  'customerNumber',
   'statementPeriodStart', 'statementPeriodEnd',
   // Hidden by design on the verification ticket (see request 2026-09-14):
   // currency is implied by MWK formatting, tax is folded into totals.
@@ -70,31 +72,90 @@ const SKIP_KEYS = new Set([
   'tax', 'taxAmount', 'taxTotal', 'taxRate', 'taxPercentage', 'taxPercent',
 ]);
 
-function fieldRows(data: VerificationData): Array<[string, string]> {
+/** Date-bearing display fields whose raw ISO timestamps should be formatted. */
+const DATE_VALUE_KEYS = new Set([
+  'contractDate', 'contract_date',
+  'issuedAt', 'issued_at',
+  'periodStart', 'period_start',
+  'periodEnd', 'period_end',
+  'starts_at', 'ends_at',
+  'createdAt', 'created_at',
+  'updatedAt', 'updated_at',
+]);
+
+/**
+ * The ERP stores some customer names with the customer number appended
+ * (e.g. "Mtakataka CCAP School (CUST-0033)"). The verification ticket shows
+ * the customer's name only; the account number is not part of the name.
+ */
+export function cleanCustomerName(value: unknown, customerNumber?: unknown): string {
+  let name = String(value ?? '').trim();
+  if (!name) return '';
+
+  const number = String(customerNumber ?? '').trim();
+  if (number) {
+    const escaped = number.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    name = name
+      .replace(new RegExp(`\\s*[\\(\\[]\\s*${escaped}\\s*[\\)\\]]\\s*$`, 'i'), '')
+      .replace(new RegExp(`^\\s*${escaped}\\s*[-–—:]\\s*`, 'i'), '')
+      .replace(new RegExp(`\\s*[-–—:]\\s*${escaped}\\s*$`, 'i'), '');
+  }
+
+  name = name
+    .replace(/\s*[\(\[]\s*CUST[-\s][A-Z0-9]+\s*[\)\]]\s*$/i, '')
+    .replace(/^\s*CUST[-\s][A-Z0-9]+\s*[-–—:]\s*/i, '')
+    .replace(/\s*[-–—:]\s*CUST[-\s][A-Z0-9]+\s*$/i, '')
+    .replace(/\s+CUST[-\s][A-Z0-9]+\s*$/i, '');
+
+  return name.replace(/\s+/g, ' ').trim();
+}
+
+export function fieldRows(data: VerificationData): Array<[string, string]> {
   const numberKey = NUMBER_KEYS.find((k) => data[k] !== undefined);
   const dateKey = DATE_KEYS.find((k) => data[k] !== undefined);
   const party = data.customerName !== undefined ? 'Customer' : 'Supplier';
-  const partyValue = data.customerName ?? data.supplierName ?? '';
+  const partyValue = data.customerName !== undefined
+    ? cleanCustomerName(data.customerName, data.customerNumber)
+    : String(data.supplierName ?? '');
   const rows: Array<[string, string]> = [];
-  if (numberKey) rows.push(['Document Number', String(data[numberKey] ?? '')]);
-  if (dateKey) rows.push(['Date', String(data[dateKey] ?? '')]);
+  // Several documents expose date/party aliases (e.g. contractDate and
+  // contract_date). Show each label once so the ticket cannot repeat a row.
+  const seenLabels = new Set<string>();
+  const pushRow = (label: string, value: string) => {
+    const labelKey = label.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    if (seenLabels.has(labelKey)) return;
+    seenLabels.add(labelKey);
+    rows.push([label, value]);
+  };
+
+  if (numberKey) pushRow('Document Number', String(data[numberKey] ?? ''));
+  if (dateKey) pushRow('Date', formatDate(String(data[dateKey] ?? '')));
   if (data.statementPeriodStart !== undefined || data.statementPeriodEnd !== undefined) {
-    rows.push(['Statement Period', `${String(data.statementPeriodStart ?? '')} – ${String(data.statementPeriodEnd ?? '')}`]);
+    pushRow('Statement Period', `${String(data.statementPeriodStart ?? '')} – ${String(data.statementPeriodEnd ?? '')}`);
   }
-  rows.push([party, String(partyValue)]);
+  pushRow(party, partyValue);
   for (const [key, value] of Object.entries(data)) {
     if (SKIP_KEYS.has(key) || value === undefined || value === null || value === '') continue;
     // Belt-and-braces: never show currency / tax rows even if the API
     // uses a variant key name (e.g. taxTotal, vatAmount).
     if (/^tax/i.test(key) || key.toLowerCase() === 'currency') continue;
     if (/^vat/i.test(key)) continue;
+    // Show assessment counts as plain numbers, not monetary totals:
+    // e.g. "total_assessments: 4" instead of "MWK 4.00".
+    if (/ass(es|essment)?s?/i.test(key)) {
+      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+      pushRow(label, String(value));
+      continue;
+    }
     const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
-    const shown = /amount|total|balance|subtotal|^tax$/i.test(key) && typeof value === 'number'
-      ? fmtMoney(String(data.currency || 'MWK'), value)
-      : String(value);
-    rows.push([label, shown]);
+    const shown = DATE_VALUE_KEYS.has(key) && typeof value === 'string'
+      ? formatDate(value) || value
+      : /amount|total|balance|subtotal|^tax$/i.test(key) && typeof value === 'number'
+        ? fmtMoney(String(data.currency || 'MWK'), value)
+        : String(value);
+    pushRow(label, shown);
   }
-  rows.push(['Status', String(data.status ?? '')]);
+  pushRow('Status', String(data.status ?? ''));
   return rows;
 }
 

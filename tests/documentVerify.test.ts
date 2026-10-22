@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { parseVerificationPath } from '../src/features/customer-portal/views/DocumentVerify';
+import {
+  cleanCustomerName,
+  fieldRows,
+  parseVerificationPath,
+} from '../src/features/customer-portal/views/DocumentVerify';
 
 describe('parseVerificationPath', () => {
   it('parses invoice verification path with encoded slash', () => {
@@ -78,5 +82,67 @@ describe('parseVerificationPath', () => {
     assert.strictEqual(result.type, 'invoice');
     assert.strictEqual(result.number, 'INV-001');
     assert.strictEqual(result.token, '');
+  });
+});
+
+describe('cleanCustomerName', () => {
+  it('removes a trailing customer number in parentheses', () => {
+    assert.strictEqual(
+      cleanCustomerName('Mtakataka CCAP School (CUST-0033)'),
+      'Mtakataka CCAP School'
+    );
+  });
+
+  it('removes the exact customerNumber supplied by the API', () => {
+    assert.strictEqual(
+      cleanCustomerName('Mtakataka Police Primary (CUST-0034)', 'CUST-0034'),
+      'Mtakataka Police Primary'
+    );
+    assert.strictEqual(
+      cleanCustomerName('CUST-0034 - Mtakataka Police Primary', 'CUST-0034'),
+      'Mtakataka Police Primary'
+    );
+  });
+
+  it('leaves ordinary customer names and parentheses untouched', () => {
+    assert.strictEqual(cleanCustomerName('School (Main Campus)'), 'School (Main Campus)');
+    assert.strictEqual(cleanCustomerName('Customer Care'), 'Customer Care');
+  });
+});
+
+describe('fieldRows', () => {
+  it('shows a printing contract customer name without the customer number', () => {
+    const rows = fieldRows({
+      verified: true,
+      documentType: 'printing_contract',
+      contractNumber: 'PC-P726/023',
+      contractDate: '2026-10-19T00:00:00.000Z',
+      companyName: 'Prime Printing Service',
+      customerName: 'Mtakataka CCAP School (CUST-0033)',
+      currency: 'MWK',
+      prepaidTotal: 319200,
+      totalAssessments: 4,
+      status: 'ACTIVE',
+    });
+
+    const customer = rows.find(([label]) => label === 'Customer');
+    assert.deepStrictEqual(customer, ['Customer', 'Mtakataka CCAP School']);
+    assert.ok(!rows.some(([, value]) => value.includes('CUST-0033')));
+  });
+
+  it('formats the contract date and does not repeat contract-date aliases', () => {
+    const rows = fieldRows({
+      verified: true,
+      documentType: 'printing_contract',
+      contractNumber: 'PC-P726/023',
+      contractDate: '2026-10-19T00:00:00.000Z',
+      contract_date: '2026-10-19T00:00:00.000Z',
+      customerName: 'Mtakataka CCAP School (CUST-0033)',
+      status: 'ACTIVE',
+    });
+
+    const contractDates = rows.filter(([label]) => /^contract date$/i.test(label));
+    assert.strictEqual(contractDates.length, 1);
+    assert.strictEqual(contractDates[0][1], '2026-10-19');
   });
 });
