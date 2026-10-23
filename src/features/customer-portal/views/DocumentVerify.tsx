@@ -83,6 +83,82 @@ const DATE_VALUE_KEYS = new Set([
   'updatedAt', 'updated_at',
 ]);
 
+const COMPLETION_RECEIPT_TYPE = 'printing_contract_completion_receipt';
+
+/**
+ * These are the source counts for the completion-progress rows. They are
+ * rendered as one derived "Completion Progress" row and one "Remaining
+ * Assessments" row, never as raw fields. `prepaidTotal` belongs to the
+ * ordinary contract view and is deliberately not shown on a completion
+ * receipt.
+ */
+const COMPLETION_RECEIPT_SOURCE_KEYS = new Set([
+  'prepaidTotal', 'prepaid_total',
+  'totalAssessments', 'total_assessments',
+  'completedToDate', 'completed_to_date',
+  'completedAssessments', 'completed_assessments',
+  'remainingAssessments', 'remaining_assessments',
+]);
+
+function nonNegativeCount(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.floor(parsed);
+}
+
+/**
+ * Completion Progress = completed assessments / total required assessments.
+ * Remaining Assessments = total - completed.
+ *
+ * The API supplies the counts from the authoritative contract and assessment
+ * records. This helper only formats them; it never derives completion from a
+ * monetary amount, payment status, invoice count or receipt count. If the
+ * authoritative counts are not present, it shows an explicit dash rather than
+ * inventing progress.
+ */
+export function completionProgressRows(data: VerificationData): Array<[string, string]> {
+  const total = nonNegativeCount(
+    data.totalAssessments
+    ?? data.total_assessments
+    ?? data.maxAssessments
+    ?? data.max_assessments
+  );
+  if (total === null) {
+    return [
+      ['Completion Progress', '—'],
+      ['Remaining Assessments', '—'],
+    ];
+  }
+
+  let completed = nonNegativeCount(
+    data.completedToDate
+    ?? data.completed_to_date
+    ?? data.completedAssessments
+    ?? data.completed_assessments
+  );
+  if (completed === null) {
+    const remaining = nonNegativeCount(
+      data.remainingAssessments ?? data.remaining_assessments
+    );
+    if (remaining !== null) completed = Math.max(0, total - remaining);
+  }
+  if (completed === null) {
+    return [
+      ['Completion Progress', '—'],
+      ['Remaining Assessments', '—'],
+    ];
+  }
+
+  // A zero denominator is valid ("0 / 0"), but a count must never exceed the
+  // contractual total. Clamp instead of rendering an impossible fraction.
+  const bounded = total === 0 ? 0 : Math.min(completed, total);
+  return [
+    ['Completion Progress', `${bounded} / ${total}`],
+    ['Remaining Assessments', String(Math.max(0, total - bounded))],
+  ];
+}
+
 /**
  * The ERP stores some customer names with the customer number appended
  * (e.g. "Mtakataka CCAP School (CUST-0033)"). The verification ticket shows
@@ -113,6 +189,7 @@ export function cleanCustomerName(value: unknown, customerNumber?: unknown): str
 export function fieldRows(data: VerificationData): Array<[string, string]> {
   const numberKey = NUMBER_KEYS.find((k) => data[k] !== undefined);
   const dateKey = DATE_KEYS.find((k) => data[k] !== undefined);
+  const isCompletionReceipt = data.documentType === COMPLETION_RECEIPT_TYPE;
   const party = data.customerName !== undefined ? 'Customer' : 'Supplier';
   const partyValue = data.customerName !== undefined
     ? cleanCustomerName(data.customerName, data.customerNumber)
@@ -134,8 +211,14 @@ export function fieldRows(data: VerificationData): Array<[string, string]> {
     pushRow('Statement Period', `${String(data.statementPeriodStart ?? '')} – ${String(data.statementPeriodEnd ?? '')}`);
   }
   pushRow(party, partyValue);
+  if (isCompletionReceipt) {
+    for (const [label, value] of completionProgressRows(data)) pushRow(label, value);
+  }
   for (const [key, value] of Object.entries(data)) {
     if (SKIP_KEYS.has(key) || value === undefined || value === null || value === '') continue;
+    // A completion receipt replaces the contract's prepaid amount with live
+    // completion counts. Its source fields are rendered once, above.
+    if (isCompletionReceipt && COMPLETION_RECEIPT_SOURCE_KEYS.has(key)) continue;
     // Belt-and-braces: never show currency / tax rows even if the API
     // uses a variant key name (e.g. taxTotal, vatAmount).
     if (/^tax/i.test(key) || key.toLowerCase() === 'currency') continue;
