@@ -87,10 +87,9 @@ const COMPLETION_RECEIPT_TYPE = 'printing_contract_completion_receipt';
 
 /**
  * These are the source counts for the completion-progress rows. They are
- * rendered as one derived "Completion Progress" row and one "Remaining
- * Assessments" row, never as raw fields. `prepaidTotal` belongs to the
- * ordinary contract view and is deliberately not shown on a completion
- * receipt.
+ * rendered as derived assessment rows, never as raw fields. `prepaidTotal`
+ * belongs to the ordinary contract view and is deliberately not shown on a
+ * completion receipt.
  */
 const COMPLETION_RECEIPT_SOURCE_KEYS = new Set([
   'prepaidTotal', 'prepaid_total',
@@ -127,6 +126,7 @@ export function completionProgressRows(data: VerificationData): Array<[string, s
   if (total === null) {
     return [
       ['Completion Progress', '—'],
+      ['Total Assessments', '—'],
       ['Remaining Assessments', '—'],
     ];
   }
@@ -146,6 +146,7 @@ export function completionProgressRows(data: VerificationData): Array<[string, s
   if (completed === null) {
     return [
       ['Completion Progress', '—'],
+      ['Total Assessments', String(total)],
       ['Remaining Assessments', '—'],
     ];
   }
@@ -155,8 +156,26 @@ export function completionProgressRows(data: VerificationData): Array<[string, s
   const bounded = total === 0 ? 0 : Math.min(completed, total);
   return [
     ['Completion Progress', `${bounded} / ${total}`],
+    ['Total Assessments', String(total)],
     ['Remaining Assessments', String(Math.max(0, total - bounded))],
   ];
+}
+
+/**
+ * Completion receipts use the same human-readable date style as the ticket
+ * subtitle (e.g. "19 Oct 2026"), not the ISO date (`2026-10-19`) used by the
+ * generic document rows.
+ */
+function formatCompletionReceiptDate(value: unknown): string {
+  const iso = formatDate(String(value ?? ''));
+  if (!iso) return '';
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 /**
@@ -206,7 +225,14 @@ export function fieldRows(data: VerificationData): Array<[string, string]> {
   };
 
   if (numberKey) pushRow('Document Number', String(data[numberKey] ?? ''));
-  if (dateKey) pushRow('Date', formatDate(String(data[dateKey] ?? '')));
+  if (dateKey) {
+    pushRow(
+      'Date',
+      isCompletionReceipt
+        ? formatCompletionReceiptDate(data[dateKey])
+        : formatDate(String(data[dateKey] ?? '')),
+    );
+  }
   if (data.statementPeriodStart !== undefined || data.statementPeriodEnd !== undefined) {
     pushRow('Statement Period', `${String(data.statementPeriodStart ?? '')} – ${String(data.statementPeriodEnd ?? '')}`);
   }
@@ -232,7 +258,7 @@ export function fieldRows(data: VerificationData): Array<[string, string]> {
     }
     const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
     const shown = DATE_VALUE_KEYS.has(key) && typeof value === 'string'
-      ? formatDate(value) || value
+      ? (isCompletionReceipt ? formatCompletionReceiptDate(value) : formatDate(value)) || value
       : /amount|total|balance|subtotal|^tax$/i.test(key) && typeof value === 'number'
         ? fmtMoney(String(data.currency || 'MWK'), value)
         : String(value);
@@ -598,7 +624,7 @@ function StampSeal({ tone = 'teal', symbol = 'check' }: { tone?: 'teal' | 'red' 
           {body}
         </div>
         <div className="vp-under">
-          Secured by <b>Prime Printing</b> · primeportalmw.vercel.app
+          Secured by <b>Prime Printing</b>
         </div>
       </div>
     </div>

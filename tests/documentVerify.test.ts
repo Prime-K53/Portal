@@ -181,6 +181,7 @@ describe('printing contract completion receipt progress', () => {
     const byLabel = rowsByLabel(rows);
 
     assert.strictEqual(byLabel['Completion Progress'], '1 / 4');
+    assert.strictEqual(byLabel['Total Assessments'], '4');
     assert.strictEqual(byLabel['Remaining Assessments'], '3');
   });
 
@@ -192,6 +193,7 @@ describe('printing contract completion receipt progress', () => {
     const byLabel = rowsByLabel(rows);
 
     assert.strictEqual(byLabel['Completion Progress'], '4 / 4');
+    assert.strictEqual(byLabel['Total Assessments'], '4');
     assert.strictEqual(byLabel['Remaining Assessments'], '0');
   });
 
@@ -203,6 +205,7 @@ describe('printing contract completion receipt progress', () => {
     const byLabel = rowsByLabel(rows);
 
     assert.strictEqual(byLabel['Completion Progress'], '0 / 4');
+    assert.strictEqual(byLabel['Total Assessments'], '4');
     assert.strictEqual(byLabel['Remaining Assessments'], '4');
   });
 
@@ -218,6 +221,7 @@ describe('printing contract completion receipt progress', () => {
     const byLabel = rowsByLabel(rows);
 
     assert.strictEqual(byLabel['Completion Progress'], '1 / 4');
+    assert.strictEqual(byLabel['Total Assessments'], '4');
     assert.strictEqual(byLabel['Remaining Assessments'], '3');
   });
 
@@ -229,6 +233,7 @@ describe('printing contract completion receipt progress', () => {
     const byLabel = rowsByLabel(rows);
 
     assert.strictEqual(byLabel['Completion Progress'], '1 / 4');
+    assert.strictEqual(byLabel['Total Assessments'], '4');
     assert.strictEqual(byLabel['Remaining Assessments'], '3');
   });
 
@@ -241,6 +246,7 @@ describe('printing contract completion receipt progress', () => {
     const byLabel = rowsByLabel(rows);
 
     assert.strictEqual(byLabel['Completion Progress'], '0 / 0');
+    assert.strictEqual(byLabel['Total Assessments'], '0');
     assert.strictEqual(byLabel['Remaining Assessments'], '0');
     assert.ok(rows.every(([, value]) => !/NaN|Infinity/i.test(value)));
   });
@@ -254,6 +260,7 @@ describe('printing contract completion receipt progress', () => {
     const byLabel = rowsByLabel(rows);
 
     assert.strictEqual(byLabel['Completion Progress'], '—');
+    assert.strictEqual(byLabel['Total Assessments'], '—');
     assert.strictEqual(byLabel['Remaining Assessments'], '—');
     assert.ok(rows.every(([, value]) => !/NaN|Infinity/i.test(value)));
   });
@@ -265,8 +272,24 @@ describe('printing contract completion receipt progress', () => {
       remainingAssessments: 0,
     }), [
       ['Completion Progress', '4 / 4'],
+      ['Total Assessments', '4'],
       ['Remaining Assessments', '0'],
     ]);
+  });
+
+  it('shows Total Assessments as a plain number with no currency', () => {
+    const rows = fieldRows(completionReceipt());
+    const byLabel = rowsByLabel(rows);
+
+    assert.strictEqual(byLabel['Total Assessments'], '4');
+    assert.ok(!/MWK|K\s/i.test(byLabel['Total Assessments']));
+  });
+
+  it('formats the completion receipt contract date as 19 Oct 2026', () => {
+    const rows = fieldRows(completionReceipt());
+    const contractDate = rows.find(([label]) => /^contract date$/i.test(label));
+
+    assert.deepStrictEqual(contractDate, ['Contract Date', '19 Oct 2026']);
   });
 
   it('does not display Prepaid Total or the raw count fields', () => {
@@ -274,10 +297,10 @@ describe('printing contract completion receipt progress', () => {
     const labels = rows.map(([label]) => label);
 
     assert.ok(!labels.includes('Prepaid Total'));
-    assert.ok(!labels.includes('Total Assessments'));
     assert.ok(!labels.includes('Completed To Date'));
     assert.ok(!labels.some((label) => /^prepaid/i.test(label)));
     assert.strictEqual(labels.filter((label) => /completion progress/i.test(label)).length, 1);
+    assert.strictEqual(labels.filter((label) => /total assessments/i.test(label)).length, 1);
     assert.strictEqual(labels.filter((label) => /remaining assessments/i.test(label)).length, 1);
   });
 
