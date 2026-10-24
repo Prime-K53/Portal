@@ -274,6 +274,11 @@ const DocumentVerify = lazy(() =>
   import('./views/DocumentVerify').then((m) => ({ default: m.DocumentVerify }))
 );
 
+// Public printing-contract hash verification (no auth required).
+const ContractVerify = lazy(() =>
+  import('./views/ContractVerify').then((m) => ({ default: m.ContractVerify }))
+);
+
 // Modals — split into separate chunks; they mount inside a Suspense boundary
 // with a null fallback so the first paint never waits for them.
 const CartDrawer = lazy(() =>
@@ -1183,7 +1188,17 @@ function CustomerPortalShell({
     </div>
   );
 
-  const isVerificationPath = /^\/verify\//.test(path.split('?')[0]);
+  const verificationPath = path.split('?')[0].replace(/\/+$/, '') || '/';
+
+  if (verificationPath === '/verify') {
+    return (
+      <Suspense fallback={<DashboardSkeleton />}>
+        <ContractVerify />
+      </Suspense>
+    );
+  }
+
+  const isVerificationPath = /^\/verify\//.test(verificationPath);
 
   if (isVerificationPath) {
     return (
